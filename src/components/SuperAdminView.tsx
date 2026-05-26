@@ -74,133 +74,205 @@ export interface GeminiUsage {
 export const SuperAdminView: React.FC = () => {
   const { company, updateCompany, user } = useApp();
 
-  // Initial tenants listing
-  const [tenants, setTenants] = useState<Tenant[]>([
-    {
-      id: company.id, // Include the currently logged-in company of the session
-      name: company.name + " (Membro Principal)",
-      cnpj: company.cnpj || "98.765.432/0001-99",
-      email: company.email || "contato@autoprecision.com.br",
-      phone: company.phone || "(11) 98765-4321",
-      planId: company.planId,
-      createdAt: company.createdAt || "2026-01-10T12:00:00Z",
-      status: 'Ativo',
-      databaseSize: 1420,
-      monthlyValue: company.planId === 'Premium' ? 499 : company.planId === 'Profissional' ? 299 : 149,
-      customDomain: company.customDomain || "mecanica.autoprecision.com.br",
-      subdomain: company.subdomain || "autoprecision",
-      domainStatus: company.domainStatus || "Ativo"
-    },
-    {
-      id: "tenant_speedy_2",
-      name: "Speedy Motor Center SRL",
-      cnpj: "42.112.553/0001-20",
-      email: "financeiro@speedymotors.com.br",
-      phone: "(41) 3224-9988",
-      planId: "Profissional",
-      createdAt: "2026-02-15T09:30:00Z",
-      status: 'Ativo',
-      databaseSize: 840,
-      monthlyValue: 299,
-      customDomain: "speedy.autoprecision.com.br",
-      subdomain: "speedy",
-      domainStatus: "Ativo"
-    },
-    {
-      id: "tenant_voltcar_3",
-      name: "Volt Car Auto Elétrica & Híbridos",
-      cnpj: "55.842.124/0001-44",
-      email: "atendimento@voltcar.com",
-      phone: "(31) 98221-5050",
-      planId: "Premium",
-      createdAt: "2026-03-01T14:45:00Z",
-      status: 'Ativo',
-      databaseSize: 2150,
-      monthlyValue: 499,
-      customDomain: "mecanicavoltcar.com.br",
-      subdomain: "voltcar",
-      domainStatus: "Ativo"
-    },
-    {
-      id: "tenant_prime_4",
-      name: "Prime Funilaria & Martelo de Ouro",
-      cnpj: "10.443.987/0001-02",
-      email: "primefunilaria@gmail.com",
-      phone: "(21) 3655-1100",
-      planId: "Básico",
-      createdAt: "2026-04-18T11:00:00Z",
-      status: 'Ativo',
-      databaseSize: 310,
-      monthlyValue: 149,
-      customDomain: "prime.autoprecision.com.br",
-      subdomain: "prime",
-      domainStatus: "Pendente"
-    },
-    {
-      id: "tenant_racing_5",
-      name: "Racing Tuners Performance SP",
-      cnpj: "09.332.148/0001-78",
-      email: "contato@racingtuners.com",
-      phone: "(11) 5055-9000",
-      planId: "Premium",
-      createdAt: "2026-05-10T17:15:00Z",
-      status: 'Suspenso',
-      databaseSize: 1890,
-      monthlyValue: 499,
-      customDomain: "performance.racingtuners.com.br",
-      subdomain: "racing",
-      domainStatus: "Falhado"
+  // Initial tenants listing with persistence to localStorage
+  const [tenants, setTenants] = useState<Tenant[]>(() => {
+    const saved = localStorage.getItem('saas_tenants');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) {
+          // Sync current session company in the persisted list to be sure
+          return parsed.map((t: Tenant) => {
+            if (t.id === company.id) {
+              return {
+                ...t,
+                name: company.name + " (Membro Principal)",
+                planId: company.planId,
+                customDomain: company.customDomain || t.customDomain,
+                subdomain: company.subdomain || t.subdomain,
+              };
+            }
+            return t;
+          });
+        }
+      } catch (e) {
+        console.error("Error parsing tenants from localStorage", e);
+      }
     }
-  ]);
+    return [
+      {
+        id: company.id, // Include the currently logged-in company of the session
+        name: company.name + " (Membro Principal)",
+        cnpj: company.cnpj || "98.765.432/0001-99",
+        email: company.email || "contato@autoprecision.com.br",
+        phone: company.phone || "(11) 98765-4321",
+        planId: company.planId,
+        createdAt: company.createdAt || "2026-01-10T12:00:00Z",
+        status: 'Ativo',
+        databaseSize: 1420,
+        monthlyValue: company.planId === 'Premium' ? 499 : company.planId === 'Profissional' ? 299 : 149,
+        customDomain: company.customDomain || "mecanica.autoprecision.com.br",
+        subdomain: company.subdomain || "autoprecision",
+        domainStatus: company.domainStatus || "Ativo"
+      },
+      {
+        id: "tenant_speedy_2",
+        name: "Speedy Motor Center SRL",
+        cnpj: "42.112.553/0001-20",
+        email: "financeiro@speedymotors.com.br",
+        phone: "(41) 3224-9988",
+        planId: "Profissional",
+        createdAt: "2026-02-15T09:30:00Z",
+        status: 'Ativo',
+        databaseSize: 840,
+        monthlyValue: 299,
+        customDomain: "speedy.autoprecision.com.br",
+        subdomain: "speedy",
+        domainStatus: "Ativo"
+      },
+      {
+        id: "tenant_voltcar_3",
+        name: "Volt Car Auto Elétrica & Híbridos",
+        cnpj: "55.842.124/0001-44",
+        email: "atendimento@voltcar.com",
+        phone: "(31) 98221-5050",
+        planId: "Premium",
+        createdAt: "2026-03-01T14:45:00Z",
+        status: 'Ativo',
+        databaseSize: 2150,
+        monthlyValue: 499,
+        customDomain: "mecanicavoltcar.com.br",
+        subdomain: "voltcar",
+        domainStatus: "Ativo"
+      },
+      {
+        id: "tenant_prime_4",
+        name: "Prime Funilaria & Martelo de Ouro",
+        cnpj: "10.443.987/0001-02",
+        email: "primefunilaria@gmail.com",
+        phone: "(21) 3655-1100",
+        planId: "Básico",
+        createdAt: "2026-04-18T11:00:00Z",
+        status: 'Ativo',
+        databaseSize: 310,
+        monthlyValue: 149,
+        customDomain: "prime.autoprecision.com.br",
+        subdomain: "prime",
+        domainStatus: "Pendente"
+      },
+      {
+        id: "tenant_racing_5",
+        name: "Racing Tuners Performance SP",
+        cnpj: "09.332.148/0001-78",
+        email: "contato@racingtuners.com",
+        phone: "(11) 5055-9000",
+        planId: "Premium",
+        createdAt: "2026-05-10T17:15:00Z",
+        status: 'Suspenso',
+        databaseSize: 1890,
+        monthlyValue: 499,
+        customDomain: "performance.racingtuners.com.br",
+        subdomain: "racing",
+        domainStatus: "Falhado"
+      },
+      {
+        id: "tenant_rafael_6",
+        name: "Oficina do Rafael",
+        cnpj: "18.349.525/0001-30",
+        email: "rafael@oficinadorafael.com.br",
+        phone: "(11) 98765-5544",
+        planId: "Profissional",
+        createdAt: "2026-05-26T17:15:00Z",
+        status: 'Ativo',
+        databaseSize: 620,
+        monthlyValue: 299,
+        customDomain: "oficinadorafael.autoprecision.com.br",
+        subdomain: "oficinadorafael",
+        domainStatus: "Ativo"
+      }
+    ];
+  });
 
-  // State for Gemini CoPilot API Token Monitor by Tenant
-  const [geminiUsages, setGeminiUsages] = useState<GeminiUsage[]>([
-    {
-      tenantId: company.id,
-      tenantName: company.name + " (Membro Principal)",
-      promptTokens: 215000,
-      completionTokens: 82400,
-      requestsCount: 185,
-      lastUsedAt: "2026-05-26T15:20:00Z",
-      monthlyLimit: 1000000
-    },
-    {
-      tenantId: "tenant_speedy_2",
-      tenantName: "Speedy Motor Center SRL",
-      promptTokens: 84000,
-      completionTokens: 31500,
-      requestsCount: 98,
-      lastUsedAt: "2026-05-26T11:45:00Z",
-      monthlyLimit: 500000
-    },
-    {
-      tenantId: "tenant_voltcar_3",
-      tenantName: "Volt Car Auto Elétrica & Híbridos",
-      promptTokens: 412450,
-      completionTokens: 184850,
-      requestsCount: 342,
-      lastUsedAt: "2026-05-26T17:12:00Z",
-      monthlyLimit: 1000000
-    },
-    {
-      tenantId: "tenant_prime_4",
-      tenantName: "Prime Funilaria & Martelo de Ouro",
-      promptTokens: 8400,
-      completionTokens: 3200,
-      requestsCount: 12,
-      lastUsedAt: "2026-05-25T14:30:00Z",
-      monthlyLimit: 100000
-    },
-    {
-      tenantId: "tenant_racing_5",
-      tenantName: "Racing Tuners Performance SP",
-      promptTokens: 142000,
-      completionTokens: 58200,
-      requestsCount: 121,
-      lastUsedAt: "2026-05-24T09:15:00Z",
-      monthlyLimit: 1000000
+  // Save tenants to localStorage
+  useEffect(() => {
+    localStorage.setItem('saas_tenants', JSON.stringify(tenants));
+  }, [tenants]);
+
+  // State for Gemini CoPilot API Token Monitor by Tenant with persistence
+  const [geminiUsages, setGeminiUsages] = useState<GeminiUsage[]>(() => {
+    const saved = localStorage.getItem('saas_gemini_usages');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error("Error parsing gemini usages from localStorage", e);
+      }
     }
-  ]);
+    return [
+      {
+        tenantId: company.id,
+        tenantName: company.name + " (Membro Principal)",
+        promptTokens: 215000,
+        completionTokens: 82400,
+        requestsCount: 185,
+        lastUsedAt: "2026-05-26T15:20:00Z",
+        monthlyLimit: 1000000
+      },
+      {
+        tenantId: "tenant_speedy_2",
+        tenantName: "Speedy Motor Center SRL",
+        promptTokens: 84000,
+        completionTokens: 31500,
+        requestsCount: 98,
+        lastUsedAt: "2026-05-26T11:45:00Z",
+        monthlyLimit: 500000
+      },
+      {
+        tenantId: "tenant_voltcar_3",
+        tenantName: "Volt Car Auto Elétrica & Híbridos",
+        promptTokens: 412450,
+        completionTokens: 184850,
+        requestsCount: 342,
+        lastUsedAt: "2026-05-26T17:12:00Z",
+        monthlyLimit: 1000000
+      },
+      {
+        tenantId: "tenant_prime_4",
+        tenantName: "Prime Funilaria & Martelo de Ouro",
+        promptTokens: 8400,
+        completionTokens: 3200,
+        requestsCount: 12,
+        lastUsedAt: "2026-05-25T14:30:00Z",
+        monthlyLimit: 100000
+      },
+      {
+        tenantId: "tenant_racing_5",
+        tenantName: "Racing Tuners Performance SP",
+        promptTokens: 142000,
+        completionTokens: 58200,
+        requestsCount: 121,
+        lastUsedAt: "2026-05-24T09:15:00Z",
+        monthlyLimit: 1000000
+      },
+      {
+        tenantId: "tenant_rafael_6",
+        tenantName: "Oficina do Rafael",
+        promptTokens: 112000,
+        completionTokens: 48500,
+        requestsCount: 110,
+        lastUsedAt: "2026-05-26T17:35:00Z",
+        monthlyLimit: 500000
+      }
+    ];
+  });
+
+  // Save gemini usages to localStorage
+  useEffect(() => {
+    localStorage.setItem('saas_gemini_usages', JSON.stringify(geminiUsages));
+  }, [geminiUsages]);
 
   const [geminiSort, setGeminiSort] = useState<'tokens' | 'requests' | 'limit'>('tokens');
   const [simSelectedTenantId, setSimSelectedTenantId] = useState<string>(company.id);
