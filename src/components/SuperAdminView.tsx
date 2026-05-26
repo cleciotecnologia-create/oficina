@@ -55,10 +55,20 @@ interface AuditLog {
   id: string;
   timestamp: string;
   tenantName: string;
-  changeType: 'Plano' | 'Status';
+  changeType: 'Plano' | 'Status' | 'TokenLimit' | 'TokenReset';
   newValue: string;
   oldValue: string;
   adminEmail: string;
+}
+
+export interface GeminiUsage {
+  tenantId: string;
+  tenantName: string;
+  promptTokens: number;
+  completionTokens: number;
+  requestsCount: number;
+  lastUsedAt: string;
+  monthlyLimit: number;
 }
 
 export const SuperAdminView: React.FC = () => {
@@ -142,6 +152,59 @@ export const SuperAdminView: React.FC = () => {
       domainStatus: "Falhado"
     }
   ]);
+
+  // State for Gemini CoPilot API Token Monitor by Tenant
+  const [geminiUsages, setGeminiUsages] = useState<GeminiUsage[]>([
+    {
+      tenantId: company.id,
+      tenantName: company.name + " (Membro Principal)",
+      promptTokens: 215000,
+      completionTokens: 82400,
+      requestsCount: 185,
+      lastUsedAt: "2026-05-26T15:20:00Z",
+      monthlyLimit: 1000000
+    },
+    {
+      tenantId: "tenant_speedy_2",
+      tenantName: "Speedy Motor Center SRL",
+      promptTokens: 84000,
+      completionTokens: 31500,
+      requestsCount: 98,
+      lastUsedAt: "2026-05-26T11:45:00Z",
+      monthlyLimit: 500000
+    },
+    {
+      tenantId: "tenant_voltcar_3",
+      tenantName: "Volt Car Auto Elétrica & Híbridos",
+      promptTokens: 412450,
+      completionTokens: 184850,
+      requestsCount: 342,
+      lastUsedAt: "2026-05-26T17:12:00Z",
+      monthlyLimit: 1000000
+    },
+    {
+      tenantId: "tenant_prime_4",
+      tenantName: "Prime Funilaria & Martelo de Ouro",
+      promptTokens: 8400,
+      completionTokens: 3200,
+      requestsCount: 12,
+      lastUsedAt: "2026-05-25T14:30:00Z",
+      monthlyLimit: 100000
+    },
+    {
+      tenantId: "tenant_racing_5",
+      tenantName: "Racing Tuners Performance SP",
+      promptTokens: 142000,
+      completionTokens: 58200,
+      requestsCount: 121,
+      lastUsedAt: "2026-05-24T09:15:00Z",
+      monthlyLimit: 1000000
+    }
+  ]);
+
+  const [geminiSort, setGeminiSort] = useState<'tokens' | 'requests' | 'limit'>('tokens');
+  const [simSelectedTenantId, setSimSelectedTenantId] = useState<string>(company.id);
+  const [simUsecaseType, setSimUsecaseType] = useState<'diagnose' | 'chat' | 'obd' | 'tuning'>('diagnose');
 
   // Pricing configs and state
   const [basicPrice, setBasicPrice] = useState(149);
@@ -434,6 +497,15 @@ export const SuperAdminView: React.FC = () => {
       return t;
     }));
 
+    // Sincronizar o limite mensal de tokens do Gemini na alteração de plano
+    const updatedLimit = newPlan === 'Premium' ? 1000000 : newPlan === 'Profissional' ? 500000 : 100000;
+    setGeminiUsages(prev => prev.map(u => {
+      if (u.tenantId === tenantId) {
+        return { ...u, monthlyLimit: updatedLimit };
+      }
+      return u;
+    }));
+
     // Synchronize real-time state with useApp context if this is the active active company!
     if (tenantId === company.id) {
       updateCompany({ planId: newPlan });
@@ -453,6 +525,126 @@ export const SuperAdminView: React.FC = () => {
 
     const timestamp = new Date().toLocaleTimeString();
     setLogs(l => [...l, `[${timestamp}] 💳 UPGRADE PLANO: Tenant ${targetTenant.name} alterado para nível [${newPlan.toUpperCase()}] por ${user?.email || "cleciotecnologia@gmail.com"}`]);
+  };
+
+  // Simula uma requisição do CoPilot consumindo tokens do Gemini
+  const handleSimulateCopilotCall = (tenantId: string, usecase: 'diagnose' | 'chat' | 'obd' | 'tuning') => {
+    const targetTenant = tenants.find(t => t.id === tenantId);
+    if (!targetTenant) return;
+
+    // Define token ranges according to selected usecase
+    let promptDelta = 1200;
+    let completionDelta = 400;
+    let desc = "Chat Geral";
+
+    if (usecase === 'diagnose') {
+      promptDelta = Math.floor(Math.random() * 1500) + 1500; // 1500-3000
+      completionDelta = Math.floor(Math.random() * 600) + 400; // 400-1000
+      desc = "Gerar Diagnóstico Inteligente";
+    } else if (usecase === 'obd') {
+      promptDelta = Math.floor(Math.random() * 2500) + 2000; // 2000-4505
+      completionDelta = Math.floor(Math.random() * 1000) + 800; // 800-1800
+      desc = "Analista Telemetria OBD-II";
+    } else if (usecase === 'tuning') {
+      promptDelta = Math.floor(Math.random() * 3000) + 2500; // 2500-5500
+      completionDelta = Math.floor(Math.random() * 1500) + 1200; // 1200-2700
+      desc = "Otimizar Remap & Performance";
+    } else {
+      promptDelta = Math.floor(Math.random() * 800) + 500; // 500-1300
+      completionDelta = Math.floor(Math.random() * 400) + 200; // 200-600
+    }
+
+    setGeminiUsages(prev => prev.map(u => {
+      if (u.tenantId === tenantId) {
+        return {
+          ...u,
+          promptTokens: u.promptTokens + promptDelta,
+          completionTokens: u.completionTokens + completionDelta,
+          requestsCount: u.requestsCount + 1,
+          lastUsedAt: new Date().toISOString()
+        };
+      }
+      return u;
+    }));
+
+    // Log the event under Live SaaS Audit Log
+    const termTimestamp = new Date().toLocaleTimeString();
+    setLogs(prev => [
+      ...prev.slice(-40),
+      `[${termTimestamp}] 🤖 [COPILOT_API] Requisição processada de '${targetTenant.name}' via Gemini-2.5-pro (${desc}). Input: ${promptDelta.toLocaleString()} tks, Output: ${completionDelta.toLocaleString()} tks.`
+    ]);
+  };
+
+  // Reseta o consumo de tokens de um tenant
+  const handleResetTokenUsage = (tenantId: string) => {
+    const targetTenant = tenants.find(t => t.id === tenantId);
+    if (!targetTenant) return;
+
+    setGeminiUsages(prev => prev.map(u => {
+      if (u.tenantId === tenantId) {
+        return {
+          ...u,
+          promptTokens: 0,
+          completionTokens: 0,
+          requestsCount: 0,
+          lastUsedAt: "Contador reiniciado"
+        };
+      }
+      return u;
+    }));
+
+    // Register in SaaS Audit Logs
+    const newLog: AuditLog = {
+      id: "log_" + Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      tenantName: targetTenant.name,
+      changeType: 'TokenReset',
+      newValue: 'Resetado (0 Tokens)',
+      oldValue: 'Consumo Parcial',
+      adminEmail: user?.email || "cleciotecnologia@gmail.com"
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+
+    // Update terminal logs
+    const termTimestamp = new Date().toLocaleTimeString();
+    setLogs(l => [...l, `[${termTimestamp}] ♻️ QUOTA RESET: Consumo mensal de AI resetado com sucesso para a oficina [${targetTenant.name}].`]);
+  };
+
+  // Ajusta o limite individual de quota de tokens de um tenant
+  const handleAdjustLimit = (tenantId: string, amount: number) => {
+    const targetTenant = tenants.find(t => t.id === tenantId);
+    if (!targetTenant) return;
+
+    setGeminiUsages(prev => prev.map(u => {
+      if (u.tenantId === tenantId) {
+        const nextLimit = Math.max(10000, u.monthlyLimit + amount);
+        return {
+          ...u,
+          monthlyLimit: nextLimit
+        };
+      }
+      return u;
+    }));
+
+    const currentUsage = geminiUsages.find(u => u.tenantId === tenantId);
+    const oldLimit = currentUsage?.monthlyLimit || 0;
+    const newLimit = Math.max(10000, oldLimit + amount);
+
+    // Register in SaaS Audit Logs
+    const newLog: AuditLog = {
+      id: "log_" + Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      tenantName: targetTenant.name,
+      changeType: 'TokenLimit',
+      newValue: `${newLimit.toLocaleString()} Tokens`,
+      oldValue: `${oldLimit.toLocaleString()} Tokens`,
+      adminEmail: user?.email || "cleciotecnologia@gmail.com"
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+
+    // Update terminal logs
+    const termTimestamp = new Date().toLocaleTimeString();
+    setLogs(l => [...l, `[${termTimestamp}] ⚙️ QUOTA LIMIT: Nova quota para [${targetTenant.name}]: ${newLimit.toLocaleString()} tokens.`]);
   };
 
   // Register a new tenant under direct SuperAdmin guidance
@@ -497,6 +689,18 @@ export const SuperAdminView: React.FC = () => {
     };
 
     setTenants(prev => [...prev, newTenant]);
+
+    // Initialize Gemini API Token usage tracking entry
+    const initialTokenLimit = newTenantPlan === 'Premium' ? 1000000 : newTenantPlan === 'Profissional' ? 500000 : 100000;
+    setGeminiUsages(prev => [...prev, {
+      tenantId: generatedId,
+      tenantName: newTenant.name,
+      promptTokens: 0,
+      completionTokens: 0,
+      requestsCount: 0,
+      lastUsedAt: "Nenhuma requisição",
+      monthlyLimit: initialTokenLimit
+    }]);
 
     // Create persistent Audit Log entry
     const newLog: AuditLog = {
@@ -581,6 +785,29 @@ export const SuperAdminView: React.FC = () => {
     .reduce((acc, curr) => acc + curr.monthlyValue, 0);
 
   const totalLogsRowsCount = tenants.reduce((acc, curr) => acc + curr.databaseSize, 0);
+
+  // Gemini Token usage statistics calculations
+  const totalSaaSPromptTokens = geminiUsages.reduce((acc, curr) => acc + curr.promptTokens, 0);
+  const totalSaaSCompletionTokens = geminiUsages.reduce((acc, curr) => acc + curr.completionTokens, 0);
+  const totalSaaSTokens = totalSaaSPromptTokens + totalSaaSCompletionTokens;
+  const totalSaaSRequests = geminiUsages.reduce((acc, curr) => acc + curr.requestsCount, 0);
+  const totalSaaSCost = (totalSaaSPromptTokens * 0.000005) + (totalSaaSCompletionTokens * 0.000015);
+
+  const sortedGeminiUsages = [...geminiUsages].sort((a, b) => {
+    if (geminiSort === 'tokens') {
+      return (b.promptTokens + b.completionTokens) - (a.promptTokens + a.completionTokens);
+    }
+    if (geminiSort === 'requests') {
+      return b.requestsCount - a.requestsCount;
+    }
+    const aPercent = a.monthlyLimit > 0 ? ((a.promptTokens + a.completionTokens) / a.monthlyLimit) * 100 : 0;
+    const bPercent = b.monthlyLimit > 0 ? ((b.promptTokens + b.completionTokens) / b.monthlyLimit) * 100 : 0;
+    return bPercent - aPercent;
+  });
+
+  const mostActiveTenant = [...geminiUsages].sort((a, b) => 
+    (b.promptTokens + b.completionTokens) - (a.promptTokens + a.completionTokens)
+  )[0];
 
   // Filter tenants for view render
   const filteredTenants = tenants.filter(t => 
@@ -687,6 +914,322 @@ export const SuperAdminView: React.FC = () => {
             <strong className="text-xl text-white font-mono leading-tight">{simulatedLatency} ms</strong>
             <span className="text-[9px] text-slate-400 mt-0.5 font-mono">Cpu: {simulatedLoad}%</span>
           </div>
+        </div>
+
+      </div>
+
+      {/* 🤖 SEÇÃO EXTRA: MONITOR DE CONSUMO DA API GEMINI (CO-PILOT) */}
+      <div id="gemini-token-monitor" className="bg-[#0c1223] border border-gray-800 rounded-2xl p-5 flex flex-col gap-5 text-left">
+        <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b border-gray-850 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="bg-purple-950/45 border border-purple-900 border-dashed text-purple-400 font-mono text-[9px] uppercase tracking-widest font-extrabold px-2 py-0.5 rounded">
+                ✦ AUDITORIA DE IA ✦
+              </span>
+              <span className="bg-slate-900 text-slate-400 font-mono text-[9.5px] px-2 py-0.5 rounded border border-gray-800">
+                Gemini 2.5 Flash / Pro
+              </span>
+            </div>
+            <h2 className="text-base sm:text-lg font-display font-bold text-white flex items-center gap-2 mt-1">
+              <Cpu className="w-5 h-5 text-purple-400 animate-pulse" />
+              Monitor de Consumo da API Gemini (CoPilot SaaS)
+            </h2>
+            <p className="text-[11px] font-sans text-gray-400">
+              Identifique em tempo real quais oficinas parceiras mais utilizam a inteligência artificial do CoPilot e gerencie as quotas individuais de tokens.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-500 font-mono uppercase font-bold text-slate-400">Ordenar por:</span>
+            <div className="flex bg-[#050912] border border-gray-800 rounded-lg p-0.5">
+              <button 
+                type="button"
+                onClick={() => setGeminiSort('tokens')}
+                style={{ cursor: 'pointer' }}
+                className={`px-3 py-1 text-[10px] font-mono font-bold rounded-md cursor-pointer transition-colors ${geminiSort === 'tokens' ? 'bg-purple-650 bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+              >
+                Tokens Usados
+              </button>
+              <button 
+                type="button"
+                onClick={() => setGeminiSort('requests')}
+                style={{ cursor: 'pointer' }}
+                className={`px-3 py-1 text-[10px] font-mono font-bold rounded-md cursor-pointer transition-colors ${geminiSort === 'requests' ? 'bg-purple-650 bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+              >
+                Requisições
+              </button>
+              <button 
+                type="button"
+                onClick={() => setGeminiSort('limit')}
+                style={{ cursor: 'pointer' }}
+                className={`px-3 py-1 text-[10px] font-mono font-bold rounded-md cursor-pointer transition-colors ${geminiSort === 'limit' ? 'bg-purple-650 bg-purple-600 text-white' : 'text-gray-400 hover:text-white'}`}
+              >
+                % do Limite
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Global Gemini Stats Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-[#050912] border border-gray-900 rounded-xl p-4">
+          <div className="flex flex-col justify-between">
+            <span className="text-[9px] text-gray-500 font-mono font-bold uppercase tracking-wider">CONSUMO GLOBAL DE TOKENS</span>
+            <strong className="text-lg text-white font-mono mt-1">
+              {totalSaaSTokens.toLocaleString()} <span className="text-[10px] text-gray-500 font-normal">tks</span>
+            </strong>
+            <span className="text-[9px] text-purple-400 font-mono mt-0.5">
+              In: {totalSaaSPromptTokens.toLocaleString()} | Out: {totalSaaSCompletionTokens.toLocaleString()}
+            </span>
+          </div>
+
+          <div className="flex flex-col justify-between border-l border-gray-850 pl-4 sm:border-l-0 sm:pl-0 lg:border-l lg:pl-4">
+            <span className="text-[9px] text-gray-500 font-mono font-bold uppercase tracking-wider">CUSTO DA INFRAESTRUTURA</span>
+            <strong className="text-lg text-emerald-400 font-mono mt-1">
+              R$ {totalSaaSCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </strong>
+            <span className="text-[9px] text-slate-400 font-mono mt-0.5">Faturado por requisição SaaS</span>
+          </div>
+
+          <div className="flex flex-col justify-between border-l border-gray-850 pl-4">
+            <span className="text-[9px] text-gray-500 font-mono font-bold uppercase tracking-wider">REQUISIÇÕES COPILOT</span>
+            <strong className="text-lg text-white font-mono mt-1">
+              {totalSaaSRequests.toLocaleString()} <span className="text-[10px] text-gray-500 font-normal font-sans">chamados</span>
+            </strong>
+            <span className="text-[9px] text-slate-400 font-mono mt-0.5">
+              Média: {totalSaaSRequests > 0 ? (totalSaaSTokens / totalSaaSRequests).toFixed(0) : 0} tokens/req
+            </span>
+          </div>
+
+          <div className="flex flex-col justify-between border-l border-gray-850 pl-4">
+            <span className="text-[9px] text-gray-500 font-mono font-bold uppercase tracking-wider">OFICINA CAMPEÃ DE USO</span>
+            <strong className="text-xs text-purple-300 font-sans truncate font-bold mt-1.5 flex items-center gap-1">
+              👑 {mostActiveTenant ? mostActiveTenant.tenantName.replace(" (Membro Principal)", "") : "Nenhuma"}
+            </strong>
+            <span className="text-[9px] text-slate-400 font-mono mt-1">
+              {mostActiveTenant ? (mostActiveTenant.promptTokens + mostActiveTenant.completionTokens).toLocaleString() : 0} tokens consumidos
+            </span>
+          </div>
+        </div>
+
+        {/* Gemini Split Container */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          
+          {/* LEFT COLUMN: TENANT COMPARISON & RANKING LIST (7-grid) */}
+          <div className="lg:col-span-8 flex flex-col gap-3">
+            <div className="flex justify-between items-center px-1">
+              <span className="text-[10px] font-mono text-gray-500 font-bold uppercase tracking-wide">RANKING DE OFICINAS PARCEIRAS</span>
+              <span className="text-[9px] text-slate-400 font-mono">Consumo resetável a qualquer período pelo Admin</span>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              {sortedGeminiUsages.map((usage, idx) => {
+                const totalUsed = usage.promptTokens + usage.completionTokens;
+                const percent = usage.monthlyLimit > 0 ? Math.min(100, (totalUsed / usage.monthlyLimit) * 100) : 0;
+                
+                // Progress bar colors depending on limit thresholds
+                let progressColor = "bg-emerald-500";
+                let textBadgeColor = "text-emerald-400 border-emerald-950/50 bg-emerald-950/20";
+                let badgeLabel = "Uso Seguro";
+
+                if (percent >= 95) {
+                  progressColor = "bg-red-500";
+                  textBadgeColor = "text-red-500 border-red-950/50 bg-red-950/20 animate-pulse";
+                  badgeLabel = "EXCEDIDO";
+                } else if (percent >= 80) {
+                  progressColor = "bg-orange-500";
+                  textBadgeColor = "text-orange-400 border-orange-950/50 bg-orange-950/20";
+                  badgeLabel = "Alerta Quota";
+                } else if (percent >= 50) {
+                  progressColor = "bg-amber-400";
+                  textBadgeColor = "text-amber-400 border-amber-950/50 bg-amber-950/20";
+                  badgeLabel = "Moderado";
+                }
+
+                const isTop1 = mostActiveTenant && mostActiveTenant.tenantId === usage.tenantId && totalUsed > 0;
+                const matchedTenantObj = tenants.find(t => t.id === usage.tenantId);
+
+                return (
+                  <div 
+                    key={usage.tenantId} 
+                    className={`bg-[#050912]/85 border rounded-xl p-4 flex flex-col gap-3 transition-all hover:border-gray-700 ${
+                      isTop1 ? 'border-purple-900/50 ring-1 ring-purple-950/40 relative overflow-hidden' : 'border-gray-850'
+                    }`}
+                  >
+                    {isTop1 && (
+                      <div className="absolute top-0 right-0 bg-purple-600/30 text-purple-300 font-mono uppercase text-[7.5px] font-bold px-2.5 py-0.5 rounded-bl select-none tracking-widest border-l border-b border-purple-900/40">
+                        🔥 Top 1 Consumo
+                      </div>
+                    )}
+
+                    {/* Header Row of single usage element */}
+                    <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1 px-0.5 text-left">
+                      <div className="flex flex-col text-left">
+                        <span className="font-sans font-bold text-white text-xs flex items-center gap-1.5 flex-wrap">
+                          <span className="text-gray-500 font-mono text-[10px] w-4 text-center">#{idx + 1}</span>
+                          {usage.tenantName}
+                          {isTop1 && <span className="text-[9px] text-amber-400">🏆</span>}
+                          {matchedTenantObj?.status === 'Suspenso' && (
+                            <span className="text-[8px] bg-red-950/35 text-red-500 px-1.5 py-0.2 rounded font-mono uppercase border border-red-900/40">Suspenso</span>
+                          )}
+                        </span>
+                        <div className="flex items-center gap-1.5 text-[9.5px] text-[10px] text-gray-500 mt-0.5 font-mono">
+                          <span>Reqs: <strong className="text-slate-300">{usage.requestsCount}</strong></span>
+                          <span>|</span>
+                          <span>Custo estimado: <strong className="text-emerald-400 font-bold">R$ {((usage.promptTokens * 0.000005) + (usage.completionTokens * 0.000015)).toFixed(2)}</strong></span>
+                          <span>|</span>
+                          <span>Último uso: <strong className="text-slate-300">{usage.lastUsedAt !== "Nenhuma requisição" && usage.lastUsedAt !== "Contador reiniciado" ? new Date(usage.lastUsedAt).toLocaleTimeString() : usage.lastUsedAt}</strong></span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 self-start sm:self-auto mt-1 sm:mt-0 font-mono">
+                        <span className={`px-1.5 py-0.5 text-[8.5px] border font-bold uppercase rounded font-mono ${textBadgeColor}`}>
+                          {badgeLabel} ({percent.toFixed(0)}%)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar Display */}
+                    <div className="flex flex-col gap-1 px-0.5 text-left">
+                      <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${progressColor} rounded-full transition-all duration-300`} 
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between items-center text-[9px] font-mono text-gray-500">
+                        <span>
+                          Consumido: <strong className="text-slate-300">{(usage.promptTokens + usage.completionTokens).toLocaleString()}</strong> [In: {usage.promptTokens.toLocaleString()} | Out: {usage.completionTokens.toLocaleString()}]
+                        </span>
+                        <span>
+                          Quota Mensal: <strong className="text-slate-300">{usage.monthlyLimit.toLocaleString()} tokens</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action buttons on the element footer */}
+                    <div className="flex flex-wrap justify-between items-center gap-3 bg-[#0a0f1d]/60 border-t border-gray-850/60 -mx-4 -mb-4 px-4 py-2 bg-[#02050c]/80 rounded-b-xl border-dashed">
+                      <div className="flex items-center gap-1.5 font-mono text-[9px] text-gray-400">
+                        <span>Ajustar quota:</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustLimit(usage.tenantId, -100000)}
+                          style={{ cursor: 'pointer' }}
+                          className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded hover:bg-slate-850 cursor-pointer text-[10px]"
+                          title="Diminuir Quota em 100k tokens"
+                        >
+                          -100k
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustLimit(usage.tenantId, 100000)}
+                          style={{ cursor: 'pointer' }}
+                          className="px-1.5 py-0.5 bg-slate-900 border border-slate-800 text-slate-400 hover:text-white rounded hover:bg-slate-850 cursor-pointer text-[10px]"
+                          title="Aumentar Quota em 100k tokens"
+                        >
+                          +100k
+                        </button>
+                      </div>
+
+                      <div className="flex gap-2 font-mono">
+                        <button
+                          type="button"
+                          onClick={() => handleResetTokenUsage(usage.tenantId)}
+                          style={{ cursor: 'pointer' }}
+                          className="text-[9px] font-mono font-bold bg-slate-900 hover:bg-red-950/20 hover:text-red-400 text-slate-400 rounded px-2.5 py-0.5 transition-colors cursor-pointer border border-transparent hover:border-red-950 text-[10px]"
+                        >
+                          Resetar Mensal
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: COPILOT CALL EMULATION SANDBOX (4-grid) */}
+          <div className="lg:col-span-4 flex flex-col gap-4">
+            
+            {/* Sandbox Console Widget */}
+            <div className="bg-[#050912] border border-gray-800 rounded-xl p-4.5 flex flex-col gap-3.5 text-left">
+              <div className="border-b border-gray-850 pb-2 flex justify-between items-center">
+                <span className="text-[10.5px] font-mono text-purple-400 font-extrabold uppercase flex items-center gap-1.5">
+                  <Play className="w-3.5 h-3.5 text-purple-405 text-purple-400 fill-purple-450 fill-purple-400" />
+                  COPILOT SIMULATION SANDBOX
+                </span>
+                <span className="text-[8.5px] font-mono uppercase bg-slate-900 border border-gray-800 text-slate-400 rounded px-1.5">TESTING CORE</span>
+              </div>
+
+              <p className="text-[10px] leading-relaxed text-slate-400">
+                Como os tokens do Gemini são gerados sob demanda nas sessões de cliente, use este simulador para injetar requisições de Copiloto e ver as quotas atualizarem em tempo real!
+              </p>
+
+              <div className="flex flex-col gap-2.5 font-mono text-xs">
+                
+                {/* Selector of Target Workshop */}
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[9.5px] text-gray-500 uppercase font-black tracking-wider">Mecânica de Destino:</label>
+                  <select 
+                    value={simSelectedTenantId}
+                    onChange={(e) => setSimSelectedTenantId(e.target.value)}
+                    className="w-full bg-slate-950 border border-gray-850 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-purple-500 font-mono cursor-pointer"
+                  >
+                    {tenants.map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name.replace(" (Membro Principal)", "")} ({t.planId})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Selector of Call Type */}
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[9.5px] text-gray-500 uppercase font-black tracking-wider">Função do Copiloto (IA):</label>
+                  <select 
+                    value={simUsecaseType}
+                    onChange={(e) => setSimUsecaseType(e.target.value as any)}
+                    className="w-full bg-slate-950 border border-gray-850 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-purple-500 font-mono cursor-pointer"
+                  >
+                    <option value="diagnose">⚙️ Gerar Diagnóstico Clínico (1.500–3.000 tks)</option>
+                    <option value="chat">💬 Chat Geral com Mecânico (500–1.300 tks)</option>
+                    <option value="obd">🔌 Telemetria Computadorizada OBD-II (2.000–4.500 tks)</option>
+                    <option value="tuning">🔥 Otimizar Remap de Performance (2.500–5.500 tks)</option>
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleSimulateCopilotCall(simSelectedTenantId, simUsecaseType)}
+                  style={{ cursor: 'pointer' }}
+                  className="py-2.5 px-4 bg-purple-600 hover:bg-purple-700 text-white font-mono text-[10.5px] font-extrabold rounded-xl text-center transition-colors border-0 uppercase select-none tracking-wider mt-1 hover:bg-purple-650 active:scale-[99.5%] cursor-pointer"
+                >
+                  ⚡ DISPARAR CHAMADA COPILOT
+                </button>
+
+              </div>
+
+              {/* Sub-note on sandbox */}
+              <div className="bg-[#0c1223]/35 rounded p-2.5 border border-gray-850/40 text-[9.5px] text-slate-450 text-gray-500 font-sans leading-relaxed text-left">
+                💡 <strong>Preço de Infraestrutura:</strong> O faturamento simulado calcula o Prompt a R$ 0,005 / 1k tokens, e a Conclusão (Completion) a R$ 0,015 / 1k tokens, que representam as margens de lucro do SaaS.
+              </div>
+
+            </div>
+
+            {/* Quota policy settings information advice card */}
+            <div className="bg-[#050912] border border-gray-900 rounded-xl p-4 text-left font-sans text-xs flex flex-col gap-2">
+              <span className="text-[10px] font-mono text-slate-450 font-bold uppercase">POLÍTICA DE INFRAESTRUTURA DE IA</span>
+              <p className="text-[10.5px] text-gray-500 leading-normal font-sans">
+                Se uma oficina parceira estoura 100% de sua quota mensal, o copiloto entra em limitação automática de banda, impedindo que mecânicos acessem diagnósticos preditivos adicionais até que:
+              </p>
+              <ul className="text-[10px] text-slate-500 pl-4 list-decimal flex flex-col gap-1 inline-block text-gray-500">
+                <li>O SuperAdmin efetue um <strong>Reset de Quota Mensal</strong>.</li>
+                <li>O parceiro realize upgrade de plano (ex: Básico → Profissional).</li>
+                <li>O cliente compre um pacote de tokens avulso sob demanda faturado no Stripe.</li>
+              </ul>
+            </div>
+
+          </div>
+
         </div>
 
       </div>
