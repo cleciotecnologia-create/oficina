@@ -65,8 +65,9 @@ interface AppContextType {
   logout: () => Promise<void>;
   
   // Modules management
-  addCliente: (c: Omit<Cliente, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
+  addCliente: (c: Omit<Cliente, 'id' | 'empresaId' | 'createdAt'> & { empresaId?: string }) => Promise<void>;
   editCliente: (id: string, c: Partial<Cliente>) => Promise<void>;
+  deleteCliente: (id: string) => Promise<void>;
   addVeiculo: (v: Omit<Veiculo, 'id' | 'empresaId'>) => Promise<void>;
   addProduto: (p: Omit<Produto, 'id' | 'empresaId'>) => Promise<void>;
   updateProdutoStock: (id: string, qty: number) => Promise<void>;
@@ -577,12 +578,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // ERP Actions implementation
-  const addCliente = async (c: Omit<Cliente, 'id' | 'empresaId' | 'createdAt'>) => {
+  const addCliente = async (c: Omit<Cliente, 'id' | 'empresaId' | 'createdAt'> & { empresaId?: string }) => {
     const id = "cli_" + Math.random().toString(36).substr(2, 9);
+    const { empresaId, ...clientData } = c;
     const newCliente: Cliente = {
-      ...c,
+      ...clientData,
       id,
-      empresaId: company.id,
+      empresaId: empresaId || company.id,
       createdAt: new Date().toISOString()
     };
 
@@ -604,6 +606,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } else {
       setClientes(prev => prev.map(c => c.id === id ? { ...c, ...updatedFields } : c));
+    }
+  };
+
+  const deleteCliente = async (id: string) => {
+    if (firebaseUser) {
+      setClientes(prev => prev.filter(c => c.id !== id));
+      try {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          await deleteDoc(doc(db, "clientes", id));
+        }
+      } catch (err) {
+        console.warn("Direct online deletion failed, local cache updated.", err);
+      }
+    } else {
+      setClientes(prev => prev.filter(c => c.id !== id));
     }
   };
 
@@ -1047,6 +1065,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       addCliente,
       editCliente,
+      deleteCliente,
       addVeiculo,
       addProduto,
       updateProdutoStock,

@@ -72,7 +72,7 @@ export interface GeminiUsage {
 }
 
 export const SuperAdminView: React.FC = () => {
-  const { company, updateCompany, user } = useApp();
+  const { company, updateCompany, user, clientes, editCliente, deleteCliente, addCliente, veiculos } = useApp();
 
   // Initial tenants listing with persistence to localStorage
   const [tenants, setTenants] = useState<Tenant[]>(() => {
@@ -90,6 +90,13 @@ export const SuperAdminView: React.FC = () => {
                 planId: company.planId,
                 customDomain: company.customDomain || t.customDomain,
                 subdomain: company.subdomain || t.subdomain,
+              };
+            }
+            if (t.id === "tenant_rafael_6") {
+              return {
+                ...t,
+                planId: "Premium",
+                monthlyValue: 499
               };
             }
             return t;
@@ -181,11 +188,11 @@ export const SuperAdminView: React.FC = () => {
         cnpj: "18.349.525/0001-30",
         email: "rafael@oficinadorafael.com.br",
         phone: "(11) 98765-5544",
-        planId: "Profissional",
+        planId: "Premium",
         createdAt: "2026-05-26T17:15:00Z",
         status: 'Ativo',
         databaseSize: 620,
-        monthlyValue: 299,
+        monthlyValue: 499,
         customDomain: "oficinadorafael.autoprecision.com.br",
         subdomain: "oficinadorafael",
         domainStatus: "Ativo"
@@ -337,6 +344,351 @@ export const SuperAdminView: React.FC = () => {
 
   // Selected tenant for detailed editing modal/drawer in local state
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+
+  // --- INTEGRATED SUPPORT, SUGGESTIONS & ADJUSTMENTS STATE ---
+  interface WorkshopSuggestion {
+    id: string;
+    tenantId: string;
+    title: string;
+    description: string;
+    category: 'Suporte' | 'Ajuste' | 'Melhoria' | 'Marketing';
+    createdAt: string;
+    status: 'Pendente' | 'Resolvido';
+  }
+
+  const [suggestions, setSuggestions] = useState<WorkshopSuggestion[]>(() => {
+    const saved = localStorage.getItem('saas_suggestions');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed)) return parsed;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return [
+      {
+        id: "sug_def_1",
+        tenantId: "tenant_rafael_6",
+        title: "💡 Sugestão de Ajuste Rápido: Faturamento de OS",
+        description: "Rafael, notei que o faturamento de suas Ordens de Serviço está concentrado no fim do mês. Sugerimos liberar as peças do estoque com 5% de desconto de balcão para pagamentos à vista via Pix para otimizar seu Fluxo de Caixa.",
+        category: "Ajuste",
+        createdAt: new Date().toISOString(),
+        status: "Pendente"
+      },
+      {
+        id: "sug_def_2",
+        tenantId: "tenant_rafael_6",
+        title: "⚙️ Suporte Técnico: Quota de Diagnósticos OBD-II",
+        description: "Reconfiguramos seu limite de processamento de IA Gemini para 500mil tokens mensais. Isso permite utilizar o CoPilot livremente em todas as marcas nacionais.",
+        category: "Suporte",
+        createdAt: new Date().toISOString(),
+        status: "Pendente"
+      }
+    ];
+  });
+
+  // Save support suggestions to localStorage when updated
+  useEffect(() => {
+    localStorage.setItem('saas_suggestions', JSON.stringify(suggestions));
+  }, [suggestions]);
+
+  // --- STATE FOR INTEGRATED CO-MANAGEMEMT OF SAAS CLIENTS DATA & CRM CLIENTS ---
+  const [superAdminViewTab, setSuperAdminViewTab] = useState<'tenants' | 'crm-clients'>('tenants');
+  const [activeCorrectionTab, setActiveCorrectionTab] = useState<'profile' | 'domain' | 'contact' | 'address'>('profile');
+  
+  // CRM Client edit modal states
+  const [selectedCrmClient, setSelectedCrmClient] = useState<any | null>(null);
+  const [editCrmClientName, setEditCrmClientName] = useState('');
+  const [editCrmClientPhone, setEditCrmClientPhone] = useState('');
+  const [editCrmClientEmail, setEditCrmClientEmail] = useState('');
+  const [editCrmClientCpf, setEditCrmClientCpf] = useState('');
+  const [editCrmClientCep, setEditCrmClientCep] = useState('');
+  const [editCrmClientAddress, setEditCrmClientAddress] = useState('');
+  const [crmSearchTerm, setCrmSearchTerm] = useState('');
+  const [isFetchingCrmCep, setIsFetchingCrmCep] = useState(false);
+  const [crmCepError, setCrmCepError] = useState<string | null>(null);
+
+  // New states for global CRM clients CRUD
+  const [selectedCrmFilterTenant, setSelectedCrmFilterTenant] = useState<string>('all');
+  const [showNewCrmClientForm, setShowNewCrmClientForm] = useState(false);
+  const [newCrmName, setNewCrmName] = useState('');
+  const [newCrmCpfCnpj, setNewCrmCpfCnpj] = useState('');
+  const [newCrmPhone, setNewCrmPhone] = useState('');
+  const [newCrmEmail, setNewCrmEmail] = useState('');
+  const [newCrmTenantId, setNewCrmTenantId] = useState('');
+  const [newCrmCep, setNewCrmCep] = useState('');
+  const [newCrmAddress, setNewCrmAddress] = useState('');
+  const [isFetchingNewCrmCep, setIsFetchingNewCrmCep] = useState(false);
+  const [newCrmCepError, setNewCrmCepError] = useState<string | null>(null);
+  const [newCrmClientFeedback, setNewCrmClientFeedback] = useState<string | null>(null);
+
+  // CEP lookup for the existing tenant being edited
+  const [isFetchingTenantEditCep, setIsFetchingTenantEditCep] = useState(false);
+  const [tenantEditCepError, setTenantEditCepError] = useState<string | null>(null);
+
+  const handleFetchTenantEditCep = async (cepCode: string) => {
+    const clean = cepCode.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    
+    setIsFetchingTenantEditCep(true);
+    setTenantEditCepError(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setTenantEditCepError("CEP não encontrado.");
+      } else {
+        const logradouro = data.logradouro || "";
+        const bairro = data.bairro || "";
+        const localidade = data.localidade || "";
+        const uf = data.uf || "";
+        
+        let fullAddress = "";
+        if (logradouro) fullAddress += logradouro;
+        if (bairro) fullAddress += `, ${bairro}`;
+        if (localidade) fullAddress += ` - ${localidade}`;
+        if (uf) fullAddress += `/${uf}`;
+        
+        setEditAddress(fullAddress);
+      }
+    } catch (err) {
+      setTenantEditCepError("Erro ViaCEP.");
+    } finally {
+      setIsFetchingTenantEditCep(false);
+    }
+  };
+
+  const handleFetchCrmCep = async (cepCode: string) => {
+    const clean = cepCode.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    
+    setIsFetchingCrmCep(true);
+    setCrmCepError(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCrmCepError("CEP não encontrado.");
+      } else {
+        const logradouro = data.logradouro || "";
+        const bairro = data.bairro || "";
+        const localidade = data.localidade || "";
+        const uf = data.uf || "";
+        
+        let fullAddress = "";
+        if (logradouro) fullAddress += logradouro;
+        if (bairro) fullAddress += `, ${bairro}`;
+        if (localidade) fullAddress += ` - ${localidade}`;
+        if (uf) fullAddress += `/${uf}`;
+        
+        setEditCrmClientAddress(fullAddress);
+      }
+    } catch (err) {
+      setCrmCepError("Erro ViaCEP.");
+    } finally {
+      setIsFetchingCrmCep(false);
+    }
+  };
+
+  const handleFetchNewCrmCep = async (cepCode: string) => {
+    const clean = cepCode.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    
+    setIsFetchingNewCrmCep(true);
+    setNewCrmCepError(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setNewCrmCepError("CEP não encontrado.");
+      } else {
+        const logradouro = data.logradouro || "";
+        const bairro = data.bairro || "";
+        const localidade = data.localidade || "";
+        const uf = data.uf || "";
+        
+        let fullAddress = "";
+        if (logradouro) fullAddress += logradouro;
+        if (bairro) fullAddress += `, ${bairro}`;
+        if (localidade) fullAddress += ` - ${localidade}`;
+        if (uf) fullAddress += `/${uf}`;
+        
+        setNewCrmAddress(fullAddress);
+      }
+    } catch (err) {
+      setNewCrmCepError("Erro ViaCEP.");
+    } finally {
+      setIsFetchingNewCrmCep(false);
+    }
+  };
+
+  const handleSaveNewCrmClient = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCrmName.trim() || !newCrmPhone.trim()) {
+      setNewCrmClientFeedback("❌ Nome e Telefone são campos obrigatórios.");
+      return;
+    }
+
+    const workshopId = newCrmTenantId || company.id;
+    const workshop = tenants.find(t => t.id === workshopId);
+
+    try {
+      await addCliente({
+        name: newCrmName.trim(),
+        phone: newCrmPhone.trim(),
+        email: newCrmEmail.trim() || undefined,
+        cpfCnpj: newCrmCpfCnpj.trim() || undefined,
+        oilChangeAlert: true,
+        reviewAlert: true,
+        empresaId: workshopId
+      });
+
+      // Write logs in SuperAdmin console
+      const timestamp = new Date().toLocaleTimeString();
+      setLogs(l => [...l, `[${timestamp}] 👤 NOVO_CLIENTE_CRM: Cliente [${newCrmName}] associado à oficina [${workshop ? workshop.name : company.name}] cadastrado com sucesso.`]);
+
+      // Reset form states
+      setNewCrmName('');
+      setNewCrmCpfCnpj('');
+      setNewCrmPhone('');
+      setNewCrmEmail('');
+      setNewCrmTenantId('');
+      setNewCrmCep('');
+      setNewCrmAddress('');
+      setNewCrmClientFeedback(`✅ Cliente "${newCrmName}" cadastrado com sucesso!`);
+      
+      setTimeout(() => {
+        setNewCrmClientFeedback(null);
+        setShowNewCrmClientForm(false);
+      }, 2500);
+
+    } catch (err) {
+      setNewCrmClientFeedback("❌ Ocorreu um erro ao salvar o registro.");
+    }
+  };
+
+  const handleDeleteTenant = (tenantId: string) => {
+    const target = tenants.find(t => t.id === tenantId);
+    if (!target) return;
+    
+    // Safety check - do not delete the main active session group
+    if (tenantId === company.id) {
+      alert("Não é permitido excluir o inquilino principal ativo desta sessão administrativa.");
+      return;
+    }
+
+    if (confirm(`Deseja realmente excluir permanentemente a oficina "${target.name}"? Todos os subdomínios, faturamento e integrações de IA vinculadas serão suspensos.`)) {
+      setTenants(prev => prev.filter(t => t.id !== tenantId));
+      setGeminiUsages(prev => prev.filter(u => u.tenantId !== tenantId));
+      
+      const newLog: AuditLog = {
+        id: "log_" + Math.random().toString(36).substring(2, 9),
+        timestamp: new Date().toISOString(),
+        tenantName: target.name,
+        changeType: 'Status',
+        newValue: 'Excluído Permanentemente',
+        oldValue: target.status,
+        adminEmail: user?.email || "cleciotecnologia@gmail.com"
+      };
+      setAuditLogs(prev => [newLog, ...prev]);
+
+      const termTimestamp = new Date().toLocaleTimeString();
+      setLogs(l => [...l, `[${termTimestamp}] ❌ EXCLUSÃO OFICINA: Oficina [${target.name}] foi excluída do SaaS pelo Admin.`]);
+    }
+  };
+
+  const handleDeleteCrmClient = async (cliId: string) => {
+    const target = clientes.find(c => c.id === cliId);
+    if (!target) return;
+
+    if (confirm(`Deseja realmente remover permanentemente o cliente "${target.name}" da base geral?`)) {
+      try {
+        await deleteCliente(cliId);
+        const timestamp = new Date().toLocaleTimeString();
+        setLogs(l => [...l, `[${timestamp}] 🗑️ EXCLUSÃO_CLIENTE_CRM: Cliente [${target.name}] removido com sucesso.`]);
+      } catch (err) {
+        alert("Erro ao excluir cliente.");
+      }
+    }
+  };
+
+  const handleOpenEditCrmClient = (cli: any) => {
+    setSelectedCrmClient(cli);
+    setEditCrmClientName(cli.name);
+    setEditCrmClientPhone(cli.phone);
+    setEditCrmClientEmail(cli.email);
+    setEditCrmClientCpf(cli.cpfCnpj);
+    setEditCrmClientCep(cli.cep || '');
+    setEditCrmClientAddress(cli.address || '');
+    setCrmCepError(null);
+  };
+
+  const handleSaveCrmClientEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCrmClient) return;
+    try {
+      await editCliente(selectedCrmClient.id, {
+        name: editCrmClientName,
+        phone: editCrmClientPhone,
+        email: editCrmClientEmail,
+        cpfCnpj: editCrmClientCpf,
+        cep: editCrmClientCep,
+        address: editCrmClientAddress,
+      });
+
+      // Log to terminal
+      const timeStr = new Date().toLocaleTimeString();
+      setLogs(l => [...l, `[${timeStr}] 👤 CORREÇÃO_CLIENTE: Cadastro do cliente de CRM [${editCrmClientName}] corrigido com sucesso.`]);
+      
+      alert("Cadastro do cliente do CRM corrigido com sucesso!");
+      setSelectedCrmClient(null);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao salvar correção de cliente.");
+    }
+  };
+
+  // Selected tenant edit states
+  const [editName, setEditName] = useState('');
+  const [editCnpj, setEditCnpj] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editPlan, setEditPlan] = useState<'Básico' | 'Profissional' | 'Premium'>('Básico');
+  const [editDbSize, setEditDbSize] = useState(0);
+  const [editSubdomain, setEditSubdomain] = useState('');
+  const [editCustomDomain, setEditCustomDomain] = useState('');
+  const [editCep, setEditCep] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editGeminiLimit, setEditGeminiLimit] = useState(500000);
+
+  // Suggestions edit states
+  const [newSugTitle, setNewSugTitle] = useState('');
+  const [newSugCat, setNewSugCat] = useState<'Suporte' | 'Ajuste' | 'Melhoria' | 'Marketing'>('Suporte');
+  const [newSugDesc, setNewSugDesc] = useState('');
+
+  // Populate form states when a tenant is selected
+  useEffect(() => {
+    if (selectedTenant) {
+      setEditName(selectedTenant.name);
+      setEditCnpj(selectedTenant.cnpj);
+      setEditEmail(selectedTenant.email);
+      setEditPhone(selectedTenant.phone);
+      setEditPlan(selectedTenant.planId || 'Básico');
+      setEditDbSize(selectedTenant.databaseSize || 1.1);
+      setEditSubdomain(selectedTenant.subdomain || '');
+      setEditCustomDomain(selectedTenant.customDomain || '');
+      setEditCep(selectedTenant.cep || '');
+      setEditAddress(selectedTenant.address || '');
+      
+      const genUsageObj = geminiUsages.find(u => u.tenantId === selectedTenant.id);
+      setEditGeminiLimit(genUsageObj ? genUsageObj.monthlyLimit : 500000);
+      
+      setNewSugTitle('');
+      setNewSugCat('Suporte');
+      setNewSugDesc('');
+    }
+  }, [selectedTenant, geminiUsages]);
   
   // Custom automated DNS and domain validation routing (Cloudflare/Route53 integration)
   const [isScanningDns, setIsScanningDns] = useState(false);
@@ -835,6 +1187,107 @@ export const SuperAdminView: React.FC = () => {
     }
   };
 
+  const handleSaveTenantAdjustments = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenant) return;
+
+    // 1. Update tenants list
+    setTenants(prev => prev.map(t => {
+      if (t.id === selectedTenant.id) {
+        return {
+          ...t,
+          name: editName,
+          cnpj: editCnpj,
+          email: editEmail,
+          phone: editPhone,
+          planId: editPlan,
+          databaseSize: editDbSize,
+          subdomain: editSubdomain,
+          customDomain: editCustomDomain,
+          cep: editCep,
+          address: editAddress,
+          status: selectedTenant.status, // Preserve status
+          monthlyValue: editPlan === 'Premium' ? 499 : editPlan === 'Profissional' ? 299 : 149
+        };
+      }
+      return t;
+    }));
+
+    // 2. Update Gemini Limit in geminiUsages
+    setGeminiUsages(prev => prev.map(u => {
+      if (u.tenantId === selectedTenant.id) {
+        return {
+          ...u,
+          tenantName: editName,
+          monthlyLimit: editGeminiLimit
+        };
+      }
+      return u;
+    }));
+
+    // 3. Add to Audit logs
+    const timestamp = new Date().toISOString();
+    const newLog: AuditLog = {
+      id: "log_" + Math.random().toString(36).substr(2, 9),
+      timestamp,
+      tenantName: editName,
+      changeType: 'Status',
+      newValue: `Plano: ${editPlan}, Tks: ${editGeminiLimit}`,
+      oldValue: `Plano: ${selectedTenant.planId}`,
+      adminEmail: user?.email || 'admin@autoprecision.com.br'
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+
+    // 4. Update logs terminal
+    const timeStr = new Date().toLocaleTimeString();
+    setLogs(l => [...l, `[${timeStr}] 🛠️ AJUSTE_SALVO: Oficina [${editName}] foi reconfigurada com sucesso pelo Admin.`]);
+
+    alert("Ajustes da oficina salvos com sucesso!");
+    setSelectedTenant(null);
+  };
+
+  const handleAddSuggestion = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedTenant || !newSugTitle.trim() || !newSugDesc.trim()) return;
+
+    const newSug: WorkshopSuggestion = {
+      id: "sug_" + Math.random().toString(36).substr(2, 9),
+      tenantId: selectedTenant.id,
+      title: newSugTitle,
+      description: newSugDesc,
+      category: newSugCat,
+      createdAt: new Date().toISOString(),
+      status: 'Pendente'
+    };
+
+    setSuggestions(prev => [newSug, ...prev]);
+    
+    // Log to terminal
+    const timeStr = new Date().toLocaleTimeString();
+    setLogs(l => [...l, `[${timeStr}] 💡 NOVA_SUGESTÃO: Suporte encaminhou nova recomendação [${newSugTitle}] para [${selectedTenant.name}].`]);
+
+    // Reset inputs
+    setNewSugTitle('');
+    setNewSugDesc('');
+    alert("Sugestão adicionada com sucesso!");
+  };
+
+  const handleToggleSuggestionStatus = (sugId: string) => {
+    setSuggestions(prev => prev.map(s => {
+      if (s.id === sugId) {
+        const nextStatus = s.status === 'Resolvido' ? 'Pendente' : 'Resolvido';
+        return { ...s, status: nextStatus };
+      }
+      return s;
+    }));
+  };
+
+  const handleDeleteSuggestion = (sugId: string) => {
+    if (confirm("Deseja realmente excluir esta sugestão de suporte?")) {
+      setSuggestions(prev => prev.filter(s => s.id !== sugId));
+    }
+  };
+
   // Peak simulation logic trigger
   const handleTriggerPeakLoad = () => {
     setSimulatedLatency(98);
@@ -1312,7 +1765,36 @@ export const SuperAdminView: React.FC = () => {
         {/* Left: Tenant Registry Database (8-grid) */}
         <div className="lg:col-span-8 flex flex-col gap-4">
           
-          <div className="bg-[#0c1223] border border-gray-800 rounded-2xl p-5 flex flex-col gap-4">
+          {/* VIEW SWITCHER / SaaS CATEGORY NAV */}
+          <div className="grid grid-cols-2 gap-3 bg-[#0a0f1d] border border-gray-850 p-1.5 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setSuperAdminViewTab('tenants')}
+              className={`py-2 px-3 rounded-lg font-mono text-[10.5px] font-extrabold tracking-wider transition-all flex items-center justify-center gap-2 select-none cursor-pointer border ${
+                superAdminViewTab === 'tenants'
+                  ? 'bg-purple-950/60 border-purple-900 text-purple-300 shadow-md shadow-purple-950/40 font-bold'
+                  : 'bg-[#050912]/50 border-transparent text-gray-505 text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <Building className="w-3.5 h-3.5" />
+              OFICINAS PARCEIRAS (SaaS TENANTS)
+            </button>
+            <button
+              type="button"
+              onClick={() => setSuperAdminViewTab('crm-clients')}
+              className={`py-2 px-3 rounded-lg font-mono text-[10.5px] font-extrabold tracking-wider transition-all flex items-center justify-center gap-2 select-none cursor-pointer border ${
+                superAdminViewTab === 'crm-clients'
+                  ? 'bg-purple-950/60 border-purple-900 text-purple-300 shadow-md shadow-purple-950/40 font-bold'
+                  : 'bg-[#050912]/50 border-transparent text-gray-550 text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              CLIENTES CRM (CARROS & DONOS)
+            </button>
+          </div>
+
+          {superAdminViewTab === 'tenants' ? (
+            <div className="bg-[#0c1223] border border-gray-800 rounded-2xl p-5 flex flex-col gap-4">
             
             <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b border-gray-850 pb-3">
               <div>
@@ -1625,6 +2107,51 @@ export const SuperAdminView: React.FC = () => {
                       </div>
                     )}
 
+                    {/* 🛠️ Direct Registration Correction Shortcuts / links */}
+                    <div className="border-t border-gray-850/40 pt-2 flex flex-wrap gap-1.5 items-center">
+                      <span className="text-[8px] font-mono text-gray-500 uppercase font-bold tracking-wider">🔧 CORREÇÃO DE ATRIBUTO:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTenant(tenant);
+                          setActiveCorrectionTab('profile');
+                        }}
+                        className="py-0.5 px-2 bg-purple-950/25 hover:bg-purple-950/50 border border-purple-900/35 hover:border-purple-800 text-[9px] text-purple-300 font-bold font-mono rounded cursor-pointer transition-all"
+                      >
+                        ✏️ Nome/CNPJ/Plano
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTenant(tenant);
+                          setActiveCorrectionTab('domain');
+                        }}
+                        className="py-0.5 px-2 bg-blue-950/25 hover:bg-blue-950/50 border border-blue-900/35 hover:border-blue-800 text-[9px] text-blue-350 font-bold font-mono rounded cursor-pointer transition-all"
+                      >
+                        🌐 URLs/Subdomínio
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTenant(tenant);
+                          setActiveCorrectionTab('contact');
+                        }}
+                        className="py-0.5 px-2 bg-amber-950/25 hover:bg-amber-950/50 border border-amber-900/35 hover:border-amber-800 text-[9px] text-amber-500 font-bold font-mono rounded cursor-pointer transition-all"
+                      >
+                        📞 Emails/Contatos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedTenant(tenant);
+                          setActiveCorrectionTab('address');
+                        }}
+                        className="py-0.5 px-2 bg-emerald-950/25 hover:bg-emerald-950/50 border border-emerald-900/35 hover:border-emerald-800 text-[9px] text-emerald-400 font-bold font-mono rounded cursor-pointer transition-all"
+                      >
+                        📍 Endereço/CEP
+                      </button>
+                    </div>
+
                     {/* Controls Actions for custom SaaS Admin */}
                     <div className="border-t border-gray-850 pt-3 flex flex-wrap gap-2 justify-between items-center bg-slate-950/30 -mx-4 -mb-4 p-3 rounded-b-xl">
                       <div className="flex gap-1.5 items-center">
@@ -1641,13 +2168,30 @@ export const SuperAdminView: React.FC = () => {
                         ))}
                       </div>
 
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedTenant(tenant)}
+                          className="py-1 px-3 text-[9px] rounded font-bold cursor-pointer transition-colors flex items-center gap-1 bg-purple-950/45 border border-purple-900/50 text-purple-300 hover:bg-purple-900/30 font-mono"
+                        >
+                          <Sliders className="w-3" />
+                          SUPORTE & SUGESTÕES
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => handleToggleStatus(tenant.id)}
-                          className={`py-1 px-3 text-[9px] rounded font-bold cursor-pointer transition-colors ${tenant.status === 'Ativo' ? 'text-red-400 bg-red-950/10 hover:bg-red-955' : 'text-green-400 bg-green-950/10 hover:bg-green-955'}`}
+                          className={`py-1 px-3 text-[9px] rounded font-bold cursor-pointer transition-colors ${tenant.status === 'Ativo' ? 'text-red-400 bg-red-950/10 hover:bg-slate-900' : 'text-green-400 bg-green-950/10 hover:bg-slate-900'}`}
                         >
                           {tenant.status === 'Ativo' ? "SUSPENDER CONTA" : "REATIVAR CONTA"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTenant(tenant.id)}
+                          className="py-1 px-3 text-[9px] rounded font-bold cursor-pointer transition-all bg-rose-950/40 text-rose-450 hover:bg-rose-900 hover:text-white border border-rose-900/40"
+                        >
+                          EXCLUIR
                         </button>
                         
                         <button
@@ -1667,6 +2211,306 @@ export const SuperAdminView: React.FC = () => {
             </div>
 
           </div>
+          ) : (
+            <div className="bg-[#0c1223] border border-gray-800 rounded-2xl p-5 flex flex-col gap-4">
+              
+              <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b border-gray-850 pb-3 text-left">
+                <div>
+                  <h3 className="font-display font-semibold text-white text-base flex items-center gap-1.5">
+                    <Users className="w-5 h-5 text-purple-400" />
+                    Base de Clientes CRM da SaaS (Preview)
+                  </h3>
+                  <p className="text-[10px] font-mono text-gray-400">
+                    Acesso global a todos os clientes CRM cadastrados no ecossistema. Administrador ativo: <strong className="text-purple-300">cleciotecnologia@gmail.com</strong>
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Select Workshop Filter */}
+                  <div className="flex items-center gap-1.5 bg-[#050912] border border-gray-850 rounded-lg px-2 py-1">
+                    <span className="text-[9px] text-gray-500 font-mono font-bold uppercase">Filtrar Oficina:</span>
+                    <select
+                      value={selectedCrmFilterTenant}
+                      onChange={(e) => setSelectedCrmFilterTenant(e.target.value)}
+                      className="bg-transparent text-white text-xs font-mono focus:outline-none border-0 cursor-pointer p-0.5"
+                    >
+                      <option value="all" className="bg-[#0c1223]">Todas ({tenants.length})</option>
+                      {tenants.map(t => (
+                        <option key={t.id} value={t.id} className="bg-[#0c1223]">{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      placeholder="Filtrar por nome, CPF ou fone..."
+                      className="bg-[#050912] border border-gray-800 rounded-lg py-1.5 pl-8 pr-3 text-white text-xs font-mono focus:outline-none focus:border-purple-500 w-full sm:w-56"
+                      value={crmSearchTerm}
+                      onChange={(e) => setCrmSearchTerm(e.target.value)}
+                    />
+                    <div className="absolute left-2.5 top-2.5 text-gray-500">
+                      <Search className="w-3 h-3" />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowNewCrmClientForm(!showNewCrmClientForm)}
+                    className={`px-3 py-1.5 rounded-lg font-mono text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                      showNewCrmClientForm
+                        ? 'bg-red-950/40 hover:bg-red-955 border border-red-900/50 text-red-400'
+                        : 'bg-purple-950/30 hover:bg-purple-950/50 border border-purple-900/40 text-purple-400'
+                    }`}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    {showNewCrmClientForm ? 'Fechar Form' : 'Novo Cliente'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Collapsible New CRM Client Form */}
+              {showNewCrmClientForm && (
+                <form onSubmit={handleSaveNewCrmClient} className="bg-[#050912] border border-purple-900/40 rounded-xl p-4 flex flex-col gap-3 text-left font-sans text-xs transition-all">
+                  <div className="flex justify-between items-center border-b border-gray-850 pb-2">
+                    <h4 className="font-mono text-xs text-purple-400 font-extrabold flex items-center gap-1.5">
+                      <Users className="w-4 h-4 text-purple-400" />
+                      CADASTRAR NOVO CLIENTE CRM SaaS
+                    </h4>
+                    <span className="text-[9px] font-mono bg-purple-950/20 text-purple-400 border border-purple-900/40 px-2 py-0.5 rounded uppercase font-bold">Cadastro de Dono</span>
+                  </div>
+
+                  {newCrmClientFeedback && (
+                    <div className={`p-2.5 rounded border font-mono text-[11px] font-bold ${newCrmClientFeedback.includes('❌') ? 'bg-red-950/20 border border-red-900 text-red-400' : 'bg-green-950/20 border border-green-900 text-green-400'}`}>
+                      {newCrmClientFeedback}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase w-full text-left">Nome do Cliente *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ex: João da Silva"
+                        className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                        value={newCrmName}
+                        onChange={(e) => setNewCrmName(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase w-full text-left">Telefone / WhatsApp *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="ex: (11) 99999-9999"
+                        className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                        value={newCrmPhone}
+                        onChange={(e) => setNewCrmPhone(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase w-full text-left">E-mail</label>
+                      <input
+                        type="email"
+                        placeholder="ex: joao@email.com"
+                        className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                        value={newCrmEmail}
+                        onChange={(e) => setNewCrmEmail(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase w-full text-left">CPF ou CNPJ</label>
+                      <input
+                        type="text"
+                        placeholder="ex: 123.456.789-00"
+                        className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                        value={newCrmCpfCnpj}
+                        onChange={(e) => setNewCrmCpfCnpj(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1 sm:col-span-2">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase w-full text-left">Oficina / Tenant Associado *</label>
+                      <select
+                        required
+                        value={newCrmTenantId}
+                        onChange={(e) => setNewCrmTenantId(e.target.value)}
+                        className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none cursor-pointer"
+                      >
+                        <option value="">-- Selecione a oficina autorizada --</option>
+                        {tenants.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1 w-full text-left">
+                        CEP Residencial {isFetchingNewCrmCep && <span className="text-purple-400 text-[8px] animate-pulse">(ViaCEP...)</span>}
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Apenas números (ex: 01001000)"
+                        className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none font-mono"
+                        value={newCrmCep}
+                        onChange={(e) => {
+                          setNewCrmCep(e.target.value);
+                          if (e.target.value.replace(/\D/g, "").length === 8) {
+                            handleFetchNewCrmCep(e.target.value);
+                          }
+                        }}
+                      />
+                      {newCrmCepError && <span className="text-[8px] text-red-400">{newCrmCepError}</span>}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] text-gray-400 font-bold uppercase w-full text-left">Endereço Completo</label>
+                      <input
+                        type="text"
+                        placeholder="Rua, Número, Cidade"
+                        className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                        value={newCrmAddress}
+                        onChange={(e) => setNewCrmAddress(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-650 hover:to-indigo-650 text-white font-mono text-[11px] font-bold rounded-xl mt-2 cursor-pointer border-0 select-none transition-all active:scale-[98.5%]"
+                  >
+                    💾 SALVAR REGISTRO DO CLIENTE NO CRM
+                  </button>
+                </form>
+              )}
+
+              {/* CRM Clients List */}
+              <div className="flex flex-col gap-3 font-mono text-xs">
+                {clientes.filter(cli => {
+                  // Workshop Filter
+                  if (selectedCrmFilterTenant !== 'all' && cli.empresaId !== selectedCrmFilterTenant) return false;
+                  
+                  if (!crmSearchTerm) return true;
+                  const term = crmSearchTerm.toLowerCase();
+                  return (
+                    cli.name.toLowerCase().includes(term) ||
+                    cli.phone.includes(term) ||
+                    (cli.email && cli.email.toLowerCase().includes(term)) ||
+                    (cli.cpfCnpj && cli.cpfCnpj.includes(term))
+                  );
+                }).length === 0 ? (
+                  <div className="p-8 text-center text-gray-500 bg-[#050912]/20 border border-gray-900 border-dashed rounded-xl">
+                    Nenhum cliente CRM encontrado com os critérios de unidade ou pesquisa definidos.
+                  </div>
+                ) : (
+                  clientes
+                    .filter(cli => {
+                      // Workshop Filter
+                      if (selectedCrmFilterTenant !== 'all' && cli.empresaId !== selectedCrmFilterTenant) return false;
+
+                      if (!crmSearchTerm) return true;
+                      const term = crmSearchTerm.toLowerCase();
+                      return (
+                        cli.name.toLowerCase().includes(term) ||
+                        cli.phone.includes(term) ||
+                        (cli.email && cli.email.toLowerCase().includes(term)) ||
+                        (cli.cpfCnpj && cli.cpfCnpj.includes(term))
+                      );
+                    })
+                    .map((cli) => {
+                      const clientVehs = veiculos.filter(v => v.clienteId === cli.id);
+                      // Look up proper original workshop/tenant name
+                      const clientTenant = tenants.find(t => t.id === cli.empresaId);
+                      const clientTenantName = clientTenant ? clientTenant.name : company.name;
+
+                      return (
+                        <div 
+                          key={cli.id} 
+                          className="p-4 rounded-xl border border-gray-850 hover:border-gray-800 bg-[#050912] text-left flex flex-col gap-3 transition-all"
+                        >
+                          {/* Name & Workshop identification banner */}
+                          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-gray-850 pb-2">
+                            <div className="flex flex-col gap-0.5">
+                              <strong className="text-white text-sm">{cli.name}</strong>
+                              <span className="text-[10px] text-gray-500">ID: {cli.id} | CPF/CNPJ: {cli.cpfCnpj}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[10px]">
+                              <span className="text-gray-500 font-mono">📍 UNIDADE:</span>
+                              <span className="px-2 py-0.5 bg-purple-950/20 text-purple-300 border border-purple-900/40 rounded font-bold">
+                                💼 {clientTenantName} {cli.empresaId === company.id ? '(Sessão Ativa)' : ''}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Client Parameters & Contacts info */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-[10px] text-gray-400">
+                            <div>📞 Telefone: <strong className="text-slate-300">{cli.phone}</strong></div>
+                            <div>📧 E-mail: <strong className="text-slate-300">{cli.email || 'Não informado'}</strong></div>
+                            <div>📅 Criado em: <strong className="text-slate-300">{cli.createdAt ? new Date(cli.createdAt).toLocaleDateString() : 'N/D'}</strong></div>
+                          </div>
+
+                          {/* Vehicles associated to this owner */}
+                          <div className="text-[10px] bg-slate-950/40 p-2.5 rounded-lg border border-gray-900 flex flex-wrap items-center gap-1.5">
+                            <span className="text-gray-500 uppercase font-bold tracking-wider text-[8px] mr-1">🚗 Frota de Veículos:</span>
+                            {clientVehs.length === 0 ? (
+                              <span className="text-gray-600 italic">Nenhum veículo vinculado a este proprietário.</span>
+                            ) : (
+                              clientVehs.map((vehi) => (
+                                <span 
+                                  key={vehi.id} 
+                                  className="px-2 py-0.5 bg-[#0a0f1d] border border-gray-850 text-slate-300 rounded text-[9px]"
+                                >
+                                  {vehi.brand} {vehi.model} — Placa: <strong className="text-purple-400 select-all">{vehi.plate}</strong> ({vehi.year})
+                                </span>
+                              ))
+                            )}
+                          </div>
+
+                          {/* Full Address details */}
+                          <div className="text-[10px] text-gray-400 flex flex-wrap items-center gap-x-2">
+                            <span>🏠 Endereço Res.:</span>
+                            <span className="text-slate-300">{cli.address || 'Não configurado no cadastro.'}</span>
+                            {cli.cep && (
+                              <span className="px-1.5 py-0.2 bg-[#050912] border border-gray-850 text-purple-400 font-mono rounded text-[9px]">CEP {cli.cep}</span>
+                            )}
+                          </div>
+
+                          {/* Fast edit correction action trigger */}
+                          <div className="border-t border-gray-850 pt-2 flex justify-between items-center bg-[#070c18] -mx-4 -mb-4 p-2.5 rounded-b-xl gap-3 flex-wrap">
+                            <span className="text-[9px] text-gray-500 font-mono">
+                              * Sincronização automática em tempo real com o banco de dados principal.
+                            </span>
+                            
+                            <div className="flex gap-2 items-center">
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCrmClient(cli.id)}
+                                className="py-1 px-2.5 bg-red-950/45 hover:bg-red-900 text-red-300 hover:text-white border border-red-900/35 font-bold rounded font-mono text-[9px] cursor-pointer"
+                              >
+                                🗑️ EXCLUIR CLIENTE
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditCrmClient(cli)}
+                                className="py-1 px-3 bg-purple-650 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded font-mono text-[9px] transition-colors cursor-pointer border-0"
+                              >
+                                ✏️ CORRIGIR CADASTRO CO-PILOTO
+                              </button>
+                            </div>
+                          </div>
+
+                        </div>
+                      );
+                    })
+                )}
+              </div>
+
+            </div>
+          )}
 
           {/* Pricing Configs Grid */}
           <div className="bg-[#0c1223] border border-gray-800 rounded-2xl p-5 flex flex-col gap-4 text-left">
@@ -1985,6 +2829,508 @@ export const SuperAdminView: React.FC = () => {
           <span className="border border-purple-900/40 bg-purple-950/10 px-2 py-0.5 rounded text-purple-400 uppercase tracking-widest font-extrabold animate-pulse">● Conexão com Firebase segura</span>
         </div>
       </div>
+
+      {/* 🛠️ MODAL DE AJUSTE, SUPORTE E SUGESTÕES PARA TENANTS */}
+      {selectedTenant && (
+        <div id="support-suggestions-modal" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-[#0c1223] border border-purple-900/80 rounded-2xl w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto flex flex-col p-4 sm:p-6 text-left relative shadow-2xl shadow-purple-950/30">
+            
+            {/* Header */}
+            <div className="flex justify-between items-start gap-4 pb-4 border-b border-gray-850">
+              <div className="flex flex-col gap-1 text-left">
+                <span className="bg-purple-950/40 border border-purple-900 border-dashed text-purple-400 font-mono text-[9px] uppercase tracking-widest font-extrabold px-2 py-0.5 rounded w-max">
+                  🛠️ PORTAL DE AJUSTE & SUPORTE
+                </span>
+                <h3 className="text-base sm:text-lg font-display font-extrabold text-white flex items-center gap-2 mt-1">
+                  Gerenciar Canal: <span className="text-purple-300">{selectedTenant.name}</span>
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  Ajuste plano, limites de tokens Gemini ou envie dicas operacionais personalizadas para serem exibidas no ERP deste cliente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedTenant(null)}
+                className="p-1 text-gray-500 hover:text-white rounded bg-slate-900 hover:bg-slate-800 cursor-pointer text-xs font-bold px-2 py-1 font-mono transition-colors"
+              >
+                ✕ FECHAR
+              </button>
+            </div>
+
+            {/* Split Content Form & Suggestions */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-5 items-start">
+              
+              {/* LEFT COLUMN: TENANT GENERAL PARAMETERS FORM */}
+              <form onSubmit={handleSaveTenantAdjustments} className="bg-gray-950/40 border border-gray-900 p-4 rounded-xl flex flex-col gap-4 text-left">
+                <div className="border-b border-gray-900 pb-2 flex justify-between items-center">
+                  <h4 className="text-xs font-mono font-bold text-gray-400 uppercase tracking-widest">⚙️ Parâmetros de Cadastro</h4>
+                  <span className="text-[9px] text-purple-400 font-mono font-semibold">Correção Rápida</span>
+                </div>
+
+                {/* TAB REGISTRATION NAVIGATION */}
+                <div className="flex bg-[#050912] border border-gray-900 rounded-lg overflow-hidden divide-x divide-gray-900">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCorrectionTab('profile')}
+                    className={`flex-1 py-1.5 text-center text-[10px] font-mono font-bold uppercase transition-all cursor-pointer select-none border-0 ${
+                      activeCorrectionTab === 'profile'
+                        ? 'bg-purple-950/70 text-purple-300 font-extrabold'
+                        : 'text-gray-500 hover:text-gray-300 bg-transparent'
+                    }`}
+                  >
+                    ✏️ Identidade
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCorrectionTab('domain')}
+                    className={`flex-1 py-1.5 text-center text-[10px] font-mono font-bold uppercase transition-all cursor-pointer select-none border-0 ${
+                      activeCorrectionTab === 'domain'
+                        ? 'bg-purple-950/70 text-purple-300 font-extrabold'
+                        : 'text-gray-500 hover:text-gray-300 bg-transparent'
+                    }`}
+                  >
+                    🌐 DNS/Plataforma
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCorrectionTab('contact')}
+                    className={`flex-1 py-1.5 text-center text-[10px] font-mono font-bold uppercase transition-all cursor-pointer select-none border-0 ${
+                      activeCorrectionTab === 'contact'
+                        ? 'bg-purple-950/70 text-purple-300 font-extrabold'
+                        : 'text-gray-500 hover:text-gray-300 bg-transparent'
+                    }`}
+                  >
+                    📞 Contatos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCorrectionTab('address')}
+                    className={`flex-1 py-1.5 text-center text-[10px] font-mono font-bold uppercase transition-all cursor-pointer select-none border-0 ${
+                      activeCorrectionTab === 'address'
+                        ? 'bg-purple-950/70 text-purple-300 font-extrabold'
+                        : 'text-gray-500 hover:text-gray-300 bg-transparent'
+                    }`}
+                  >
+                    📍 Locais
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs mt-1">
+                  
+                  {activeCorrectionTab === 'profile' && (
+                    <>
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">NOME DA OFICINA / CONTRATO</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={editName}
+                          onChange={e => setEditName(e.target.value)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs" 
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">CNPJ DA EMPRESA</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={editCnpj}
+                          onChange={e => setEditCnpj(e.target.value)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">PLANO SAAS ATIVO</label>
+                        <select
+                          value={editPlan}
+                          onChange={e => setEditPlan(e.target.value as any)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-2 text-white text-xs font-bold cursor-pointer"
+                        >
+                          <option value="Básico">Básico (R$ 149/mês)</option>
+                          <option value="Profissional">Profissional (R$ 299/mês)</option>
+                          <option value="Premium">Premium (R$ 499/mês)</option>
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 sm:col-span-2 bg-[#050912] p-3 rounded-lg border border-purple-950">
+                        <div className="flex justify-between items-center text-[10px]">
+                          <label className="text-purple-400 font-mono font-bold uppercase tracking-wider">💎 Quota Gemini CoPilot</label>
+                          <span className="text-gray-400 font-mono">{(editGeminiLimit / 1000).toFixed(0)}k tks /mês</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min={100000}
+                          max={5000000}
+                          step={100000}
+                          value={editGeminiLimit}
+                          onChange={e => setEditGeminiLimit(parseInt(e.target.value))}
+                          className="w-full accent-purple-500 cursor-ew-resize mt-2"
+                        />
+                        <div className="flex justify-between text-[9px] text-gray-500 font-mono mt-1">
+                          <span>100k tokens</span>
+                          <span>500k recom.</span>
+                          <span>5.0M Premium</span>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {activeCorrectionTab === 'domain' && (
+                    <>
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">SUBDOMÍNIO DE ACESSO (.autoprecision.com.br)</label>
+                        <input 
+                          type="text" 
+                          value={editSubdomain}
+                          onChange={e => setEditSubdomain(e.target.value)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                          placeholder="oficina-do-rafael"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">DOMÍNIO CUSTOMIZADO (CNAME EXTERNO)</label>
+                        <input 
+                          type="text" 
+                          value={editCustomDomain}
+                          onChange={e => setEditCustomDomain(e.target.value)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                          placeholder="autoprecision.com.br"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">ARMAZENAMENTO ATRIBUÍDO NO CLUSTER (GBS)</label>
+                        <input 
+                          type="number" 
+                          step="0.1"
+                          required
+                          value={editDbSize}
+                          onChange={e => setEditDbSize(parseFloat(e.target.value) || 0)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {activeCorrectionTab === 'contact' && (
+                    <>
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">TELEFONE GERAL</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={editPhone}
+                          onChange={e => setEditPhone(e.target.value)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">E-MAIL DE SUPORTE / NOTIFICAÇÃO</label>
+                        <input 
+                          type="email" 
+                          required
+                          value={editEmail}
+                          onChange={e => setEditEmail(e.target.value)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {activeCorrectionTab === 'address' && (
+                    <>
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-gray-400 font-mono text-[10px] font-bold">CEP DO ESTABELECIMENTO</label>
+                          {isFetchingTenantEditCep && <span className="text-purple-400 text-[8px] animate-pulse">Buscando CEP...</span>}
+                          {tenantEditCepError && <span className="text-red-400 text-[8px]">{tenantEditCepError}</span>}
+                        </div>
+                        <input 
+                          type="text" 
+                          value={editCep}
+                          placeholder="CEP de 8 dígitos para auto-preenchimento"
+                          onChange={e => {
+                            setEditCep(e.target.value);
+                            if (e.target.value.replace(/\D/g, "").length === 8) {
+                              handleFetchTenantEditCep(e.target.value);
+                            }
+                          }}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5 sm:col-span-2">
+                        <label className="text-gray-400 font-mono text-[10px] font-bold">ENDEREÇO COMPLETO VIA VIA_CEP</label>
+                        <input 
+                          type="text" 
+                          value={editAddress}
+                          onChange={e => setEditAddress(e.target.value)}
+                          className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs" 
+                        />
+                      </div>
+                    </>
+                  )}
+
+                </div>
+
+                <button
+                  type="submit"
+                  style={{ cursor: 'pointer' }}
+                  className="py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-650 hover:to-indigo-650 text-white font-mono text-[11px] font-bold rounded-xl mt-2 tracking-wider text-center cursor-pointer border-0 select-none transition-all active:scale-[99.5%]"
+                >
+                  SALVAR AJUSTES DA OFICINA
+                </button>
+              </form>
+
+              {/* RIGHT COLUMN: ACTIVE SUPPORT SUGGESTIONS PANEL */}
+              <div className="bg-gray-950/40 border border-gray-900 p-4 rounded-xl flex flex-col gap-4 text-left">
+                <div className="border-b border-gray-900 pb-2 flex justify-between items-center">
+                  <h4 className="text-xs font-mono font-bold text-gray-400 uppercase tracking-widest">📝 RECOMENDAÇÕES DO SUPORTE</h4>
+                  <span className="text-[9px] text-pink-400 font-mono font-semibold">Exibido no Dashboard ERP</span>
+                </div>
+
+                {/* Sub-form to Add New Suggestions */}
+                <form onSubmit={handleAddSuggestion} className="bg-slate-950 border border-gray-900 p-3 rounded-lg flex flex-col gap-2.5 text-xs">
+                  <span className="text-[10px] text-gray-405 text-gray-500 font-mono font-bold block uppercase tracking-wider">✦ Cadastrar Nova Dica Operacional</span>
+                  
+                  <div className="grid grid-cols-5 gap-2">
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="Título da recomendação..."
+                      className="col-span-3 bg-[#0a0f1d] border border-slate-850 rounded py-1 px-2.5 text-xs text-white"
+                      value={newSugTitle}
+                      onChange={e => setNewSugTitle(e.target.value)}
+                    />
+                    
+                    <select
+                      className="col-span-2 bg-[#0a0f1d] border border-slate-850 rounded py-1 px-1.5 text-xs text-slate-300 font-mono cursor-pointer"
+                      value={newSugCat}
+                      onChange={e => setNewSugCat(e.target.value as any)}
+                    >
+                      <option value="Suporte">Suporte Tech</option>
+                      <option value="Ajuste">Ajuste Config</option>
+                      <option value="Marketing">Campanha/Mkt</option>
+                      <option value="Melhoria">Melhoria</option>
+                    </select>
+                  </div>
+
+                  <textarea
+                    required
+                    placeholder="Escreva detalhadamente a instrução ou orientação de suporte. Ela aparecerá diretamente na tela principal do cliente para ajudá-lo operativamente..."
+                    className="w-full bg-[#0a0f1d] border border-slate-850 rounded py-1 px-2.5 text-xs text-slate-300 h-16 resize-none font-sans"
+                    value={newSugDesc}
+                    onChange={e => setNewSugDesc(e.target.value)}
+                  />
+
+                  <button
+                    type="submit"
+                    style={{ cursor: 'pointer' }}
+                    className="py-1.5 bg-purple-650 bg-purple-600 hover:bg-purple-700 text-white font-mono text-[9.5px] font-bold rounded-lg tracking-wider text-center cursor-pointer border-0 select-none transition-colors"
+                  >
+                    🚀 ENVIAR RECOMENDAÇÃO DIPLOMÁTICA
+                  </button>
+                </form>
+
+                {/* List of suggestions sent to this store */}
+                <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+                  <span className="text-[9.5px] font-mono text-gray-400 font-bold block uppercase tracking-wider">Histórico de Sugestões de Suporte</span>
+                  
+                  {suggestions.filter(s => s.tenantId === selectedTenant.id).length === 0 ? (
+                    <div className="text-center py-6 text-[11px] text-gray-600 font-mono bg-slate-950/20 border border-gray-900 border-dashed rounded-lg">
+                      Nenhuma dica ou sugestão ativa para este cliente. Use o formulário acima para criá-la.
+                    </div>
+                  ) : (
+                    suggestions
+                      .filter(s => s.tenantId === selectedTenant.id)
+                      .map((sug) => (
+                        <div key={sug.id} className="bg-slate-950/70 border border-slate-900 rounded-lg p-3 text-xs flex flex-col gap-1.5 relative hover:border-gray-850 transition-all">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSuggestion(sug.id)}
+                            className="absolute top-2 right-2 text-red-500 hover:text-red-400 font-mono text-[10px] bg-red-955 hover:bg-red-950/20 p-1 px-1.5 rounded"
+                            title="Remover sugestão"
+                          >
+                            ✕ Excluir
+                          </button>
+                          
+                          <div className="flex items-center gap-1.5 leading-none pr-16 text-left">
+                            <span className="text-[8px] bg-slate-900 text-slate-400 font-mono border border-slate-800 rounded px-1">{sug.category}</span>
+                            <span className={`${sug.status === 'Resolvido' ? 'line-through text-slate-500 font-bold' : 'text-slate-200 font-bold'}`}>{sug.title}</span>
+                          </div>
+
+                          <p className={`text-slate-400 text-[11px] text-left leading-relaxed mt-0.5 ${sug.status === 'Resolvido' ? 'line-through text-slate-600' : ''}`}>
+                            {sug.description}
+                          </p>
+
+                          <div className="flex justify-between items-center mt-2 pt-1.5 border-t border-gray-900 text-[9px] font-mono">
+                            <span className="text-slate-500">Enviado em: {new Date(sug.createdAt).toLocaleDateString()}</span>
+                            
+                            <button
+                              type="button"
+                              onClick={() => handleToggleSuggestionStatus(sug.id)}
+                              className={`px-2 py-0.5 rounded font-bold ${
+                                sug.status === 'Resolvido'
+                                  ? 'bg-green-950/30 text-green-400 border border-green-900'
+                                  : 'bg-yellow-950/30 text-yellow-500 border border-yellow-905 hover:bg-yellow-950'
+                              }`}
+                            >
+                              {sug.status === 'Resolvido' ? '✔️ Lido / Resolvido' : '● Aguardando Visualização'}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Footer Infiltrator Action link Shortcut */}
+            <div className="mt-6 pt-4 border-t border-gray-850 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs">
+              <span className="text-[10px] text-gray-500 font-mono">
+                * Qualquer alteração em CNPJ, Plano ou Quota de Token reflete instantaneamente nas propriedades de hardware isoladas em nuvem.
+              </span>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  const t = selectedTenant;
+                  setSelectedTenant(null);
+                  handleImpersonate(t);
+                }}
+                className="py-1.5 px-4 bg-yellow-600 hover:bg-yellow-700 text-black font-extrabold rounded-lg select-none cursor-pointer duration-200 flex items-center gap-1.5 text-[11px] font-mono shadow-md shadow-yellow-600/10 active:scale-95 border-0"
+              >
+                <Zap className="w-4" /> INFILTRAR NA CONTA ERP PREPARADO
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 👤 MODAL DE CORREÇÃO DE CADASTRO DE CLIENTE CRM */}
+      {selectedCrmClient && (
+        <div id="crm-client-correction-modal" className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0c1223] border border-purple-900/80 rounded-2xl w-full max-w-lg overflow-y-auto flex flex-col p-6 text-left relative shadow-2xl shadow-purple-950/30">
+            
+            {/* Header */}
+            <div className="flex justify-between items-start gap-4 pb-4 border-b border-gray-850">
+              <div className="flex flex-col gap-1 text-left">
+                <span className="bg-purple-950/40 border border-purple-900 border-dashed text-purple-400 font-mono text-[9px] uppercase tracking-widest font-extrabold px-2 py-0.5 rounded w-max">
+                  👤 CRM REGISTER REVISION
+                </span>
+                <h3 className="text-base font-display font-extrabold text-white flex items-center gap-2 mt-1">
+                  Corrigir Cadastro do Cliente
+                </h3>
+                <p className="text-[10px] text-slate-400 font-mono">
+                  Edite as informações cadastrais do cliente <span className="text-purple-300 font-bold">{selectedCrmClient.name}</span>.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedCrmClient(null)}
+                className="p-1 text-gray-450 hover:text-white rounded bg-slate-900 hover:bg-slate-800 cursor-pointer text-xs font-mono font-bold transition-all px-2.5 py-1 border-0"
+              >
+                ✕ CANCELAR
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSaveCrmClientEdit} className="flex flex-col gap-4 mt-4 text-xs font-mono">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-gray-400 font-mono text-[10px] font-bold col-span-2">NOME DO PROPRIETÁRIO</label>
+                <input 
+                  type="text" 
+                  required
+                  value={editCrmClientName}
+                  onChange={e => setEditCrmClientName(e.target.value)}
+                  className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-sans" 
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 font-mono text-[10px] font-bold">CPF OU CNPJ</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={editCrmClientCpf}
+                    onChange={e => setEditCrmClientCpf(e.target.value)}
+                    className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-gray-400 font-mono text-[10px] font-bold">TELEFONE / WHATSAPP</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={editCrmClientPhone}
+                    onChange={e => setEditCrmClientPhone(e.target.value)}
+                    className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-gray-400 font-mono text-[10px] font-bold">ENDEREÇO DE E-MAIL</label>
+                <input 
+                  type="email" 
+                  placeholder="exemplo@email.com"
+                  value={editCrmClientEmail}
+                  onChange={e => setEditCrmClientEmail(e.target.value)}
+                  className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-sans" 
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5 border-t border-gray-900 pt-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-gray-400 font-mono text-[10px] font-bold">CEP RESIDENCIAL</label>
+                  {isFetchingCrmCep && <span className="text-purple-400 text-[8px] animate-pulse">Consultando ViaCEP...</span>}
+                  {crmCepError && <span className="text-red-400 text-[8px]">{crmCepError}</span>}
+                </div>
+                <input 
+                  type="text" 
+                  placeholder="Digitar CEP sem traços"
+                  value={editCrmClientCep}
+                  onChange={e => {
+                    setEditCrmClientCep(e.target.value);
+                    if (e.target.value.replace(/\D/g, "").length === 8) {
+                      handleFetchCrmCep(e.target.value);
+                    }
+                  }}
+                  className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono" 
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-gray-400 font-mono text-[10px] font-bold">ENDEREÇO COMPLETO VIA VIA_CEP</label>
+                <input 
+                  type="text" 
+                  placeholder="Rua, Número, Bairro, Cidade/UF"
+                  value={editCrmClientAddress}
+                  onChange={e => setEditCrmClientAddress(e.target.value)}
+                  className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-sans" 
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-650 hover:to-indigo-650 text-white font-mono text-[11px] font-bold rounded-xl mt-3 tracking-wider text-center cursor-pointer border-0 select-none transition-all active:scale-[98.5%]"
+              >
+                💾 SALVAR CORREÇÃO DE CLIENTE
+              </button>
+
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

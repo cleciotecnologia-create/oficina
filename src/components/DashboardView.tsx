@@ -31,8 +31,101 @@ export const DashboardView: React.FC = () => {
     produtos, 
     ordensServico, 
     financeiro, 
-    caixaStatus 
+    caixaStatus,
+    company
   } = useApp();
+
+  // Load administrative support suggestions for this workshop from localStorage with reactive status toggles
+  const [sugList, setSugList] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem('saas_suggestions');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed)) {
+          // Filter suggestions for this company
+          const companySugs = parsed.filter((s: any) => s.tenantId === company.id);
+          // If none are present and this is Oficina do Rafael, seed default suggestions
+          if (companySugs.length === 0 && company.id === 'tenant_rafael_6') {
+            const defaults = [
+              {
+                id: "sug_def_1",
+                tenantId: "tenant_rafael_6",
+                title: "💡 Sugestão de Ajuste Rápido: Faturamento de OS",
+                description: "Rafael, notei que o faturamento de suas Ordens de Serviço está concentrado no fim do mês. Sugerimos liberar as peças do estoque com 5% de desconto de balcão para pagamentos à vista via Pix para otimizar seu Fluxo de Caixa.",
+                category: "Ajuste",
+                createdAt: new Date().toISOString(),
+                status: "Pendente"
+              },
+              {
+                id: "sug_def_2",
+                tenantId: "tenant_rafael_6",
+                title: "⚙️ Suporte Técnico: Quota de Diagnósticos OBD-II",
+                description: "Reconfiguramos seu limite de processamento de IA Gemini para 500mil tokens mensais. Isso permite utilizar o CoPilot livremente em todas as marcas nacionais.",
+                category: "Suporte",
+                createdAt: new Date().toISOString(),
+                status: "Pendente"
+              }
+            ];
+            // Save defaults
+            const updated = [...parsed, ...defaults];
+            localStorage.setItem('saas_suggestions', JSON.stringify(updated));
+            setSugList(defaults);
+          } else {
+            setSugList(companySugs);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      // If no suggestions in localStorage at all, seed initial ones for all
+      const initialSugs = [
+        {
+          id: "sug_def_1",
+          tenantId: "tenant_rafael_6",
+          title: "💡 Sugestão de Ajuste Rápido: Faturamento de OS",
+          description: "Rafael, notei que o faturamento de suas Ordens de Serviço está concentrado no fim do mês. Sugerimos liberar as peças do estoque com 5% de desconto de balcão para pagamentos à vista via Pix para otimizar seu Fluxo de Caixa.",
+          category: "Ajuste",
+          createdAt: new Date().toISOString(),
+          status: "Pendente"
+        },
+        {
+          id: "sug_def_2",
+          tenantId: "tenant_rafael_6",
+          title: "⚙️ Suporte Técnico: Quota de Diagnósticos OBD-II",
+          description: "Reconfiguramos seu limite de processamento de IA Gemini para 500mil tokens mensais. Isso permite utilizar o CoPilot livremente em todas as marcas nacionais.",
+          category: "Suporte",
+          createdAt: new Date().toISOString(),
+          status: "Pendente"
+        }
+      ];
+      localStorage.setItem('saas_suggestions', JSON.stringify(initialSugs));
+      setSugList(initialSugs.filter((s: any) => s.tenantId === company.id));
+    }
+  }, [company.id]);
+
+  const handleMarkAsResolved = (sugId: string) => {
+    const saved = localStorage.getItem('saas_suggestions');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed)) {
+          const updated = parsed.map((s: any) => {
+            if (s.id === sugId) {
+              return { ...s, status: s.status === 'Resolvido' ? 'Pendente' : 'Resolvido' };
+            }
+            return s;
+          });
+          localStorage.setItem('saas_suggestions', JSON.stringify(updated));
+          setSugList(updated.filter((s: any) => s.tenantId === company.id));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
 
   // 1. KPI Calculations
   const dailyEarnings = () => {
@@ -93,11 +186,86 @@ export const DashboardView: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-2">
+          {company.name.includes("(Impersonado)") && (
+            <span className="text-[10px] font-mono tracking-wider bg-yellow-950/45 border border-yellow-800 text-yellow-405 text-yellow-500 px-3 py-1.5 rounded-full font-bold animate-pulse">
+              👤 ADMINISTRADOR INFILTRADO
+            </span>
+          )}
           <span className="text-[11px] font-mono tracking-widest bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-full text-slate-400">
             Ficha: {caixaStatus?.status === 'Aberto' ? '🟢 CAIXA OPERACIONAL ABERTO' : '🔴 CAIXA FECHADO'}
           </span>
         </div>
       </div>
+
+      {/* 💡 SAAS ADMINISTRATIVE SUPPORT SUGGESTIONS BOX */}
+      {sugList.length > 0 && (
+        <div className="bg-gradient-to-r from-purple-950/20 to-indigo-950/15 border border-purple-900/40 rounded-2xl p-5 flex flex-col gap-4 text-left">
+          <div className="flex items-center gap-2 pb-2.5 border-b border-gray-850/60">
+            <span className="bg-purple-950/50 border border-purple-800 text-purple-400 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded font-mono">
+              💡 CANAL DE SUPORTE SaaS
+            </span>
+            <strong className="text-white text-xs font-sans">
+              Recomendações e Dicas Administrativas do SuperAdmin
+            </strong>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {sugList.map((sug) => (
+              <div 
+                key={sug.id} 
+                className={`p-4 rounded-xl border transition-all text-xs flex flex-col gap-2 ${
+                  sug.status === 'Resolvido' 
+                    ? 'bg-[#050912]/40 border-gray-900/50 opacity-60' 
+                    : 'bg-[#070b16] border-purple-950 hover:border-purple-900/60'
+                }`}
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                      {sug.category === 'Marketing' && '📢'}
+                      {sug.category === 'Ajuste' && '🛠️'}
+                      {sug.category === 'Suporte' && '⚙️'}
+                      {sug.category === 'Melhoria' && '📈'}
+                      <span className={sug.status === 'Resolvido' ? 'line-through text-slate-500' : ''}>
+                        {sug.title}
+                      </span>
+                    </span>
+                    <span className="text-[9px] font-mono text-gray-500">
+                      Enviado em: {new Date(sug.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  
+                  <span className={`px-1.5 py-0.2 rounded text-[8px] font-mono font-bold uppercase ${
+                    sug.status === 'Resolvido' 
+                      ? 'bg-green-950/20 border border-green-950 text-green-600' 
+                      : 'bg-amber-950/30 border border-amber-900/50 text-amber-400 animate-pulse'
+                  }`}>
+                    {sug.status === 'Resolvido' ? 'CONCLUÍDO' : 'PENDENTE'}
+                  </span>
+                </div>
+
+                <p className={`text-slate-350 text-[11px] leading-relaxed ${sug.status === 'Resolvido' ? 'line-through text-slate-500' : ''}`}>
+                  {sug.description}
+                </p>
+
+                <div className="flex justify-end mt-1 pt-2 border-t border-gray-850/30">
+                  <button
+                    type="button"
+                    onClick={() => handleMarkAsResolved(sug.id)}
+                    className={`py-1 px-2.5 rounded text-[9.5px] font-mono cursor-pointer transition-colors flex items-center gap-1.5 ${
+                      sug.status === 'Resolvido'
+                        ? 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                        : 'bg-purple-950/40 text-purple-300 hover:bg-purple-900/30 border border-purple-900/50 font-bold'
+                    }`}
+                  >
+                    {sug.status === 'Resolvido' ? ' Reabrir Dica' : '✔️ Marcar como Lido'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
