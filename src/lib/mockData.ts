@@ -309,13 +309,57 @@ export const MOCK_OS: OrdemServico[] = [
 
 export const MOCK_FINANCE: Financeiro[] = [
   // Receitas (Ganhos de OS e PDV)
-  { id: "fin_1", empresaId: "comp_demo_1", description: "Ordem de Serviço OS-2026-002", type: "Receita", amount: 889.90, dueDate: "2026-05-20", status: "Pago", category: "Serviços", createdAt: "2026-05-20T17:00:00Z" },
-  { id: "fin_2", empresaId: "comp_demo_1", description: "Venda PDV Balcão #1032", type: "Receita", amount: 379.80, dueDate: "2026-05-25", status: "Pago", category: "Vendas Peças", createdAt: "2026-05-25T14:10:00Z" },
-  { id: "fin_3", empresaId: "comp_demo_1", description: "Venda Dianteira Pastilhas Bosch", type: "Receita", amount: 189.90, dueDate: "2026-05-24", status: "Pago", category: "Vendas Peças", createdAt: "2026-05-24T11:30:00Z" },
+  { id: "fin_1", empresaId: "comp_demo_1", description: "Ordem de Serviço OS-2026-002", type: "Receita", amount: 889.90, dueDate: "2026-05-20", status: "Pago", category: "Serviços", createdAt: "2026-05-20T17:00:00Z", invoiceNumber: "NFS-4321", purchaseOrder: "PED-8871" },
+  { id: "fin_2", empresaId: "comp_demo_1", description: "Venda PDV Balcão #1032", type: "Receita", amount: 379.80, dueDate: "2026-05-25", status: "Pago", category: "Vendas Peças", createdAt: "2026-05-25T14:10:00Z", invoiceNumber: "NFC-8910", purchaseOrder: "PED-1032" },
+  { id: "fin_3", empresaId: "comp_demo_1", description: "Venda Dianteira Pastilhas Bosch", type: "Receita", amount: 189.90, dueDate: "2026-05-24", status: "Pago", category: "Vendas Peças", createdAt: "2026-05-24T11:30:00Z", invoiceNumber: "NFC-8911", purchaseOrder: "PED-1033" },
   // Despesas (Aluguel, Peças)
-  { id: "fin_4", empresaId: "comp_demo_1", description: "Fornecimento de Óleo Castrol Castrol Edge", type: "Despesa", amount: 560.00, dueDate: "2026-06-05", status: "Pendente", category: "Compra de Peças", createdAt: "2026-05-22T08:00:00Z" },
-  { id: "fin_5", empresaId: "comp_demo_1", description: "Fatura Aluguel Galpão Oficina", type: "Despesa", amount: 2500.00, dueDate: "2026-06-01", status: "Pendente", category: "Infraestrutura", createdAt: "2026-05-01T09:00:00Z" },
-  { id: "fin_6", empresaId: "comp_demo_1", description: "Energia Elétrica Copel", type: "Despesa", amount: 480.00, dueDate: "2026-05-28", status: "Pendente", category: "Serviços Básicos", createdAt: "2026-05-18T10:00:00Z" }
+  { 
+    id: "fin_4", 
+    empresaId: "comp_demo_1", 
+    description: "Fornecimento de Óleo Castrol Castrol Edge", 
+    type: "Despesa", 
+    amount: 560.00, 
+    dueDate: "2026-06-05", 
+    status: "Pendente", 
+    category: "Compra de Peças", 
+    createdAt: "2026-05-22T08:00:00Z",
+    invoiceNumber: "NF-99812",
+    purchaseOrder: "PED-44810",
+    reminderEnabled: true,
+    reminderDaysBefore: 3,
+    supplierId: "for_3",
+    supplierName: "LubriDistr Distribuidora Lubrificantes"
+  },
+  { 
+    id: "fin_5", 
+    empresaId: "comp_demo_1", 
+    description: "Fatura Aluguel Galpão Oficina", 
+    type: "Despesa", 
+    amount: 2500.00, 
+    dueDate: "2026-06-01", 
+    status: "Pendente", 
+    category: "Infraestrutura", 
+    createdAt: "2026-05-01T09:00:00Z",
+    invoiceNumber: "FAT-3312",
+    purchaseOrder: "CON-010",
+    reminderEnabled: true,
+    reminderDaysBefore: 5
+  },
+  { 
+    id: "fin_6", 
+    empresaId: "comp_demo_1", 
+    description: "Energia Elétrica Copel", 
+    type: "Despesa", 
+    amount: 480.00, 
+    dueDate: "2026-05-28", 
+    status: "Pendente", 
+    category: "Serviços Básicos", 
+    createdAt: "2026-05-18T10:00:00Z",
+    invoiceNumber: "COP-88712",
+    purchaseOrder: "INS-990",
+    reminderEnabled: true,
+    reminderDaysBefore: 2
+  }
 ];
 
 export const MOCK_FORNECEDORES: Fornecedor[] = [

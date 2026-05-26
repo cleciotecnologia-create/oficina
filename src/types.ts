@@ -172,6 +172,12 @@ export interface Financeiro {
   status: 'Pago' | 'Pendente';
   category: string;
   createdAt: string;
+  invoiceNumber?: string;       // Número da Nota Fiscal (NF-e)
+  purchaseOrder?: string;       // Número do Pedido de Compra / Venda
+  reminderEnabled?: boolean;    // Lembrete de vencimento ativo
+  reminderDaysBefore?: number;  // Dias para alertar antes do vencimento
+  supplierId?: string;          // Fornecedor vinculado (se houver)
+  supplierName?: string;        // Nome amigável do Fornecedor vinculado
 }
 
 export interface Caixa {
