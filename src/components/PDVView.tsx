@@ -39,7 +39,9 @@ export const PDVView: React.FC = () => {
     fecharCaixa, 
     addVenda, 
     user,
-    company
+    company,
+    ordensServico,
+    editOS
   } = useApp();
 
   // Catalogue states
@@ -50,6 +52,43 @@ export const PDVView: React.FC = () => {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'Cartão' | 'Dinheiro'>('PIX');
   const [commissionPct, setCommissionPct] = useState(5); // Default 5% seller fee
+  
+  // Workshop linked OS tracking
+  const [linkedOSId, setLinkedOSId] = useState<string | null>(null);
+
+  // Import open OS to POS checkout basket
+  const handleImportOS = (osId: string) => {
+    if (!osId) return;
+    const os = ordensServico.find(o => o.id === osId);
+    if (!os) return;
+
+    // Map services
+    const loadedServices: SaleItem[] = os.services.map(s => ({
+      produtoId: s.id || `srv_dummy_${Math.random()}`,
+      name: `🛠️ ${s.description}`,
+      sellPrice: s.price,
+      quantity: 1,
+      subtotal: s.price
+    }));
+
+    // Map parts
+    const loadedParts: SaleItem[] = os.parts.map(p => ({
+      produtoId: p.id || `prt_dummy_${Math.random()}`,
+      name: `📦 ${p.name}`,
+      sellPrice: p.sellPrice,
+      quantity: p.quantity,
+      subtotal: p.sellPrice * p.quantity
+    }));
+
+    setBasket([...loadedServices, ...loadedParts]);
+    
+    // Set client
+    if (os.clienteId) {
+      setSelectedClienteId(os.clienteId);
+    }
+    
+    setLinkedOSId(os.id);
+  };
   
   // Attendant/seller chosen for commission attribution
   const [selectedSeller, setSelectedSeller] = useState<string>(user?.name || 'Clécio Santos');
@@ -248,13 +287,24 @@ export const PDVView: React.FC = () => {
       sellerName: selectedSeller,
       clienteId: selectedClienteId !== 'unidentified' ? selectedClienteId : undefined,
       clienteName: finalClientName,
-      clienteCpfCnpj: finalClientCpf
+      clienteCpfCnpj: finalClientCpf,
+      linkedOSId: linkedOSId || undefined
     };
 
     await addVenda(saleDetails);
+
+    if (linkedOSId) {
+      try {
+        await editOS(linkedOSId, { status: 'Entregue' });
+      } catch (err) {
+        console.error("Erro ao atualizar status da OS ligada:", err);
+      }
+    }
+
     setLastFinishedSale(saleDetails);
     setBasket([]);
     setDiscountPercent(0);
+    setLinkedOSId(null);
     setSaleFinished(true);
   };
 
@@ -455,6 +505,77 @@ export const PDVView: React.FC = () => {
       {/* RIGHT COLUMN: CLIENT INTEGRATION & SHOPPING CART (5 columns) */}
       <div className="col-span-12 xl:col-span-5 flex flex-col gap-5">
         
+        {/* Module OS: VINCULAR ORDEM DE SERVIÇO */}
+        <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-5 flex flex-col gap-3.5">
+          <div className="flex justify-between items-center border-b border-gray-800 pb-3">
+            <h3 className="text-xs font-bold text-white font-mono flex items-center gap-1.5 uppercase">
+              <Wrench className="w-4 h-4 text-red-500 animate-pulse" /> 🎛️ VINCULAR ORDEM DE SERVIÇO
+            </h3>
+            {linkedOSId && (
+              <span className="text-[10px] bg-red-650/20 text-red-400 font-bold px-2 py-0.5 rounded font-mono animate-pulse">
+                OS ATIVA
+              </span>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-2.5 text-xs text-left">
+            <label className="text-[10px] font-mono text-gray-400">SELECIONE UMA OS PARA ADICIONAR AO CAIXA:</label>
+            <select
+              value={linkedOSId || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (!val) {
+                  setLinkedOSId(null);
+                  setBasket([]);
+                } else {
+                  handleImportOS(val);
+                }
+              }}
+              className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono focus:outline-none focus:border-red-500 cursor-pointer text-left"
+            >
+              <option value="">-- Selecione a OS para faturar --</option>
+              {ordensServico
+                .filter(o => o.status !== 'Entregue')
+                .map(o => (
+                  <option key={o.id} value={o.id}>
+                    🔧 {o.id} - {o.veiculoInfo || o.plate} ({o.clienteName || 'Sem nome'}) - R$ {o.total.toFixed(2)} [Status: {o.status}]
+                  </option>
+                ))}
+            </select>
+
+            {linkedOSId && (() => {
+              const matchedOS = ordensServico.find(o => o.id === linkedOSId);
+              if (!matchedOS) return null;
+              return (
+                <div className="mt-1 p-3 rounded-xl bg-red-950/15 border border-red-900/35 flex flex-col gap-1.5 text-xs font-mono leading-normal">
+                  <div className="flex justify-between items-center text-white font-bold">
+                    <span className="text-red-400 font-sans">🛠️ CONTEXTO DE OFICINA VINCULADO</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLinkedOSId(null);
+                        setBasket([]);
+                      }}
+                      className="text-[9px] text-red-400 hover:text-white underline cursor-pointer"
+                    >
+                      Remover Vínculo
+                    </button>
+                  </div>
+                  <div className="flex flex-col gap-1 text-[11px] text-gray-300 mt-0.5">
+                    <span>Ordem de Serviço: <strong className="text-white">{matchedOS.id}</strong></span>
+                    <span>Automóvel: <strong className="text-white">{matchedOS.veiculoInfo || matchedOS.plate}</strong></span>
+                    <span>Cliente: <strong className="text-white">{matchedOS.clienteName || 'Balcão'}</strong></span>
+                    <span className="text-amber-400 font-bold">Total faturando no Caixa: R$ {matchedOS.total.toFixed(2)}</span>
+                  </div>
+                  <div className="text-[10px] text-gray-400 leading-snug mt-1 pt-1.5 border-t border-red-950/60 font-sans">
+                    💡 <em>Nota: Fechar esta venda marcará a OS #{matchedOS.id} como <strong>Entregue (Paga e Encerrada)</strong> e gerará o cupom fiscal de peças e serviços unificados.</em>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
         {/* Module A: CUSTOMER DESIGN & INTEGRATION */}
         <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-5 flex flex-col gap-3.5">
           
@@ -817,6 +938,13 @@ export const PDVView: React.FC = () => {
               {lastFinishedSale.sellerName && (
                 <div className="text-[10px] text-gray-600 mt-1 pl-1">
                   <span>Atendente: <strong>{lastFinishedSale.sellerName}</strong></span>
+                </div>
+              )}
+
+              {lastFinishedSale.linkedOSId && (
+                <div className="bg-red-50 p-2 rounded text-[10px] mt-1 text-red-800 border border-red-200">
+                  <span className="font-bold">ORDEM DE SERVIÇO:</span>
+                  <span className="block font-semibold">{lastFinishedSale.linkedOSId}</span>
                 </div>
               )}
 

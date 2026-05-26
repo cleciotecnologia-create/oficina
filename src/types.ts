@@ -96,6 +96,8 @@ export interface Venda {
   paymentMethod: 'PIX' | 'Cartão' | 'Dinheiro';
   commission: number; // calculated seller fee
   sellerId: string;
+  sellerName?: string;
+  linkedOSId?: string;
 }
 
 export interface ChecklistItem {
