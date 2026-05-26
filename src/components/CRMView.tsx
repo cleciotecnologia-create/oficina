@@ -18,7 +18,8 @@ import {
   Award,
   Droplet,
   Copy,
-  Check
+  Check,
+  MapPin
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Cliente, Veiculo, OrdemServico } from '../types';
@@ -137,6 +138,43 @@ export const CRMView: React.FC = () => {
   const [cliPhone, setCliPhone] = useState('');
   const [cliEmail, setCliEmail] = useState('');
   const [cliCpfCnpj, setCliCpfCnpj] = useState('');
+  const [cliCep, setCliCep] = useState('');
+  const [cliAddress, setCliAddress] = useState('');
+  const [isFetchingCliCep, setIsFetchingCliCep] = useState(false);
+  const [cliCepError, setCliCepError] = useState<string | null>(null);
+
+  const handleFetchClientCep = async (cepCode: string) => {
+    const clean = cepCode.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    
+    setIsFetchingCliCep(true);
+    setCliCepError(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCliCepError("CEP inválido/não encontrado.");
+      } else {
+        const logradouro = data.logradouro || "";
+        const bairro = data.bairro || "";
+        const localidade = data.localidade || "";
+        const uf = data.uf || "";
+        
+        let fullAddress = "";
+        if (logradouro) fullAddress += logradouro;
+        if (bairro) fullAddress += `, ${bairro}`;
+        if (localidade) fullAddress += ` - ${localidade}`;
+        if (uf) fullAddress += `/${uf}`;
+        
+        setCliAddress(fullAddress);
+      }
+    } catch (err) {
+      setCliCepError("Erro na conexão com ViaCEP.");
+    } finally {
+      setIsFetchingCliCep(false);
+    }
+  };
+
   const [cliOilAlert, setCliOilAlert] = useState(true);
   const [cliReviewAlert, setCliReviewAlert] = useState(true);
 
@@ -176,13 +214,17 @@ export const CRMView: React.FC = () => {
       email: cliEmail || 'sem@email.com',
       cpfCnpj: cliCpfCnpj || '000.000.000-00',
       oilChangeAlert: cliOilAlert,
-      reviewAlert: cliReviewAlert
+      reviewAlert: cliReviewAlert,
+      cep: cliCep || undefined,
+      address: cliAddress || undefined
     });
 
     setCliName('');
     setCliPhone('');
     setCliEmail('');
     setCliCpfCnpj('');
+    setCliCep('');
+    setCliAddress('');
     alert("Cliente registrado com êxito!");
   };
 
@@ -374,6 +416,23 @@ export const CRMView: React.FC = () => {
 
                     {isExpanded && (
                       <div className="p-4 bg-[#050912]/80 flex flex-col gap-4 text-left">
+                        {(cli.address || cli.cep) && (
+                          <div className="bg-[#0b1020] border border-gray-850 p-3 rounded-xl flex items-start gap-2.5 text-xs">
+                            <MapPin className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Endereço Residencial / Entrega</span>
+                              <p className="text-white text-xs font-sans">
+                                {cli.address || "Endereço não preenchido"}
+                                {cli.cep && (
+                                  <span className="bg-[#050912] border border-gray-800 text-purple-400 font-mono text-[10px] px-2 py-0.5 rounded ml-2 font-bold select-all">
+                                    CEP {cli.cep}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex items-center justify-between border-b border-gray-900 pb-2">
                           <h4 className="text-xs font-mono font-bold text-red-400 flex items-center gap-1.5 uppercase">
                             <Droplet className="w-4 h-4 text-red-500" /> Diagnóstico de Troca de Óleo e Viscosidades
@@ -537,6 +596,41 @@ export const CRMView: React.FC = () => {
                   className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
                   value={cliCpfCnpj}
                   onChange={(e) => setCliCpfCnpj(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400 flex items-center gap-1">
+                  CEP DO CLIENTE {isFetchingCliCep && <span className="text-red-500 text-[8px] animate-pulse font-mono">(Buscando...)</span>}
+                </label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Ex: 01001-000"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white w-full"
+                    value={cliCep}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCliCep(val);
+                      if (val.replace(/\D/g, "").length === 8) {
+                        handleFetchClientCep(val);
+                      }
+                    }}
+                  />
+                  {cliCepError && (
+                    <span className="text-[9px] text-red-500 block absolute left-1 -bottom-4 font-sans">{cliCepError}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400">ENDEREÇO / LOGRADOURO</label>
+                <input 
+                  type="text" 
+                  placeholder="Rua, número - Bairro - Cidade/UF"
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                  value={cliAddress}
+                  onChange={(e) => setCliAddress(e.target.value)}
                 />
               </div>
 

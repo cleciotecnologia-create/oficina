@@ -41,6 +41,8 @@ export interface Cliente {
   oilChangeAlert: boolean; // Automatic notification on oil cycles
   reviewAlert: boolean;    // Next review date tracking
   createdAt: string;
+  cep?: string;
+  address?: string;
 }
 
 export interface Veiculo {

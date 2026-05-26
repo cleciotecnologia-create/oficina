@@ -25,7 +25,8 @@ import {
   Globe,
   Server,
   Activity,
-  RefreshCw
+  RefreshCw,
+  Upload
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Company } from '../types';
@@ -48,6 +49,42 @@ export const ConfigView: React.FC = () => {
   const [cnpjStr, setCnpjStr] = useState(company.cnpj);
   const [phoneStr, setPhoneStr] = useState(company.phone);
   const [addressStr, setAddressStr] = useState(company.address);
+  const [companyCep, setCompanyCep] = useState('');
+  const [isFetchingCep, setIsFetchingCep] = useState(false);
+  const [cepError, setCepError] = useState<string | null>(null);
+
+  const handleFetchCompanyCep = async (cepCode: string) => {
+    const clean = cepCode.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    
+    setIsFetchingCep(true);
+    setCepError(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setCepError("CEP inválido/não encontrado.");
+      } else {
+        const logradouro = data.logradouro || "";
+        const bairro = data.bairro || "";
+        const localidade = data.localidade || "";
+        const uf = data.uf || "";
+        
+        let fullAddress = "";
+        if (logradouro) fullAddress += logradouro;
+        if (bairro) fullAddress += `, ${bairro}`;
+        if (localidade) fullAddress += ` - ${localidade}`;
+        if (uf) fullAddress += `/${uf}`;
+        
+        setAddressStr(fullAddress);
+      }
+    } catch (err) {
+      setCepError("Erro na conexão com ViaCEP.");
+    } finally {
+      setIsFetchingCep(false);
+    }
+  };
+
   const [emailStr, setEmailStr] = useState(company.email || 'contato@autoprecision.com.br');
   const [whatsappStr, setWhatsappStr] = useState(company.whatsapp || '(11) 98765-4321');
   
@@ -120,6 +157,29 @@ export const ConfigView: React.FC = () => {
         setLogoFeedback("❌ Erro ao converter o SVG para Imagem.");
       }
     }
+  };
+
+  // Convert uploaded image file into direct Base64 logo Url
+  const handleUploadCompanyLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setLogoFeedback("❌ Arquivo muito grande! Escolha um logotipo menor que 2MB.");
+      setTimeout(() => setLogoFeedback(null), 4000);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      if (base64) {
+        setLogoUrlStr(base64);
+        setLogoFeedback("🎉 Logomarca carregada com sucesso! Lembre-se de salvar as configurações.");
+        setTimeout(() => setLogoFeedback(null), 4000);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   // Download raw SVG code
@@ -363,12 +423,37 @@ export const ConfigView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5 col-span-2">
+              <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
+                <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider flex items-center gap-1.5">
+                  CEP {isFetchingCep && <span className="text-red-500 text-[8px] animate-pulse font-mono">(Buscando endereço...)</span>}
+                </label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Ex: 01001-000"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white w-full focus:outline-none focus:border-red-500 font-mono text-xs"
+                    value={companyCep}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCompanyCep(val);
+                      if (val.replace(/\D/g, "").length === 8) {
+                        handleFetchCompanyCep(val);
+                      }
+                    }}
+                  />
+                  {cepError && (
+                    <span className="text-[9px] text-red-500 block absolute left-1 -bottom-4 font-sans">{cepError}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
                 <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Endereço Completo / Logradouro</label>
                 <div className="relative">
                   <input 
                     type="text" 
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 pl-3 pr-12 text-white w-full focus:outline-none focus:border-red-500"
+                    placeholder="Rua, número - Bairro - Cidade/UF"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 pl-3 pr-12 text-white w-full focus:outline-none focus:border-red-500 text-xs"
                     value={addressStr}
                     onChange={(e) => setAddressStr(e.target.value)}
                   />
@@ -439,32 +524,63 @@ export const ConfigView: React.FC = () => {
               </div>
             </div>
 
-            {/* Custom logo address url input (fallback input) */}
-            <div className="border-t border-gray-850 pt-4 flex flex-col gap-2 font-mono text-xs">
-              <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Endereço HTTP do Logotipo Externo</label>
-              <div className="flex gap-2">
-                <input 
-                  type="text" 
-                  placeholder="https://sua-oficina.com.br/logo.png"
-                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white flex-1 text-xs"
-                  value={logoUrlStr}
-                  onChange={(e) => setLogoUrlStr(e.target.value)}
-                />
-                {logoUrlStr && (
-                  <div className="w-9 h-9 rounded-lg border border-gray-800 bg-[#080c16] flex items-center justify-center shrink-0">
-                    <img 
-                      src={logoUrlStr} 
-                      alt="Preview" 
-                      className="w-7 h-7 object-contain" 
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/broken/50/50';
-                      }}
-                    />
-                  </div>
-                )}
+            {/* Custom logo upload AND address integration */}
+            <div className="border-t border-gray-850 pt-4 flex flex-col gap-3 font-mono text-xs">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Logotipo / Logomarca da Oficina</label>
+                <span className="bg-red-950/30 border border-red-900/40 text-red-500 text-[8px] font-extrabold px-1.5 py-0.2 rounded uppercase animate-pulse">White-Label</span>
               </div>
-              <span className="text-[9px] text-gray-500">Se preferir usar sua própria arte, insira o link direto de imagem acima. Caso contrário, crie um logotipo vetorial exclusivo usando nosso construtor ao lado.</span>
+
+              {/* Direct File Upload area */}
+              <div className="group relative border border-dashed border-gray-800 hover:border-red-900/80 bg-[#050912]/60 rounded-xl p-4 transition-all flex flex-col items-center justify-center text-center gap-2 cursor-pointer">
+                <input 
+                  type="file" 
+                  id="company-logo-file-upload" 
+                  accept="image/*" 
+                  onChange={handleUploadCompanyLogo} 
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
+                />
+                <div className="w-10 h-10 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-450 group-hover:text-red-500 group-hover:scale-110 transition-all duration-300">
+                  <Upload className="w-4 h-4 text-red-500" />
+                </div>
+                <div className="flex flex-col gap-0.5 pointer-events-none">
+                  <span className="text-white text-[11px] font-bold font-sans">Fazer Upload de Logomarca</span>
+                  <span className="text-[9px] text-gray-500 font-sans">Arraste ou selecione uma imagem mestre (PNG, JPG, SVG) até 2MB</span>
+                </div>
+              </div>
+
+              {logoFeedback && (
+                <div className="p-2 border text-[9px] leading-snug font-sans bg-[#0c1328] text-purple-400 border-purple-900/40 rounded-lg">
+                  {logoFeedback}
+                </div>
+              )}
+
+              {/* Fallback URL input */}
+              <div className="flex flex-col gap-1.5 bg-black/20 p-2.5 rounded-lg border border-gray-900/60">
+                <span className="text-[9px] text-gray-400">Alternativa: Link Direto da Imagem na Web</span>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="https://sua-oficina.com.br/logo.png"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-1.5 px-2.5 text-white flex-1 text-[11px]"
+                    value={logoUrlStr}
+                    onChange={(e) => setLogoUrlStr(e.target.value)}
+                  />
+                  {logoUrlStr && (
+                    <div className="w-8 h-8 rounded border border-gray-850 bg-[#050912] flex items-center justify-center shrink-0">
+                      <img 
+                        src={logoUrlStr} 
+                        alt="Preview" 
+                        className="w-6 h-6 object-contain" 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/broken/50/50';
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Printer configs */}

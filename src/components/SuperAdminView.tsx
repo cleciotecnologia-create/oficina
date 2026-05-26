@@ -25,7 +25,9 @@ import {
   Sparkles,
   Lock,
   UserCheck,
-  History
+  History,
+  Plus,
+  ExternalLink
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Company } from '../types';
@@ -44,6 +46,8 @@ interface Tenant {
   customDomain?: string;
   subdomain?: string;
   domainStatus?: 'Pendente' | 'Verificando' | 'Ativo' | 'Falhado';
+  cep?: string;
+  address?: string;
 }
 
 interface AuditLog {
@@ -146,6 +150,54 @@ export const SuperAdminView: React.FC = () => {
   // Search filter
   const [searchTerm, setSearchTerm] = useState('');
   const [auditSearch, setAuditSearch] = useState('');
+
+  // Register New Tenant form states
+  const [showNewTenantForm, setShowNewTenantForm] = useState(false);
+  const [newTenantName, setNewTenantName] = useState('');
+  const [newTenantCnpj, setNewTenantCnpj] = useState('');
+  const [newTenantEmail, setNewTenantEmail] = useState('');
+  const [newTenantPhone, setNewTenantPhone] = useState('');
+  const [newTenantPlan, setNewTenantPlan] = useState<'Básico' | 'Profissional' | 'Premium'>('Básico');
+  const [newTenantSubdomain, setNewTenantSubdomain] = useState('');
+  const [newTenantCustomDomain, setNewTenantCustomDomain] = useState('');
+  const [newTenantCep, setNewTenantCep] = useState('');
+  const [newTenantAddress, setNewTenantAddress] = useState('');
+  const [isFetchingTenantCep, setIsFetchingTenantCep] = useState(false);
+  const [tenantCepError, setTenantCepError] = useState<string | null>(null);
+
+  const handleFetchTenantCep = async (cepCode: string) => {
+    const clean = cepCode.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    
+    setIsFetchingTenantCep(true);
+    setTenantCepError(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setTenantCepError("CEP inválido/não encontrado.");
+      } else {
+        const logradouro = data.logradouro || "";
+        const bairro = data.bairro || "";
+        const localidade = data.localidade || "";
+        const uf = data.uf || "";
+        
+        let fullAddress = "";
+        if (logradouro) fullAddress += logradouro;
+        if (bairro) fullAddress += `, ${bairro}`;
+        if (localidade) fullAddress += ` - ${localidade}`;
+        if (uf) fullAddress += `/${uf}`;
+        
+        setNewTenantAddress(fullAddress);
+      }
+    } catch (err) {
+      setTenantCepError("Erro na conexão com ViaCEP.");
+    } finally {
+      setIsFetchingTenantCep(false);
+    }
+  };
+
+  const [newTenantFeedback, setNewTenantFeedback] = useState<string | null>(null);
 
   // Selected tenant for detailed editing modal/drawer in local state
   const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
@@ -298,6 +350,83 @@ export const SuperAdminView: React.FC = () => {
 
     const timestamp = new Date().toLocaleTimeString();
     setLogs(l => [...l, `[${timestamp}] 💳 UPGRADE PLANO: Tenant ${targetTenant.name} alterado para nível [${newPlan.toUpperCase()}] por ${user?.email || "cleciotecnologia@gmail.com"}`]);
+  };
+
+  // Register a new tenant under direct SuperAdmin guidance
+  const handleRegisterNewTenant = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTenantName.trim()) {
+      setNewTenantFeedback("❌ Por favor, informe o nome da oficina.");
+      return;
+    }
+
+    const generatedId = "tenant_" + Math.random().toString(36).substring(2, 9);
+    
+    // Sluggify name if subdomain is left blank
+    const cleanSubdomain = (newTenantSubdomain.trim() || newTenantName)
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // remove accents
+      .replace(/[^a-z0-9-]/g, '-') // replace non-alphanumerics with hyphen
+      .replace(/-+/g, '-') // compress consecutive hyphens
+      .replace(/^-|-$/g, ''); // trim hyphens
+
+    let val = basicPrice;
+    if (newTenantPlan === 'Profissional') val = profPrice;
+    if (newTenantPlan === 'Premium') val = premPrice;
+
+    const newTenant: Tenant = {
+      id: generatedId,
+      name: newTenantName.trim(),
+      cnpj: newTenantCnpj.trim() || "00.000.000/0001-00",
+      email: newTenantEmail.trim() || "contato@oficina.com.br",
+      phone: newTenantPhone.trim() || "(11) 99999-9999",
+      planId: newTenantPlan,
+      createdAt: new Date().toISOString(),
+      status: 'Ativo',
+      databaseSize: 10,
+      monthlyValue: val,
+      subdomain: cleanSubdomain,
+      customDomain: newTenantCustomDomain.trim() || undefined,
+      domainStatus: newTenantCustomDomain.trim() ? 'Pendente' : undefined,
+      cep: newTenantCep || undefined,
+      address: newTenantAddress || undefined
+    };
+
+    setTenants(prev => [...prev, newTenant]);
+
+    // Create persistent Audit Log entry
+    const newLog: AuditLog = {
+      id: "log_" + Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      tenantName: newTenant.name,
+      changeType: 'Status',
+      newValue: 'Ativo (Novo)',
+      oldValue: 'Inexistente',
+      adminEmail: user?.email || "cleciotecnologia@gmail.com"
+    };
+    setAuditLogs(prev => [newLog, ...prev]);
+
+    // Update Live terminal console
+    const termTimestamp = new Date().toLocaleTimeString();
+    setLogs(l => [...l, `[${termTimestamp}] ✨ NOVO CADASTRO: Oficina [${newTenant.name}] cadastrada com sucesso por ${user?.email || "cleciotecnologia@gmail.com"}`]);
+
+    // Clear form states
+    setNewTenantName('');
+    setNewTenantCnpj('');
+    setNewTenantEmail('');
+    setNewTenantPhone('');
+    setNewTenantPlan('Básico');
+    setNewTenantSubdomain('');
+    setNewTenantCustomDomain('');
+    setNewTenantCep('');
+    setNewTenantAddress('');
+    
+    setNewTenantFeedback(`✅ Oficina "${newTenant.name}" cadastrada com sucesso!`);
+    setTimeout(() => {
+      setNewTenantFeedback(null);
+      setShowNewTenantForm(false);
+    }, 2500);
   };
 
   // Impersonate / masquerade trigger
@@ -467,24 +596,206 @@ export const SuperAdminView: React.FC = () => {
           
           <div className="bg-[#0c1223] border border-gray-800 rounded-2xl p-5 flex flex-col gap-4">
             
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+            <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b border-gray-850 pb-3">
               <div>
-                <h3 className="font-display font-bold text-white text-base">🏢 Cadastro e Diretório de Tenants SaaS</h3>
-                <span className="text-[10px] font-mono text-gray-500">Base total de mecânicas registradas integradas no ERP multi-inquilinato.</span>
+                <h3 className="font-display font-bold text-white text-base flex items-center gap-1.5">
+                  <Building className="w-5 h-5 text-purple-400" />
+                  Diretório e Cadastro de Tenants SaaS
+                </h3>
+                <span className="text-[10px] font-mono text-gray-500">Gestão global de mecânicas cadastradas e seus respectivos portais.</span>
               </div>
-              <div className="relative">
-                <input 
-                  type="text" 
-                  placeholder="Filtrar oficina ou CNPJ..."
-                  className="bg-[#050912] border border-gray-800 rounded-lg py-1.5 pl-8 pr-3 text-white text-xs font-mono focus:outline-none focus:border-purple-500 w-full sm:w-56"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <div className="absolute left-2.5 top-2 text-gray-550 text-gray-550 text-gray-500">
-                  <Search className="w-3.5 h-3.5" />
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Filtrar oficina, email ou CNPJ..."
+                    className="bg-[#050912] border border-gray-800 rounded-lg py-1.5 pl-8 pr-3 text-white text-xs font-mono focus:outline-none focus:border-purple-500 w-full sm:w-52"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                  <div className="absolute left-2.5 top-2.5 text-gray-500">
+                    <Search className="w-3 h-3" />
+                  </div>
                 </div>
+                
+                <button
+                  type="button"
+                  onClick={() => setShowNewTenantForm(!showNewTenantForm)}
+                  className={`px-3 py-1.5 rounded-lg font-mono text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-all ${
+                    showNewTenantForm
+                      ? 'bg-red-950/40 hover:bg-red-950/60 border border-red-900/50 text-red-400'
+                      : 'bg-purple-950/30 hover:bg-purple-950/50 border border-purple-900/40 text-purple-400'
+                  }`}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  {showNewTenantForm ? 'Fechar Form' : 'Novo Cadastro'}
+                </button>
               </div>
             </div>
+
+            {/* Collapsible New Tenant Registration Form */}
+            {showNewTenantForm && (
+              <form onSubmit={handleRegisterNewTenant} className="bg-[#050912] border border-purple-900/40 rounded-xl p-4 flex flex-col gap-3 text-left font-sans text-xs transition-all">
+                <div className="flex justify-between items-center border-b border-gray-850 pb-2">
+                  <h4 className="font-mono text-xs text-purple-400 font-extrabold flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
+                    CADASTRAR NOVA OFICINA PARCEIRA (TENANT)
+                  </h4>
+                  <span className="text-[9px] font-mono bg-purple-950/20 text-purple-400 border border-purple-900/40 px-2 py-0.5 rounded uppercase">Inquilinato Isolado</span>
+                </div>
+
+                {newTenantFeedback && (
+                  <div className={`p-2.5 rounded-lg border font-mono text-[11px] font-bold ${newTenantFeedback.includes('❌') ? 'bg-red-950/20 border-red-900/45 text-red-400' : 'bg-green-950/20 border-green-900/45 text-green-400'}`}>
+                    {newTenantFeedback}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Nome da Oficina / Razão Social *</label>
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="ex: Auto Mecânica São José"
+                      className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                      value={newTenantName}
+                      onChange={(e) => setNewTenantName(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">CNPJ (Opcional)</label>
+                    <input 
+                      type="text" 
+                      placeholder="ex: 12.345.678/0001-90"
+                      className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                      value={newTenantCnpj}
+                      onChange={(e) => setNewTenantCnpj(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">E-mail Administrativo</label>
+                    <input 
+                      type="email" 
+                      placeholder="ex: contato@oficina.com"
+                      className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                      value={newTenantEmail}
+                      onChange={(e) => setNewTenantEmail(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Telefone / WhatsApp</label>
+                    <input 
+                      type="text" 
+                      placeholder="ex: (11) 99999-8888"
+                      className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                      value={newTenantPhone}
+                      onChange={(e) => setNewTenantPhone(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Plano Recorrente do SaaS</label>
+                    <div className="flex gap-2">
+                      {(['Básico', 'Profissional', 'Premium'] as const).map((plan) => (
+                        <button
+                          key={plan}
+                          type="button"
+                          onClick={() => setNewTenantPlan(plan)}
+                          className={`flex-1 py-2 px-3 rounded font-bold transition-all text-center cursor-pointer ${
+                            newTenantPlan === plan 
+                              ? 'bg-purple-600 text-white border border-purple-500' 
+                              : 'bg-slate-900 hover:bg-slate-850 text-slate-400 border border-transparent'
+                          }`}
+                        >
+                          {plan === 'Básico' ? '🔩 Básico' : plan === 'Profissional' ? '⚙️ Profissional' : '👑 Premium'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Subdomínio (Opcional - Gerado Automaticamente)</label>
+                    <div className="flex items-center">
+                      <input 
+                        type="text" 
+                        placeholder="slug (ex: auto-sao-jose)"
+                        className="bg-[#0a0f1d] border border-gray-850 border-r-0 rounded-l py-1.5 px-2 text-white focus:border-purple-500 focus:outline-none text-right flex-1 font-mono"
+                        value={newTenantSubdomain}
+                        onChange={(e) => setNewTenantSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                      />
+                      <span className="bg-[#0c1223] border border-gray-850 rounded-r py-1.5 px-2 text-slate-450 text-[10px] select-none">
+                        .autoprecision.com.br
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Domínio DNS Próprio (Opcional)</label>
+                    <input 
+                      type="text" 
+                      placeholder="ex: portal.mecanicasaojose.com.br"
+                      className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                      value={newTenantCustomDomain}
+                      onChange={(e) => setNewTenantCustomDomain(e.target.value.toLowerCase().trim())}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1.5">
+                      CEP {isFetchingTenantCep && <span className="text-purple-400 text-[8px] animate-pulse font-mono">(Buscando...)</span>}
+                    </label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="ex: 01001-000"
+                        className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white w-full focus:border-purple-500 focus:outline-none font-mono"
+                        value={newTenantCep}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setNewTenantCep(val);
+                          if (val.replace(/\D/g, "").length === 8) {
+                            handleFetchTenantCep(val);
+                          }
+                        }}
+                      />
+                      {tenantCepError && (
+                        <span className="text-[9px] text-red-500 block absolute left-1 -bottom-4 font-sans">{tenantCepError}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1 sm:col-span-2">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Endereço Completo</label>
+                    <input 
+                      type="text" 
+                      placeholder="Rua, número - Bairro - Cidade/UF"
+                      className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none"
+                      value={newTenantAddress}
+                      onChange={(e) => setNewTenantAddress(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 border-t border-gray-850 pt-2.5 mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewTenantForm(false)}
+                    className="py-1.5 px-4 bg-slate-900 hover:bg-slate-800 text-slate-400 font-bold rounded-lg cursor-pointer transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="py-1.5 px-5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg cursor-pointer transition-colors"
+                  >
+                    Salvar e Ativar Portal
+                  </button>
+                </div>
+              </form>
+            )}
 
             {/* Tenant Cards / List */}
             <div className="flex flex-col gap-3 font-mono text-xs">
@@ -548,16 +859,40 @@ export const SuperAdminView: React.FC = () => {
                       <div>🗄️ Dados Gravados: <strong className="text-slate-300">{tenant.databaseSize} documentos</strong></div>
                     </div>
 
+                    {(tenant.address || tenant.cep) && (
+                      <div className="text-[10px] text-gray-500 leading-tight">
+                        📍 Endereço: <strong className="text-slate-400">{tenant.address || "Não configurado"}</strong> {tenant.cep && <span className="bg-[#050912]/85 text-purple-400 border border-gray-850 rounded px-1.5 py-0.5 ml-1 select-all font-mono">CEP {tenant.cep}</span>}
+                      </div>
+                    )}
+
                     {(tenant.subdomain || tenant.customDomain) && (
                       <div className="border-t border-gray-850/50 pt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[10px] items-center text-gray-500">
                         {tenant.subdomain && (
-                          <div>
-                            🌐 Subdomínio SaaS: <span className="text-purple-400 font-bold">{tenant.subdomain}.autoprecision.com.br</span>
+                          <div className="flex items-center gap-1 bg-[#050912]/80 px-2.5 py-1 rounded border border-gray-850">
+                            <span className="text-gray-450 text-gray-400">🌐 Link do Portal:</span>
+                            <a 
+                              href={`https://${tenant.subdomain}.autoprecision.com.br`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-purple-400 font-bold hover:text-purple-300 hover:underline flex items-center gap-1 transition-all"
+                            >
+                              {tenant.subdomain}.autoprecision.com.br
+                              <ExternalLink className="w-2.5 h-2.5 text-purple-400" />
+                            </a>
                           </div>
                         )}
                         {tenant.customDomain && (
-                          <div className="flex items-center gap-1.5">
-                            🔗 Domínio Próprio: <span className="text-blue-400 font-bold underline cursor-pointer">{tenant.customDomain}</span>
+                          <div className="flex items-center gap-1.5 bg-[#050912]/80 px-2.5 py-1 rounded border border-gray-850">
+                            <span className="text-gray-450 text-gray-400">🔗 Domínio Próprio:</span>
+                            <a 
+                              href={`https://${tenant.customDomain}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-blue-400 font-bold hover:text-blue-300 hover:underline flex items-center gap-1 transition-all"
+                            >
+                              {tenant.customDomain}
+                              <ExternalLink className="w-2.5 h-2.5 text-blue-450" />
+                            </a>
                             <span className={`px-1.5 py-0.2 rounded text-[8px] uppercase tracking-wider font-extrabold ${
                               tenant.domainStatus === 'Ativo' 
                                 ? 'bg-green-950/40 border border-green-900/50 text-green-400' 
