@@ -1,0 +1,6 @@
+{
+  "name": "SaaS Auto Peças e Oficina",
+  "description": "SaaS completo para gestão de lojas de autopeças, oficinas mecânicas, centros automotivos e troca de óleo.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

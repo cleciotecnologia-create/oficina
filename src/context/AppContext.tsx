@@ -1,0 +1,1090 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { 
+  collection, 
+  doc, 
+  setDoc, 
+  addDoc, 
+  getDocs, 
+  onSnapshot, 
+  query, 
+  where,
+  getDocFromServer
+} from 'firebase/firestore';
+import { 
+  onAuthStateChanged, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut,
+  User as FirebaseUser,
+  signInAnonymously
+} from 'firebase/auth';
+import { db, auth, OperationType, handleFirestoreError } from '../lib/firebase';
+import { 
+  Cliente, 
+  Veiculo, 
+  Produto, 
+  Servico,
+  OrdemServico, 
+  Financeiro, 
+  Caixa, 
+  Fornecedor, 
+  UserProfile, 
+  Company, 
+  Venda 
+} from '../types';
+import { 
+  INITIAL_COMPANY, 
+  MOCK_CLIENTS, 
+  MOCK_VEHICLES, 
+  MOCK_PRODUCTS, 
+  MOCK_SERVICES,
+  MOCK_OS, 
+  MOCK_FINANCE, 
+  MOCK_FORNECEDORES 
+} from '../lib/mockData';
+
+interface AppContextType {
+  user: UserProfile | null;
+  company: Company;
+  clientes: Cliente[];
+  veiculos: Veiculo[];
+  produtos: Produto[];
+  servicos: Servico[];
+  ordensServico: OrdemServico[];
+  financeiro: Financeiro[];
+  fornecedores: Fornecedor[];
+  caixaStatus: Caixa | null;
+  vendas: Venda[];
+  loading: boolean;
+  aiLoading: boolean;
+  loginError: string | null;
+  
+  // Actions
+  loginWithGoogle: () => Promise<void>;
+  loginDemo: () => Promise<void>;
+  logout: () => Promise<void>;
+  
+  // Modules management
+  addCliente: (c: Omit<Cliente, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
+  editCliente: (id: string, c: Partial<Cliente>) => Promise<void>;
+  addVeiculo: (v: Omit<Veiculo, 'id' | 'empresaId'>) => Promise<void>;
+  addProduto: (p: Omit<Produto, 'id' | 'empresaId'>) => Promise<void>;
+  updateProdutoStock: (id: string, qty: number) => Promise<void>;
+  editProduto: (id: string, p: Partial<Produto>) => Promise<void>;
+  deleteProduto: (id: string) => Promise<void>;
+  addServico: (s: Omit<Servico, 'id' | 'empresaId'>) => Promise<void>;
+  editServico: (id: string, s: Partial<Servico>) => Promise<void>;
+  deleteServico: (id: string) => Promise<void>;
+  addOS: (os: Omit<OrdemServico, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
+  editOS: (id: string, os: Partial<OrdemServico>) => Promise<void>;
+  addVenda: (v: Omit<Venda, 'id' | 'empresaId' | 'date'>) => Promise<void>;
+  addFinanceiro: (f: Omit<Financeiro, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
+  editFinanceiro: (id: string, f: Partial<Financeiro>) => Promise<void>;
+  abrirCaixa: (amount: number) => Promise<void>;
+  fecharCaixa: () => Promise<void>;
+  addFornecedor: (f: Omit<Fornecedor, 'id' | 'empresaId'>) => Promise<void>;
+  editFornecedor: (id: string, f: Partial<Fornecedor>) => Promise<void>;
+  deleteFornecedor: (id: string) => Promise<void>;
+  updateCompany: (c: Partial<Company>) => Promise<void>;
+
+  // AI Integration
+  getSmartDiagnosis: (model: string, plate: string, problem: string) => Promise<any>;
+  sendChatMessage: (messages: { role: 'user' | 'assistant'; text: string }[]) => Promise<string>;
+
+  // Offline Synchronization & Network Status
+  isOnline: boolean;
+  pendingActionsCount: number;
+  syncPendingActions: () => Promise<void>;
+  syncing: boolean;
+}
+
+const AppContext = createContext<AppContextType | undefined>(undefined);
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Authentication & Org State
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [company, setCompany] = useState<Company>(INITIAL_COMPANY);
+  const [loading, setLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Network, Sync and Pending Offline Queues
+  const [isOnline, setIsOnline] = useState<boolean>(typeof window !== 'undefined' ? navigator.onLine : true);
+  const [syncing, setSyncing] = useState<boolean>(false);
+  const [pendingActionsCount, setPendingActionsCount] = useState<number>(0);
+
+  // Business Entities State
+  const [clientes, setClientes] = useState<Cliente[]>(MOCK_CLIENTS);
+  const [veiculos, setVeiculos] = useState<Veiculo[]>(MOCK_VEHICLES);
+  const [produtos, setProdutos] = useState<Produto[]>(MOCK_PRODUCTS);
+  const [servicos, setServicos] = useState<Servico[]>(MOCK_SERVICES);
+  const [ordensServico, setOrdensServico] = useState<OrdemServico[]>(MOCK_OS);
+  const [financeiro, setFinanceiro] = useState<Financeiro[]>(MOCK_FINANCE);
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>(MOCK_FORNECEDORES);
+  const [caixaStatus, setCaixaStatus] = useState<Caixa | null>({
+    id: "cx_default",
+    empresaId: INITIAL_COMPANY.id,
+    status: "Fechado",
+    initialAmount: 0,
+    currentAmount: 0,
+    openedAt: ""
+  });
+  const [vendas, setVendas] = useState<Venda[]>([]);
+
+  // Sandbox data seeder for first-use / new multi-tenant SaaS trial sandbox
+  const seedSandboxData = async (empId: string) => {
+    try {
+      // 1. Seed Company
+      const freshCompanyNode: Company = {
+        id: empId,
+        name: "AutoPrecision Premium",
+        cnpj: "12.345.678/0001-90",
+        phone: "(11) 98765-4321",
+        address: "Av. das Nações Unidas, 1040 - São Paulo, SP",
+        planId: "Premium",
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, "empresas", empId), freshCompanyNode);
+
+      // 2. Seed Clientes
+      for (const c of MOCK_CLIENTS) {
+        await setDoc(doc(db, "clientes", c.id), { ...c, data: {}, empresaId: empId });
+      }
+
+      // 3. Seed Veiculos
+      for (const v of MOCK_VEHICLES) {
+        await setDoc(doc(db, "veiculos", v.id), { ...v, empresaId: empId });
+      }
+
+      // 4. Seed Produtos
+      for (const p of MOCK_PRODUCTS) {
+        await setDoc(doc(db, "produtos", p.id), { ...p, empresaId: empId });
+      }
+
+      // Seeding Serviços
+      for (const s of MOCK_SERVICES) {
+        await setDoc(doc(db, "servicos", s.id), { ...s, empresaId: empId });
+      }
+
+      // 5. Seed OS
+      for (const os of MOCK_OS) {
+        await setDoc(doc(db, "ordens_servico", os.id), { ...os, empresaId: empId });
+      }
+
+      // 6. Seed Financeiro
+      for (const f of MOCK_FINANCE) {
+        await setDoc(doc(db, "financeiro", f.id), { ...f, empresaId: empId });
+      }
+
+      // 7. Seed Caixa Session
+      const initialCaixa = {
+        id: "cx_" + new Date().toISOString().substring(0, 10),
+        empresaId: empId,
+        status: "Aberto" as const,
+        initialAmount: 250,
+        currentAmount: 250,
+        openedAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, "caixa", initialCaixa.id), initialCaixa);
+      console.log(`Successfully provisioned tenant workspace ${empId} in Firestore!`);
+    } catch (error) {
+      console.error("Failed to seed multi-tenant trial sandbox databases: ", error);
+    }
+  };
+
+  // Offline Pending Operations interface
+  interface PendingAction {
+    id: string;
+    collection: string;
+    docId: string;
+    payload: any;
+    operation: 'set' | 'merge';
+    createdAt: string;
+  }
+
+  // 1. Direct write helper with network fallback & offline local queueing
+  const executeWrite = async (
+    collectionName: string,
+    docId: string,
+    payload: any,
+    operation: 'set' | 'merge' = 'set'
+  ): Promise<boolean> => {
+    // If online, write to Firestore
+    if (navigator.onLine && auth.currentUser) {
+      try {
+        const docRef = doc(db, collectionName, docId);
+        if (operation === 'merge') {
+          await setDoc(docRef, payload, { merge: true });
+        } else {
+          await setDoc(docRef, payload);
+        }
+        return true; // Succeeded online
+      } catch (err) {
+        console.warn(`Direct write failed for ${collectionName}/${docId}, queueing offline...`, err);
+      }
+    }
+
+    // Offline or failed online: queue inside localStorage
+    if (auth.currentUser) {
+      try {
+        const stored = localStorage.getItem("autotech_pending_actions");
+        const currentQueue: PendingAction[] = stored ? JSON.parse(stored) : [];
+        
+        // Remove prior pending actions rewriting the exact same doc to avoid duplicating queue bloat
+        const refinedQueue = currentQueue.filter(act => !(act.collection === collectionName && act.docId === docId));
+
+        const newAction: PendingAction = {
+          id: "act_" + Math.random().toString(36).substr(2, 9),
+          collection: collectionName,
+          docId,
+          payload,
+          operation,
+          createdAt: new Date().toISOString()
+        };
+
+        refinedQueue.push(newAction);
+        localStorage.setItem("autotech_pending_actions", JSON.stringify(refinedQueue));
+        setPendingActionsCount(refinedQueue.length);
+        console.log(`Action added to local offline backup queue:`, newAction);
+      } catch (e) {
+        console.error("Local Storage backing fail for offline queue: ", e);
+      }
+    }
+    return false; // Queued or offline fallback
+  };
+
+  // 2. Synchronize all operations in context
+  const syncPendingActions = async () => {
+    if (syncing) return;
+    if (!navigator.onLine) return; // Halt if offline
+
+    setSyncing(true);
+    try {
+      const stored = localStorage.getItem("autotech_pending_actions");
+      if (!stored) {
+        setSyncing(false);
+        return;
+      }
+
+      const queue: PendingAction[] = JSON.parse(stored);
+      if (queue.length === 0) {
+        localStorage.removeItem("autotech_pending_actions");
+        setPendingActionsCount(0);
+        setSyncing(false);
+        return;
+      }
+
+      console.log(`Synchronizing ${queue.length} pending local transaction(s) to Firestore...`);
+      const remaining: PendingAction[] = [];
+      let stopSync = false;
+
+      for (const action of queue) {
+        if (stopSync) {
+          remaining.push(action);
+          continue;
+        }
+
+        try {
+          const docRef = doc(db, action.collection, action.docId);
+          if (action.operation === 'merge') {
+            await setDoc(docRef, action.payload, { merge: true });
+          } else {
+            await setDoc(docRef, action.payload);
+          }
+          console.log(`Successfully synced action ${action.id} to ${action.collection}/${action.docId}`);
+        } catch (err: any) {
+          console.error(`Syncing operation ${action.id} failed: `, err);
+          stopSync = true;
+          remaining.push(action);
+        }
+      }
+
+      if (remaining.length > 0) {
+        localStorage.setItem("autotech_pending_actions", JSON.stringify(remaining));
+        setPendingActionsCount(remaining.length);
+      } else {
+        localStorage.removeItem("autotech_pending_actions");
+        setPendingActionsCount(0);
+      }
+    } catch (err) {
+      console.error("Error occurred while syncing offline transactions: ", err);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // 3. Network connection event handlers & synchronization cycle
+  useEffect(() => {
+    // Check initial count
+    try {
+      const stored = localStorage.getItem("autotech_pending_actions");
+      if (stored) {
+        const queue = JSON.parse(stored);
+        setPendingActionsCount(queue.length);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      syncPendingActions();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial check triggers
+    if (navigator.onLine && firebaseUser) {
+      syncPendingActions();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [firebaseUser]);
+
+  // Authenticate user changes and sync
+  useEffect(() => {
+    let activeUnsubs: (() => void)[] = [];
+
+    const cleanAllListeners = () => {
+      activeUnsubs.forEach(unsub => {
+        try {
+          unsub();
+        } catch (err) {
+          console.warn("Unsubscribe listener error: ", err);
+        }
+      });
+      activeUnsubs = [];
+    };
+
+    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      cleanAllListeners();
+      setLoading(true);
+
+      if (u) {
+        setFirebaseUser(u);
+
+        try {
+          const userRef = doc(db, 'users', u.uid);
+          const userSnap = await getDocFromServer(userRef);
+
+          let activeProfile: UserProfile;
+
+          if (userSnap.exists()) {
+            activeProfile = userSnap.data() as UserProfile;
+          } else {
+            // Profile does not exist yet. Provision a secure isolated workspace
+            const sandboxEmpId = "emp_" + Math.random().toString(36).substring(2, 11);
+            activeProfile = {
+              uid: u.uid,
+              name: u.displayName || "Admin Autotech",
+              email: u.email || "membro@autotech.com",
+              role: "Administrador",
+              empresaId: sandboxEmpId,
+              createdAt: new Date().toISOString()
+            };
+
+            // Provision profile first
+            await setDoc(userRef, activeProfile);
+            // Provision full workspace asynchronously to load immediately
+            await seedSandboxData(sandboxEmpId);
+          }
+
+          setUser(activeProfile);
+
+          // Get and sync corporate properties
+          const compRef = doc(db, 'empresas', activeProfile.empresaId);
+          const compSnap = await getDocFromServer(compRef);
+          if (compSnap.exists()) {
+            setCompany(compSnap.data() as Company);
+          }
+
+          const targetEmpId = activeProfile.empresaId;
+
+          // Real-time Reactive isolated multi-tenant sync subscriptions with RLS approval
+          const unsubClientes = onSnapshot(
+            query(collection(db, 'clientes'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: Cliente[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Cliente));
+              if (list.length > 0) setClientes(list);
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "clientes")
+          );
+          activeUnsubs.push(unsubClientes);
+
+          const unsubVeiculos = onSnapshot(
+            query(collection(db, 'veiculos'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: Veiculo[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Veiculo));
+              if (list.length > 0) setVeiculos(list);
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "veiculos")
+          );
+          activeUnsubs.push(unsubVeiculos);
+
+          const unsubProdutos = onSnapshot(
+            query(collection(db, 'produtos'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: Produto[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Produto));
+              if (list.length > 0) setProdutos(list);
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "produtos")
+          );
+          activeUnsubs.push(unsubProdutos);
+
+          const unsubServicos = onSnapshot(
+            query(collection(db, 'servicos'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: Servico[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Servico));
+              if (list.length > 0) setServicos(list);
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "servicos")
+          );
+          activeUnsubs.push(unsubServicos);
+
+          const unsubOS = onSnapshot(
+            query(collection(db, 'ordens_servico'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: OrdemServico[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as OrdemServico));
+              if (list.length > 0) setOrdensServico(list);
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "ordens_servico")
+          );
+          activeUnsubs.push(unsubOS);
+
+          const unsubFin = onSnapshot(
+            query(collection(db, 'financeiro'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: Financeiro[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Financeiro));
+              if (list.length > 0) setFinanceiro(list);
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "financeiro")
+          );
+          activeUnsubs.push(unsubFin);
+
+          const unsubCaixa = onSnapshot(
+            query(collection(db, 'caixa'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: Caixa[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Caixa));
+              if (list.length > 0) {
+                setCaixaStatus(list[0]);
+              }
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "caixa")
+          );
+          activeUnsubs.push(unsubCaixa);
+
+          const unsubVendas = onSnapshot(
+            query(collection(db, 'vendas'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: Venda[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Venda));
+              if (list.length > 0) setVendas(list);
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "vendas")
+          );
+          activeUnsubs.push(unsubVendas);
+
+          const unsubFornecedores = onSnapshot(
+            query(collection(db, 'fornecedores'), where('empresaId', '==', targetEmpId)),
+            (snap) => {
+              const list: Fornecedor[] = [];
+              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Fornecedor));
+              if (list.length > 0) setFornecedores(list);
+            },
+            (err) => handleFirestoreError(err, OperationType.LIST, "fornecedores")
+          );
+          activeUnsubs.push(unsubFornecedores);
+
+        } catch (e) {
+          console.error("Firestore Loading error, using secure fallback mode: ", e);
+        }
+      } else {
+        setFirebaseUser(null);
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      cleanAllListeners();
+      unsubscribe();
+    };
+  }, []);
+
+  // Login actions
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    setLoginError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      console.error("Authentication Error: ", error);
+      setLoginError(error.message || "Erro ao conectar com Google Auth.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginDemo = async () => {
+    setLoading(true);
+    setLoginError(null);
+    try {
+      // Login Anonymously to trigger dynamic firebase session
+      await signInAnonymously(auth);
+    } catch (error: any) {
+      console.log("Proceeding with full Client Offline Mode", error);
+      // Fallback: Mock login
+      setUser({
+        uid: "demo_user_id",
+        name: "Clécio Santos",
+        email: "cleciotecnologia@gmail.com",
+        role: "Administrador",
+        empresaId: INITIAL_COMPANY.id,
+        createdAt: new Date().toISOString()
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    setLoading(true);
+    try {
+      await signOut(auth);
+      setUser(null);
+    } catch (error) {
+      console.error("Logout Error: ", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ERP Actions implementation
+  const addCliente = async (c: Omit<Cliente, 'id' | 'empresaId' | 'createdAt'>) => {
+    const id = "cli_" + Math.random().toString(36).substr(2, 9);
+    const newCliente: Cliente = {
+      ...c,
+      id,
+      empresaId: company.id,
+      createdAt: new Date().toISOString()
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("clientes", id, newCliente, 'set');
+      if (!isOnlineWrite) {
+        setClientes(prev => [newCliente, ...prev]);
+      }
+    } else {
+      setClientes(prev => [newCliente, ...prev]);
+    }
+  };
+
+  const editCliente = async (id: string, updatedFields: Partial<Cliente>) => {
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("clientes", id, updatedFields, 'merge');
+      if (!isOnlineWrite) {
+        setClientes(prev => prev.map(c => c.id === id ? { ...c, ...updatedFields } : c));
+      }
+    } else {
+      setClientes(prev => prev.map(c => c.id === id ? { ...c, ...updatedFields } : c));
+    }
+  };
+
+  const addVeiculo = async (v: Omit<Veiculo, 'id' | 'empresaId'>) => {
+    const id = "vei_" + Math.random().toString(36).substr(2, 9);
+    const newVeiculo: Veiculo = {
+      ...v,
+      id,
+      empresaId: company.id
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("veiculos", id, newVeiculo, 'set');
+      if (!isOnlineWrite) {
+        setVeiculos(prev => [newVeiculo, ...prev]);
+      }
+    } else {
+      setVeiculos(prev => [newVeiculo, ...prev]);
+    }
+  };
+
+  const addProduto = async (p: Omit<Produto, 'id' | 'empresaId'>) => {
+    const id = "prod_" + Math.random().toString(36).substr(2, 9);
+    const newProduto: Produto = {
+      ...p,
+      id,
+      empresaId: company.id
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("produtos", id, newProduto, 'set');
+      if (!isOnlineWrite) {
+        setProdutos(prev => [newProduto, ...prev]);
+      }
+    } else {
+      setProdutos(prev => [newProduto, ...prev]);
+    }
+  };
+
+  const updateProdutoStock = async (id: string, qty: number) => {
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("produtos", id, { quantity: qty }, 'merge');
+      if (!isOnlineWrite) {
+        setProdutos(prev => prev.map(p => p.id === id ? { ...p, quantity: qty } : p));
+      }
+    } else {
+      setProdutos(prev => prev.map(p => p.id === id ? { ...p, quantity: qty } : p));
+    }
+  };
+
+  const editProduto = async (id: string, updatedFields: Partial<Produto>) => {
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("produtos", id, updatedFields, 'merge');
+      if (!isOnlineWrite) {
+        setProdutos(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
+      }
+    } else {
+      setProdutos(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
+    }
+  };
+
+  const deleteProduto = async (id: string) => {
+    if (firebaseUser) {
+      setProdutos(prev => prev.filter(p => p.id !== id));
+      try {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          await deleteDoc(doc(db, "produtos", id));
+        }
+      } catch (err) {
+        console.warn("Direct online deletion failed, local cache updated.", err);
+      }
+    } else {
+      setProdutos(prev => prev.filter(p => p.id !== id));
+    }
+  };
+
+  const addServico = async (s: Omit<Servico, 'id' | 'empresaId'>) => {
+    const id = "srv_" + Math.random().toString(36).substr(2, 9);
+    const newServico: Servico = {
+      ...s,
+      id,
+      empresaId: company.id
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("servicos", id, newServico, 'set');
+      if (!isOnlineWrite) {
+        setServicos(prev => [newServico, ...prev]);
+      }
+    } else {
+      setServicos(prev => [newServico, ...prev]);
+    }
+  };
+
+  const editServico = async (id: string, updatedFields: Partial<Servico>) => {
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("servicos", id, updatedFields, 'merge');
+      if (!isOnlineWrite) {
+        setServicos(prev => prev.map(s => s.id === id ? { ...s, ...updatedFields } : s));
+      }
+    } else {
+      setServicos(prev => prev.map(s => s.id === id ? { ...s, ...updatedFields } : s));
+    }
+  };
+
+  const deleteServico = async (id: string) => {
+    if (firebaseUser) {
+      // Deletar localmente
+      setServicos(prev => prev.filter(s => s.id !== id));
+      try {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          await deleteDoc(doc(db, "servicos", id));
+        }
+      } catch (err) {
+        console.warn("Direct online deletion failed, local cache updated.", err);
+      }
+    } else {
+      setServicos(prev => prev.filter(s => s.id !== id));
+    }
+  };
+
+  const addOS = async (os: Omit<OrdemServico, 'id' | 'empresaId' | 'createdAt'>) => {
+    const id = "OS-" + new Date().getFullYear() + "-" + Math.floor(100 + Math.random() * 900);
+    const newOS: OrdemServico = {
+      ...os,
+      id,
+      empresaId: company.id,
+      createdAt: new Date().toISOString()
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("ordens_servico", id, newOS, 'set');
+      
+      // Deduct items used on OS from stock parts
+      os.parts.forEach(p => {
+        const product = produtos.find(item => item.id === p.id);
+        if (product) {
+          updateProdutoStock(product.id, Math.max(0, product.quantity - p.quantity));
+        }
+      });
+
+      if (!isOnlineWrite) {
+        setOrdensServico(prev => [newOS, ...prev]);
+      }
+    } else {
+      setOrdensServico(prev => [newOS, ...prev]);
+
+      // Deduct items used on OS from stock parts
+      os.parts.forEach(p => {
+        const product = produtos.find(item => item.id === p.id);
+        if (product) {
+          updateProdutoStock(product.id, Math.max(0, product.quantity - p.quantity));
+        }
+      });
+    }
+  };
+
+  const editOS = async (id: string, fields: Partial<OrdemServico>) => {
+    const updatedWithTime = {
+      ...fields,
+      updatedAt: new Date().toISOString()
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("ordens_servico", id, updatedWithTime, 'merge');
+      if (!isOnlineWrite) {
+        setOrdensServico(prev => prev.map(item => item.id === id ? { ...item, ...updatedWithTime } : item));
+      }
+    } else {
+      setOrdensServico(prev => prev.map(item => item.id === id ? { ...item, ...updatedWithTime } : item));
+    }
+  };
+
+  const addVenda = async (v: Omit<Venda, 'id' | 'empresaId' | 'date'>) => {
+    const id = "vnd_" + Math.random().toString(36).substr(2, 9);
+    const newVenda: Venda = {
+      ...v,
+      id,
+      empresaId: company.id,
+      date: new Date().toISOString()
+    };
+
+    // Create a financial entry for cash income
+    const finId = "fin_" + Math.random().toString(36).substr(2, 9);
+    const salesIncome: Financeiro = {
+      id: finId,
+      empresaId: company.id,
+      description: `Venda PDV Balcão #${id.substr(4, 5).toUpperCase()}`,
+      type: "Receita",
+      amount: v.total,
+      dueDate: new Date().toISOString().split('T')[0],
+      status: "Pago",
+      category: "Vendas Peças",
+      createdAt: new Date().toISOString()
+    };
+    
+    if (firebaseUser) {
+      const w1 = await executeWrite("vendas", id, newVenda, 'set');
+      const w2 = await executeWrite("financeiro", finId, salesIncome, 'set');
+
+      // Deduct sold items from stock
+      v.items.forEach(sold => {
+        const product = produtos.find(p => p.id === sold.produtoId);
+        if (product) {
+          updateProdutoStock(product.id, Math.max(0, product.quantity - sold.quantity));
+        }
+      });
+
+      // Update current cash register balance
+      let w3 = true;
+      if (caixaStatus && caixaStatus.status === "Aberto") {
+        const openedCaixaId = caixaStatus.id;
+        const newAmt = caixaStatus.currentAmount + v.total;
+        w3 = await executeWrite("caixa", openedCaixaId, { currentAmount: newAmt }, 'merge');
+      }
+
+      if (!w1 || !w2 || !w3) {
+        setVendas(prev => [newVenda, ...prev]);
+        setFinanceiro(prev => [salesIncome, ...prev]);
+        if (caixaStatus && caixaStatus.status === "Aberto") {
+          setCaixaStatus(prev => prev ? {
+            ...prev,
+            currentAmount: prev.currentAmount + v.total
+          } : null);
+        }
+      }
+    } else {
+      setVendas(prev => [newVenda, ...prev]);
+      setFinanceiro(prev => [salesIncome, ...prev]);
+
+      // Deduct sold items from stock
+      v.items.forEach(sold => {
+        const product = produtos.find(p => p.id === sold.produtoId);
+        if (product) {
+          updateProdutoStock(product.id, Math.max(0, product.quantity - sold.quantity));
+        }
+      });
+
+      // Update current cash register balance
+      if (caixaStatus && caixaStatus.status === "Aberto") {
+        setCaixaStatus(prev => prev ? {
+          ...prev,
+          currentAmount: prev.currentAmount + v.total
+        } : null);
+      }
+    }
+  };
+
+  const addFinanceiro = async (f: Omit<Financeiro, 'id' | 'empresaId' | 'createdAt'>) => {
+    const id = "fin_" + Math.random().toString(36).substr(2, 9);
+    const newEntry: Financeiro = {
+      ...f,
+      id,
+      empresaId: company.id,
+      createdAt: new Date().toISOString()
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("financeiro", id, newEntry, 'set');
+      if (!isOnlineWrite) {
+        setFinanceiro(prev => [newEntry, ...prev]);
+      }
+    } else {
+      setFinanceiro(prev => [newEntry, ...prev]);
+    }
+  };
+
+  const editFinanceiro = async (id: string, fields: Partial<Financeiro>) => {
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("financeiro", id, fields, 'merge');
+      if (!isOnlineWrite) {
+        setFinanceiro(prev => prev.map(f => f.id === id ? { ...f, ...fields } : f));
+      }
+    } else {
+      setFinanceiro(prev => prev.map(f => f.id === id ? { ...f, ...fields } : f));
+    }
+  };
+
+  const abrirCaixa = async (amount: number) => {
+    const updatedCaixa: Caixa = {
+      id: "cx_" + new Date().toISOString().substring(0, 10),
+      empresaId: company.id,
+      status: "Aberto",
+      initialAmount: amount,
+      currentAmount: amount,
+      openedAt: new Date().toISOString()
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("caixa", updatedCaixa.id, updatedCaixa, 'set');
+      if (!isOnlineWrite) {
+        setCaixaStatus(updatedCaixa);
+      }
+    } else {
+      setCaixaStatus(updatedCaixa);
+    }
+  };
+
+  const fecharCaixa = async () => {
+    if (!caixaStatus) return;
+    const closedCaixa: Caixa = {
+      ...caixaStatus,
+      status: "Fechado",
+      closedAt: new Date().toISOString()
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("caixa", closedCaixa.id, closedCaixa, 'merge');
+      if (!isOnlineWrite) {
+        setCaixaStatus(closedCaixa);
+      }
+    } else {
+      setCaixaStatus(closedCaixa);
+    }
+  };
+
+  const addFornecedor = async (f: Omit<Fornecedor, 'id' | 'empresaId'>) => {
+    const id = "for_" + Math.random().toString(36).substr(2, 9);
+    const newFornecedor: Fornecedor = {
+      ...f,
+      id,
+      empresaId: company.id
+    };
+
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("fornecedores", id, newFornecedor, 'set');
+      if (!isOnlineWrite) {
+        setFornecedores(prev => [newFornecedor, ...prev]);
+      }
+    } else {
+      setFornecedores(prev => [newFornecedor, ...prev]);
+    }
+  };
+
+  const editFornecedor = async (id: string, updatedFields: Partial<Fornecedor>) => {
+    if (firebaseUser) {
+      const isOnlineWrite = await executeWrite("fornecedores", id, updatedFields, 'merge');
+      if (!isOnlineWrite) {
+        setFornecedores(prev => prev.map(f => f.id === id ? { ...f, ...updatedFields } : f));
+      }
+    } else {
+      setFornecedores(prev => prev.map(f => f.id === id ? { ...f, ...updatedFields } : f));
+    }
+  };
+
+  const deleteFornecedor = async (id: string) => {
+    if (firebaseUser) {
+      // Deletar localmente
+      setFornecedores(prev => prev.filter(f => f.id !== id));
+      try {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          await deleteDoc(doc(db, "fornecedores", id));
+        }
+      } catch (err) {
+        console.warn("Direct online deletion failed, local cache updated.", err);
+      }
+    } else {
+      setFornecedores(prev => prev.filter(f => f.id !== id));
+    }
+  };
+
+  const updateCompany = async (updatedFields: Partial<Company>) => {
+    setCompany(prev => ({ ...prev, ...updatedFields }));
+    if (firebaseUser) {
+      try {
+        const { updateDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          const compRef = doc(db, 'empresas', company.id);
+          await updateDoc(compRef, updatedFields);
+        }
+      } catch (err) {
+        console.warn("Direct online company update failed, local state modified.", err);
+      }
+    }
+  };
+
+  // AI API Integrations call server side proxy
+  const getSmartDiagnosis = async (model: string, plate: string, problem: string) => {
+    setAiLoading(true);
+    try {
+      const response = await fetch("/api/gemini/diagnose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model, plate, problemDescription: problem })
+      });
+      return await response.json();
+    } catch (e) {
+      console.error("AI service error, pulling fallback", e);
+      return {
+        diagnosis: "Sintoma de falha mecânica genérica ou leitura instável do atuador de vácuo. Proceda para teste analógico.",
+        suggestedParts: [{ name: "Kit de Filtros de Ar e Combustível Bosch", confidence: "70%", estCost: "R$ 150,00", qtyNeeded: 1 }],
+        suggestedServices: [{ description: "Análise computadorizada OBD", estHours: "1h", estLaborCost: "R$ 90,00" }],
+        estimatedTotal: "R$ 240,00",
+        urgency: "Média"
+      };
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const sendChatMessage = async (messages: { role: 'user' | 'assistant'; text: string }[]) => {
+    setAiLoading(true);
+    try {
+      const response = await fetch("/api/gemini/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages })
+      });
+      const data = await response.json();
+      return data.text || "Assistente temporariamente indisponível.";
+    } catch (e) {
+      return "Erro na rede. Por favor, tente enviar novamente.";
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  return (
+    <AppContext.Provider value={{
+      user,
+      company,
+      clientes,
+      veiculos,
+      produtos,
+      servicos,
+      ordensServico,
+      financeiro,
+      fornecedores,
+      caixaStatus,
+      vendas,
+      loading,
+      aiLoading,
+      loginError,
+      
+      loginWithGoogle,
+      loginDemo,
+      logout,
+      
+      addCliente,
+      editCliente,
+      addVeiculo,
+      addProduto,
+      updateProdutoStock,
+      editProduto,
+      deleteProduto,
+      addServico,
+      editServico,
+      deleteServico,
+      addOS,
+      editOS,
+      addVenda,
+      addFinanceiro,
+      editFinanceiro,
+      abrirCaixa,
+      fecharCaixa,
+      addFornecedor,
+      editFornecedor,
+      deleteFornecedor,
+      updateCompany,
+      
+      getSmartDiagnosis,
+      sendChatMessage,
+
+      // Offline properties
+      isOnline,
+      pendingActionsCount,
+      syncPendingActions,
+      syncing
+    }}>
+      {children}
+    </AppContext.Provider>
+  );
+};
+
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (context === undefined) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};

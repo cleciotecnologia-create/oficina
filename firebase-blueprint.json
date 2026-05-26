@@ -1,0 +1,201 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role details",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["Administrador", "Gerente", "Mecânico", "Caixa", "Estoquista"] },
+        "empresaId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "name", "email", "role", "empresaId"]
+    },
+    "Empresa": {
+      "title": "Empresa",
+      "description": "Company registration for multi-tenant SaaS features",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "cnpj": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "planId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Cliente": {
+      "title": "Cliente",
+      "description": "Customer record including vehicles and contact details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "cpfCnpj": { "type": "string" },
+        "empresaId": { "type": "string" },
+        "oilChangeAlert": { "type": "boolean" },
+        "reviewAlert": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "empresaId"]
+    },
+    "Veiculo": {
+      "title": "Veiculo",
+      "description": "Car vehicle registered for service history",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "year": { "type": "string" },
+        "engine": { "type": "string" },
+        "plate": { "type": "string" },
+        "chassi": { "type": "string" },
+        "km": { "type": "number" },
+        "empresaId": { "type": "string" }
+      },
+      "required": ["id", "clienteId", "brand", "model", "plate", "empresaId"]
+    },
+    "Produto": {
+      "title": "Produto",
+      "description": "Auto parts and products inventory details",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "brand": { "type": "string" },
+        "internalSku": { "type": "string" },
+        "barcode": { "type": "string" },
+        "category": { "type": "string" },
+        "compatibility": { "type": "string" },
+        "manufacturer": { "type": "string" },
+        "costPrice": { "type": "number" },
+        "sellPrice": { "type": "number" },
+        "quantity": { "type": "number" },
+        "minStock": { "type": "number" },
+        "photo": { "type": "string" },
+        "empresaId": { "type": "string" }
+      },
+      "required": ["id", "name", "sellPrice", "quantity", "empresaId"]
+    },
+    "Venda": {
+      "title": "Venda",
+      "description": "Point-of-Sale (PDV) transactions records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "empresaId": { "type": "string" },
+        "date": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "items": { "type": "array" },
+        "discount": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "commission": { "type": "number" },
+        "sellerId": { "type": "string" }
+      },
+      "required": ["id", "empresaId", "total", "items"]
+    },
+    "OrdemServico": {
+      "title": "OrdemServico",
+      "description": "Mechanic shop service orders detailed sheet",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "empresaId": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "veiculoId": { "type": "string" },
+        "plate": { "type": "string" },
+        "km": { "type": "number" },
+        "problem": { "type": "string" },
+        "diagnosis": { "type": "string" },
+        "status": { "type": "string", "enum": ["Aberta", "Em análise", "Aguardando peça", "Em execução", "Finalizada", "Entregue"] },
+        "mechanicId": { "type": "string" },
+        "services": { "type": "array" },
+        "parts": { "type": "array" },
+        "signature": { "type": "string" },
+        "total": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "empresaId", "clienteId", "veiculoId", "status"]
+    },
+    "Financeiro": {
+      "title": "Financeiro",
+      "description": "Accounts payable and receivable financial flow",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "empresaId": { "type": "string" },
+        "description": { "type": "string" },
+        "type": { "type": "string", "enum": ["Receita", "Despesa"] },
+        "amount": { "type": "number" },
+        "dueDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pago", "Pendente"] },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "empresaId", "type", "amount", "status"]
+    },
+    "Caixa": {
+      "title": "Caixa",
+      "description": "Daily register control logic",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "empresaId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Aberto", "Fechado"] },
+        "initialAmount": { "type": "number" },
+        "currentAmount": { "type": "number" },
+        "openedAt": { "type": "string" },
+        "closedAt": { "type": "string" }
+      },
+      "required": ["id", "empresaId", "status", "initialAmount"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Profiles for registered staff and admins"
+    },
+    "/empresas/{empresaId}": {
+      "schema": "Empresa",
+      "description": "Multi-tenant company configurations"
+    },
+    "/clientes/{clienteId}": {
+      "schema": "Cliente",
+      "description": "Auto mechanic shop customers"
+    },
+    "/veiculos/{veiculoId}": {
+      "schema": "Veiculo",
+      "description": "Client automobiles details"
+    },
+    "/produtos/{produtoId}": {
+      "schema": "Produto",
+      "description": "Products and vehicle parts list"
+    },
+    "/vendas/{vendaId}": {
+      "schema": "Venda",
+      "description": "PDV point of sale transactions"
+    },
+    "/ordens_servico/{osId}": {
+      "schema": "OrdemServico",
+      "description": "Active and completed service orders"
+    },
+    "/financeiro/{movId}": {
+      "schema": "Financeiro",
+      "description": "Accounts ledger history"
+    },
+    "/caixa/{caixaId}": {
+      "schema": "Caixa",
+      "description": "Cash register sessions"
+    }
+  }
+}

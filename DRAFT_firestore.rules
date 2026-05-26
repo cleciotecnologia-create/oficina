@@ -1,0 +1,202 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==========================================
+    // 3. PRIMITIVES & GLOBAL HELPERS
+    // ==========================================
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Alphanumeric ID checks for security rules to prevent path escape or denial-of-wallet resource attacks
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Relational Sync: Get user profile details
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Master Gate Rule: Verify that the document belongs to the active user's company (empresaId)
+    function belongsToTenant(empresaId) {
+      return isSignedIn() && getUserData().empresaId == empresaId;
+    }
+
+    // Default deny security fence
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ==========================================
+    // 4. ENTITY VALIDATION BLUEPRINTS
+    // ==========================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'email', 'role', 'empresaId'])
+        && data.uid is string && data.uid.size() > 0 && data.uid.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.email is string && data.email.size() > 0 && data.email.size() <= 150
+        && data.role is string && (data.role == "Administrador" || data.role == "Gerente" || data.role == "Mecânico" || data.role == "Caixa" || data.role == "Estoquista")
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128;
+    }
+
+    function isValidCliente(data) {
+      return data.keys().hasAll(['id', 'name', 'empresaId'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128;
+    }
+
+    function isValidVeiculo(data) {
+      return data.keys().hasAll(['id', 'clienteId', 'brand', 'model', 'plate', 'empresaId'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.clienteId is string && data.clienteId.size() > 0 && data.clienteId.size() <= 128
+        && data.brand is string && data.brand.size() > 0 && data.brand.size() <= 100
+        && data.model is string && data.model.size() > 0 && data.model.size() <= 100
+        && data.plate is string && data.plate.size() > 0 && data.plate.size() <= 20
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128;
+    }
+
+    function isValidProduto(data) {
+      return data.keys().hasAll(['id', 'name', 'sellPrice', 'quantity', 'empresaId'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 200
+        && data.sellPrice is number && data.sellPrice >= 0.0
+        && data.quantity is number && data.quantity >= 0
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128;
+    }
+
+    function isValidVenda(data) {
+      return data.keys().hasAll(['id', 'empresaId', 'total', 'items'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128
+        && data.total is number && data.total >= 0.0
+        && data.items is list && data.items.size() <= 100;
+    }
+
+    function isValidOrdemServico(data) {
+      return data.keys().hasAll(['id', 'empresaId', 'clienteId', 'veiculoId', 'status'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128
+        && data.clienteId is string && data.clienteId.size() > 0 && data.clienteId.size() <= 128
+        && data.veiculoId is string && data.veiculoId.size() > 0 && data.veiculoId.size() <= 128
+        && data.status is string && (data.status == "Aberta" || data.status == "Em análise" || data.status == "Aguardando peça" || data.status == "Em execução" || data.status == "Finalizada" || data.status == "Entregue");
+    }
+
+    function isValidFinanceiro(data) {
+      return data.keys().hasAll(['id', 'empresaId', 'type', 'amount', 'status'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128
+        && data.type is string && (data.type == "Receita" || data.type == "Despesa")
+        && data.amount is number && data.amount >= 0.0
+        && data.status is string && (data.status == "Pago" || data.status == "Pendente");
+    }
+
+    function isValidCaixa(data) {
+      return data.keys().hasAll(['id', 'empresaId', 'status', 'initialAmount'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128
+        && data.status is string && (data.status == "Aberto" || data.status == "Fechado")
+        && data.initialAmount is number && data.initialAmount >= 0.0;
+    }
+
+    // ==========================================
+    // 5. MATCH RULES
+    // ==========================================
+
+    // Users Profiles (Self-governed)
+    match /users/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming())
+        && incoming().empresaId == existing().empresaId 
+        && incoming().role == existing().role; // Role & Company ID are immutable self-service wise
+    }
+
+    // Companies (Only viewable and updateable if user belongs to the company)
+    match /empresas/{empresaId} {
+      allow get: if isSignedIn() && isValidId(empresaId) && belongsToTenant(empresaId);
+      allow create: if isSignedIn() && isValidId(empresaId) && getUserData().role == "Administrador";
+      allow update: if isSignedIn() && isValidId(empresaId) && belongsToTenant(empresaId) && getUserData().role == "Administrador";
+    }
+
+    // Clients CRUD with Multi-tenant isolation
+    match /clientes/{clienteId} {
+      allow get: if isSignedIn() && isValidId(clienteId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(clienteId) && isValidCliente(incoming()) && belongsToTenant(incoming().empresaId);
+      allow update: if isSignedIn() && isValidId(clienteId) && isValidCliente(incoming()) && belongsToTenant(existing().empresaId) && belongsToTenant(incoming().empresaId);
+      allow delete: if isSignedIn() && isValidId(clienteId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+
+    // Vehicles list
+    match /veiculos/{veiculoId} {
+      allow get: if isSignedIn() && isValidId(veiculoId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(veiculoId) && isValidVeiculo(incoming()) && belongsToTenant(incoming().empresaId);
+      allow update: if isSignedIn() && isValidId(veiculoId) && isValidVeiculo(incoming()) && belongsToTenant(existing().empresaId) && belongsToTenant(incoming().empresaId);
+      allow delete: if isSignedIn() && isValidId(veiculoId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+
+    // Stock Parts and Products
+    match /produtos/{produtoId} {
+      allow get: if isSignedIn() && isValidId(produtoId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(produtoId) && isValidProduto(incoming()) && belongsToTenant(incoming().empresaId);
+      allow update: if isSignedIn() && isValidId(produtoId) && isValidProduto(incoming()) && belongsToTenant(existing().empresaId) && belongsToTenant(incoming().empresaId);
+      allow delete: if isSignedIn() && isValidId(produtoId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+
+    // PDV checkout sales
+    match /vendas/{vendaId} {
+      allow get: if isSignedIn() && isValidId(vendaId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(vendaId) && isValidVenda(incoming()) && belongsToTenant(incoming().empresaId);
+      allow update: if isSignedIn() && isValidId(vendaId) && isValidVenda(incoming()) && belongsToTenant(existing().empresaId) && belongsToTenant(incoming().empresaId);
+      allow delete: if isSignedIn() && isValidId(vendaId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+
+    // Services and Repairs order
+    match /ordens_servico/{osId} {
+      allow get: if isSignedIn() && isValidId(osId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(osId) && isValidOrdemServico(incoming()) && belongsToTenant(incoming().empresaId);
+      
+      // Enforce status terminal states: once delivered (Entregue), it's locked for non-admins
+      allow update: if isSignedIn() && isValidId(osId) && isValidOrdemServico(incoming()) 
+        && belongsToTenant(existing().empresaId) && belongsToTenant(incoming().empresaId)
+        && (existing().status != "Entregue" || getUserData().role == "Administrador");
+        
+      allow delete: if isSignedIn() && isValidId(osId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+
+    // Cash Ledger
+    match /financeiro/{movId} {
+      allow get: if isSignedIn() && isValidId(movId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(movId) && isValidFinanceiro(incoming()) && belongsToTenant(incoming().empresaId);
+      allow update: if isSignedIn() && isValidId(movId) && isValidFinanceiro(incoming()) && belongsToTenant(existing().empresaId) && belongsToTenant(incoming().empresaId);
+      allow delete: if isSignedIn() && isValidId(movId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+
+    // Cash registers
+    match /caixa/{caixaId} {
+      allow get: if isSignedIn() && isValidId(caixaId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(caixaId) && isValidCaixa(incoming()) && belongsToTenant(incoming().empresaId);
+      allow update: if isSignedIn() && isValidId(caixaId) && isValidCaixa(incoming()) && belongsToTenant(existing().empresaId) && belongsToTenant(incoming().empresaId);
+      allow delete: if isSignedIn() && isValidId(caixaId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+  }
+}
