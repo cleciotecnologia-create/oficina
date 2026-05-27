@@ -2104,23 +2104,25 @@ export const SuperAdminView: React.FC = () => {
 
         <div className="bg-[#0c1223] border border-gray-800 p-4.5 rounded-2xl flex items-center gap-4">
           <div className="p-3.5 rounded-xl bg-cyan-950/20 border border-cyan-900/30 text-cyan-400">
+            <Sparkles className="w-6 h-6" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-gray-500 font-mono font-bold uppercase">Faturamento Implantação</span>
+            <strong className="text-xl text-cyan-400 font-mono leading-tight">
+              R$ {(tenants.length * 1500).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </strong>
+            <span className="text-[9px] text-slate-400 mt-0.5 font-mono font-bold text-cyan-400/80">R$ 1.500,00 Taxa de Adesão</span>
+          </div>
+        </div>
+
+        <div className="bg-[#0c1223] border border-gray-800 p-4.5 rounded-2xl flex items-center gap-4">
+          <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-900/30 text-indigo-400">
             <Database className="w-6 h-6" />
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] text-gray-500 font-mono font-bold uppercase">Registros Globais</span>
             <strong className="text-xl text-white font-mono leading-tight">{totalLogsRowsCount} rgs</strong>
             <span className="text-[9px] text-slate-400 mt-0.5 font-mono">Isolamento Cloud Firestore</span>
-          </div>
-        </div>
-
-        <div className="bg-[#0c1223] border border-gray-800 p-4.5 rounded-2xl flex items-center gap-4">
-          <div className="p-3.5 rounded-xl bg-red-950/20 border border-red-900/30 text-red-500">
-            <Activity className="w-6 h-6" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] text-gray-500 font-mono font-bold uppercase">Latência API</span>
-            <strong className="text-xl text-white font-mono leading-tight">{simulatedLatency} ms</strong>
-            <span className="text-[9px] text-slate-400 mt-0.5 font-mono">Cpu: {simulatedLoad}%</span>
           </div>
         </div>
 
@@ -2282,7 +2284,7 @@ export const SuperAdminView: React.FC = () => {
                         <div className="flex items-center gap-1.5 text-[9.5px] text-[10px] text-gray-500 mt-0.5 font-mono">
                           <span>Reqs: <strong className="text-slate-300">{usage.requestsCount}</strong></span>
                           <span>|</span>
-                          <span>Custo estimado: <strong className="text-emerald-400 font-bold">R$ {((usage.promptTokens * 0.000005) + (usage.completionTokens * 0.000015)).toFixed(2)}</strong></span>
+                          <span>Cobrança de Token: <strong className="text-emerald-400 font-bold">Gratuito / Isento (Incluso)</strong></span>
                           <span>|</span>
                           <span>Último uso: <strong className="text-slate-300">{usage.lastUsedAt !== "Nenhuma requisição" && usage.lastUsedAt !== "Contador reiniciado" ? new Date(usage.lastUsedAt).toLocaleTimeString() : usage.lastUsedAt}</strong></span>
                         </div>
@@ -2418,21 +2420,21 @@ export const SuperAdminView: React.FC = () => {
 
               {/* Sub-note on sandbox */}
               <div className="bg-[#0c1223]/35 rounded p-2.5 border border-gray-850/40 text-[9.5px] text-slate-450 text-gray-500 font-sans leading-relaxed text-left">
-                💡 <strong>Preço de Infraestrutura:</strong> O faturamento simulado calcula o Prompt a R$ 0,005 / 1k tokens, e a Conclusão (Completion) a R$ 0,015 / 1k tokens, que representam as margens de lucro do SaaS.
+                💡 <strong>Acesso Ilimitado CoPilot:</strong> Na AutoPrecision não cobramos por tokens! O uso da inteligência artificial do CoPilot é totalmente incluso e isento de taxas avulsas nos planos recorrentes após o pagamento da implantação única.
               </div>
 
             </div>
 
             {/* Quota policy settings information advice card */}
             <div className="bg-[#050912] border border-gray-900 rounded-xl p-4 text-left font-sans text-xs flex flex-col gap-2">
-              <span className="text-[10px] font-mono text-slate-450 font-bold uppercase">POLÍTICA DE INFRAESTRUTURA DE IA</span>
+              <span className="text-[10px] font-mono text-slate-450 font-bold uppercase">POLÍTICA COMERCIAL DO SAAS</span>
               <p className="text-[10.5px] text-gray-500 leading-normal font-sans">
-                Se uma oficina parceira estoura 100% de sua quota mensal, o copiloto entra em limitação automática de banda, impedindo que mecânicos acessem diagnósticos preditivos adicionais até que:
+                O modelo de negócios do SaaS consiste exclusivamente no faturamento de <strong>Adesão/Implantação de R$ 1.500,00 (única)</strong> e a <strong>Assinatura Recorrente Mensal</strong> dos planos selecionados:
               </p>
               <ul className="text-[10px] text-slate-500 pl-4 list-decimal flex flex-col gap-1 inline-block text-gray-500">
-                <li>O SuperAdmin efetue um <strong>Reset de Quota Mensal</strong>.</li>
-                <li>O parceiro realize upgrade de plano (ex: Básico → Profissional).</li>
-                <li>O cliente compre um pacote de tokens avulso sob demanda faturado no Stripe.</li>
+                <li>Taxa Única de Implantação e Treinamento Técnica: <strong>R$ 1.500,00</strong>.</li>
+                <li>Assinatura Mensal conforme o plano contratado (Básico, Profissional ou Premium).</li>
+                <li>CoPilot Inteligência Artificial Gemini: **Incluso Totalmente Grátis** (Sem cobrança por tokens).</li>
               </ul>
             </div>
 
@@ -3809,8 +3811,8 @@ export const SuperAdminView: React.FC = () => {
               </div>
 
               <div className="p-3 bg-slate-950/40 rounded-xl border border-gray-850">
-                <strong className="text-white block mb-1">✨ Módulo Inteligência Artificial Premium:</strong>
-                Crie um add-on mensal de <strong>R$ 49,90/mês</strong> em seu modelo de faturamento para liberar requisições ilimitadas do copiloto inteligente para os mecânicos do parceiro.
+                <strong className="text-white block mb-1">✨ Diferencial da Inteligência Artificial:</strong>
+                Mostre o valor da inteligência artificial como um super diferencial incluso já na assinatura recorrente! O CoPilot ajuda a fidelizar e reter os parceiros no SaaS por ser isento de cobranças por tokens.
               </div>
 
               <div className="p-3 bg-slate-950/40 rounded-xl border border-gray-850">

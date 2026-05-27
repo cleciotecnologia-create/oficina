@@ -10,8 +10,13 @@ import {
   DollarSign, 
   Package, 
   CheckCircle2, 
-  Clock 
+  Clock,
+  PiggyBank,
+  Percent,
+  ArrowRight,
+  Sparkles
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import { 
   AreaChart, 
@@ -34,6 +39,8 @@ export const DashboardView: React.FC = () => {
     caixaStatus,
     company
   } = useApp();
+
+  const [selectedMetric, setSelectedMetric] = React.useState<'diario' | 'mensal' | 'despesas' | 'lucro' | 'ordens' | 'estoque'>('mensal');
 
   // Load administrative support suggestions for this workshop from localStorage with reactive status toggles
   const [sugList, setSugList] = React.useState<any[]>([]);
@@ -268,75 +275,395 @@ export const DashboardView: React.FC = () => {
       )}
 
       {/* KPI CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         
         {/* Card 1: Faturamento Diário */}
-        <div className="bg-[#0c1223] rounded-2xl border border-gray-800/80 p-4 shrink-0 flex flex-col justify-between hover:border-red-600/30 transition-all">
+        <div 
+          onClick={() => setSelectedMetric('diario')}
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+            selectedMetric === 'diario' 
+              ? 'bg-[#0f2122]/40 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.15)] ring-1 ring-green-500/20' 
+              : 'bg-[#0c1223] border-gray-800/80 hover:border-green-800/50 hover:bg-[#0c1223]/80'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-gray-400 font-mono font-medium">FATURAMENTO DIÁRIO</span>
-            <div className="p-2 rounded-lg bg-green-950/40 text-green-500 border border-green-900/30">
+            <span className="text-[10px] text-gray-400 font-mono font-medium tracking-wider">DIÁRIO (ENTRADAS)</span>
+            <div className={`p-2 rounded-lg transition-colors ${
+              selectedMetric === 'diario' ? 'bg-green-500 text-black font-extrabold' : 'bg-green-950/40 text-green-500 border border-green-900/30'
+            }`}>
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-2xl font-display font-bold text-white">R$ {dailyEarnings().toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div className="text-[10px] text-green-500 font-mono mt-1 flex items-center gap-1">
-              <ArrowUpRight className="w-3.5 h-3.5" /> +14.2% vs ontem
+            <div className="text-xl font-display font-extrabold text-white">
+              R$ {dailyEarnings().toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[9px] text-green-500 font-mono mt-1 flex items-center gap-1">
+              <ArrowUpRight className="w-3 h-3" /> +14.2% vs ontem
             </div>
           </div>
         </div>
 
         {/* Card 2: Faturamento Mensal */}
-        <div className="bg-[#0c1223] rounded-2xl border border-gray-800/80 p-4 shrink-0 flex flex-col justify-between hover:border-cyan-600/30 transition-all">
+        <div 
+          onClick={() => setSelectedMetric('mensal')}
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+            selectedMetric === 'mensal' 
+              ? 'bg-[#0b1e2c]/40 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20' 
+              : 'bg-[#0c1223] border-gray-800/80 hover:border-cyan-800/50 hover:bg-[#0c1223]/80'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-gray-400 font-mono font-medium">RESUMO ENTRADAS MÊS</span>
-            <div className="p-2 rounded-lg bg-cyan-950/40 text-cyan-500 border border-cyan-900/30">
+            <span className="text-[10px] text-gray-400 font-mono font-medium tracking-wider">ENTRADAS DO MÊS</span>
+            <div className={`p-2 rounded-lg transition-colors ${
+              selectedMetric === 'mensal' ? 'bg-cyan-500 text-black font-extrabold' : 'bg-cyan-950/40 text-cyan-400 border border-cyan-900/30'
+            }`}>
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-2xl font-display font-bold text-white">R$ {monthlyEarnings().toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div className="text-[10px] text-cyan-400 font-mono mt-1 flex items-center gap-1">
-              <ArrowUpRight className="w-3.5 h-3.5" /> Meta de R$ 30k (63%)
+            <div className="text-xl font-display font-extrabold text-white">
+              R$ {monthlyEarnings().toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[9px] text-cyan-400 font-mono mt-1 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-cyan-400" /> Meta de R$ 30k
             </div>
           </div>
         </div>
 
-        {/* Card 3: OS em Aberto */}
-        <div className="bg-[#0c1223] rounded-2xl border border-gray-800/80 p-4 shrink-0 flex flex-col justify-between hover:border-yellow-600/30 transition-all">
+        {/* Card 3: Despesas do Mês */}
+        <div 
+          onClick={() => setSelectedMetric('despesas')}
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+            selectedMetric === 'despesas' 
+              ? 'bg-[#29111c]/40 border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/20' 
+              : 'bg-[#0c1223] border-gray-800/80 hover:border-rose-900/50 hover:bg-[#0c1223]/80'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-gray-400 font-mono font-medium">ORDENS NO PÁTIO</span>
-            <div className="p-2 rounded-lg bg-yellow-950/40 text-yellow-500 border border-yellow-900/30">
+            <span className="text-[10px] text-gray-400 font-mono font-medium tracking-wider">DESPESAS DO MÊS</span>
+            <div className={`p-2 rounded-lg transition-colors ${
+              selectedMetric === 'despesas' ? 'bg-rose-500 text-black font-extrabold' : 'bg-rose-950/40 text-rose-400 border border-rose-900/30'
+            }`}>
+              <ArrowDownRight className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-xl font-display font-extrabold text-white">
+              R$ {monthlyExpenses().toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-[9px] text-rose-450 font-mono mt-1 flex items-center gap-1">
+              <Percent className="w-3 h-3" /> do faturado: {monthlyEarnings() > 0 ? ((monthlyExpenses() / monthlyEarnings()) * 100).toFixed(1) : 0}%
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Lucro Líquido Estimado */}
+        <div 
+          onClick={() => setSelectedMetric('lucro')}
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+            selectedMetric === 'lucro' 
+              ? 'bg-[#08201a]/40 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20' 
+              : 'bg-[#0c1223] border-gray-800/80 hover:border-emerald-800/50 hover:bg-[#0c1223]/80'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-gray-400 font-mono font-medium tracking-wider">LUCRO ESTIMADO</span>
+            <div className={`p-2 rounded-lg transition-colors ${
+              selectedMetric === 'lucro' ? 'bg-emerald-500 text-black font-extrabold' : 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/30'
+            }`}>
+              <PiggyBank className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-xl font-display font-extrabold text-white">
+              R$ {(monthlyEarnings() - monthlyExpenses()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="text-[9px] text-emerald-400 font-mono mt-1 flex items-center gap-1">
+              Margem: {monthlyEarnings() > 0 ? (((monthlyEarnings() - monthlyExpenses()) / monthlyEarnings()) * 100).toFixed(1) : 0}%
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Ordens no Pátio */}
+        <div 
+          onClick={() => setSelectedMetric('ordens')}
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+            selectedMetric === 'ordens' 
+              ? 'bg-[#271d15]/40 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/20' 
+              : 'bg-[#0c1223] border-gray-800/80 hover:border-amber-850/50'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-gray-400 font-mono font-medium tracking-wider">ORDENS NO PÁTIO</span>
+            <div className={`p-2 rounded-lg transition-colors ${
+              selectedMetric === 'ordens' ? 'bg-amber-500 text-black font-extrabold' : 'bg-amber-950/40 text-amber-500 border border-amber-900/30'
+            }`}>
               <Wrench className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-2xl font-display font-bold text-white">{activeOSCount} de {ordensServico.length} OS</div>
-            <div className="text-[10px] text-yellow-500 font-mono mt-1 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> {servicesInProgress} em execução ativa
+            <div className="text-xl font-display font-extrabold text-white">
+              {activeOSCount} de {ordensServico.length} OS
+            </div>
+            <div className="text-[9px] text-amber-500 font-mono mt-1 flex items-center gap-1">
+              <Clock className="w-3 h-3 text-amber-500" /> {servicesInProgress} em execução
             </div>
           </div>
         </div>
 
-        {/* Card 4: Alerta Estoque Baixo */}
-        <div className="bg-[#0c1223] rounded-2xl border border-gray-800/80 p-4 shrink-0 flex flex-col justify-between hover:border-red-650/40 transition-all">
+        {/* Card 6: Alerta Reposição Estoque */}
+        <div 
+          onClick={() => setSelectedMetric('estoque')}
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+            selectedMetric === 'estoque' 
+              ? 'bg-[#291113]/40 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.15)] ring-1 ring-red-500/20' 
+              : 'bg-[#0c1223] border-gray-800/80 hover:border-red-800/50 hover:bg-[#0c1223]/80'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] text-red-400 font-mono font-medium flex items-center gap-1">
-              <Activity className="w-3.5 h-3.5 text-red-500 animate-pulse" /> ALERTA DE REPOSIÇÃO
+            <span className="text-[10px] text-red-450 font-mono font-medium tracking-wider flex items-center gap-1">
+              <Activity className="w-3 h-3 text-red-500 animate-pulse" /> REPOSIÇÃO
             </span>
-            <div className={`p-2 rounded-lg ${lowStockCount > 0 ? 'bg-red-950/40 text-red-500 border border-red-900/30' : 'bg-slate-900 text-slate-500'}`}>
+            <div className={`p-2 rounded-lg transition-colors ${
+              selectedMetric === 'estoque' ? 'bg-red-500 text-black font-extrabold' : 'bg-red-950/40 text-red-400 border border-red-900/30'
+            }`}>
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-4">
-            <div className="text-2xl font-display font-bold text-white">{lowStockCount} Itens</div>
-            <div className="text-[10px] text-red-400 font-mono mt-1">
-              Abaixo do estoque mínimo configurado.
+            <div className="text-xl font-display font-extrabold text-white">
+              {lowStockCount} Itens
+            </div>
+            <div className="text-[9px] text-red-400 font-mono mt-1">
+              Estoque crítico detectado
             </div>
           </div>
         </div>
 
       </div>
+
+      {/* DETAILED INTERACTIVE DRAWER CONTEXTUAL */}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={selectedMetric}
+          initial={{ opacity: 0, height: 0, y: -8 }}
+          animate={{ opacity: 1, height: 'auto', y: 0 }}
+          exit={{ opacity: 0, height: 0, y: -8 }}
+          transition={{ duration: 0.25 }}
+          className="overflow-hidden bg-[#0a101d] border border-slate-800 rounded-2xl p-5 shadow-2xl relative"
+        >
+          {/* Subtle neon indicator top line */}
+          <div className={`absolute top-0 left-0 right-0 h-[2px] ${
+            selectedMetric === 'diario' ? 'bg-green-500' :
+            selectedMetric === 'mensal' ? 'bg-cyan-500' :
+            selectedMetric === 'despesas' ? 'bg-rose-500' :
+            selectedMetric === 'lucro' ? 'bg-emerald-500' :
+            selectedMetric === 'ordens' ? 'bg-amber-500' : 'bg-red-500'
+          }`} />
+
+          {selectedMetric === 'diario' && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center font-sans">
+              <div className="md:col-span-8 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest bg-green-950/50 border border-green-800 text-green-400 px-2 py-0.5 rounded font-bold uppercase">Métrica ativa: Lançamentos Diários</span>
+                <h3 className="text-white font-extrabold text-lg flex items-center gap-1.5 font-display pt-1">
+                  ⚡ Fluxo de Caixa Diário Consolidado
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                  Sumarização em tempo real de todas as receitas processadas hoje na {company.name}. 
+                  Pagamentos à vista via Pix e ordens de serviço finalizadas nas últimas 24 horas atualizam este balanço instantaneamente para controle de fechamento diário de caixa.
+                </p>
+                <div className="pt-2 font-mono text-[10px] text-gray-500">
+                  Total de lançamentos registrados hoje: <span className="text-white font-bold">{financeiro.filter(f => f.dueDate === new Date().toISOString().split('T')[0]).length} operação(ões)</span>.
+                </div>
+              </div>
+              <div className="md:col-span-4 flex flex-col justify-center bg-[#070b14] border border-gray-850 p-4 rounded-xl space-y-2">
+                <div className="text-[10px] text-gray-400 font-mono">SALDO CONSOLIDADO:</div>
+                <div className="text-2xl font-display font-extrabold text-green-405 text-green-400 text-left md:text-right">
+                  R$ {dailyEarnings().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </div>
+                <div className="border-t border-gray-800/65 pt-1.5 flex justify-between items-center text-[10px] text-green-400 font-mono">
+                  <span>Meta Diária Estimada:</span>
+                  <span>R$ 1.500,00</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedMetric === 'mensal' && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center font-sans">
+              <div className="md:col-span-8 space-y-2">
+                <span className="text-[9px] font-mono tracking-widest bg-cyan-950/50 border border-cyan-800 text-cyan-400 px-2 py-0.5 rounded font-bold uppercase">Métrica ativa: Entradas do Mês</span>
+                <h3 className="text-white font-extrabold text-lg flex items-center gap-1.5 font-display">
+                  📈 Objetivos de Faturamento do Mês
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                  Progresso geral do faturamento contra a meta estipulada de <strong>R$ 30.000,00</strong>. No plano SaaS atual, atingir este patamar destaca sua oficina na zona de excelente rentabilidade setorial para lojas mecânicas prêmio.
+                </p>
+                
+                {/* Custom Goal Progress Bar */}
+                <div className="pt-3 max-w-xl">
+                  <div className="flex justify-between items-center text-[10px] font-mono text-gray-400 mb-1">
+                    <span>Progresso Atual: {Math.min(100, (monthlyEarnings() / 30000) * 100).toFixed(1)}%</span>
+                    <span>Meta: R$ 30.000,00</span>
+                  </div>
+                  <div className="w-full bg-slate-900 border border-slate-800 h-2.5 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-cyan-500 h-full rounded-full transition-all duration-500" 
+                      style={{ width: `${Math.min(100, (monthlyEarnings() / 30000) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="md:col-span-4 flex flex-col justify-center bg-[#070b14] border border-gray-850 p-4 rounded-xl space-y-2">
+                <div className="text-[10px] text-cyan-400 font-mono">TOTAL RECEBIDO (ACUMULADO):</div>
+                <div className="text-2xl font-display font-extrabold text-white text-left md:text-right">
+                  R$ {monthlyEarnings().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </div>
+                <div className="border-t border-gray-800/65 pt-1.5 flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                  <span>Falta para Meta:</span>
+                  <span className="text-white font-bold">R$ {Math.max(0, 30000 - monthlyEarnings()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedMetric === 'despesas' && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center font-sans">
+              <div className="md:col-span-8 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest bg-rose-950/50 border border-rose-800 text-rose-400 px-2 py-0.5 rounded font-bold uppercase">Métrica ativa: Despesas Consolidadas</span>
+                <h3 className="text-white font-extrabold text-lg flex items-center gap-1.5 font-display pt-1">
+                  🛑 Controle e Auditoria de Custos Mensais
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                  Total de saídas registradas relativas a pagamentos de peças, ferramentas, comissões de equipe, luz e assessoria especializada. Reduzir custos fixos não essenciais é a chave para sustentar fluxos de caixa otimizados nos fins de semana.
+                </p>
+                <div className="pt-2 font-mono text-[10px] text-rose-450 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-rose-500" />
+                  Alerta: O coeficiente de despesa atual está em {(monthlyEarnings() > 0 ? ((monthlyExpenses() / monthlyEarnings()) * 100).toFixed(1) : 0)}% do faturamento. Limite prudencial: 60%.
+                </div>
+              </div>
+              <div className="md:col-span-4 flex flex-col justify-center bg-[#070b14] border border-gray-850 p-4 rounded-xl space-y-2">
+                <div className="text-[10px] text-rose-400 font-mono">TOTAL EM DESPESAS (DÉBITO):</div>
+                <div className="text-2xl font-display font-extrabold text-[#ef4444] text-left md:text-right">
+                  R$ {monthlyExpenses().toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </div>
+                <div className="border-t border-gray-800/65 pt-1.5 flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                  <span>Lançamentos cadastrados:</span>
+                  <span className="text-white font-bold">{financeiro.filter(f => f.type === 'Despesa').length} itens</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedMetric === 'lucro' && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center font-sans">
+              <div className="md:col-span-8 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest bg-emerald-950/50 border border-emerald-800 text-emerald-400 px-2 py-0.5 rounded font-bold uppercase">Métrica ativa: Lucratividade</span>
+                <h3 className="text-white font-extrabold text-lg flex items-center gap-1.5 font-display pt-1">
+                  💎 Saúde Financeira e Retorno Líquido
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                  Resultado líquido estimado no período (Receitas menos Custos Totais). Margens líquidas acima de <strong>20%</strong> são consideradas excelentes no segmento de Autotech e reparações mecânicas avançadas no Brasil.
+                </p>
+                <div className="pt-2 flex items-center gap-2">
+                  <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded ${
+                    ((monthlyEarnings() - monthlyExpenses()) / (monthlyEarnings() || 1)) >= 0.25 
+                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-900/60' 
+                      : 'bg-amber-950/50 text-amber-500 border border-amber-900/40'
+                  }`}>
+                    {((monthlyEarnings() - monthlyExpenses()) / (monthlyEarnings() || 1)) >= 0.25 ? 'EXCELENTE RENDIMENTO' : 'DENTRO DAS METAS OPERACIONAIS'}
+                  </span>
+                  <span className="text-[10px] text-gray-500 font-mono">
+                    Ticket Médio de OS: <strong className="text-white">R$ {(monthlyEarnings() / (ordensServico.length || 1)).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</strong>
+                  </span>
+                </div>
+              </div>
+              <div className="md:col-span-4 flex flex-col justify-center bg-[#070b14] border border-gray-850 p-4 rounded-xl space-y-2">
+                <div className="text-[10px] text-emerald-400 font-mono font-bold">LUCRO LÍQUIDO RESIDUAL:</div>
+                <div className="text-2xl font-display font-extrabold text-[#10b981] text-left md:text-right">
+                  R$ {(monthlyEarnings() - monthlyExpenses()).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </div>
+                <div className="border-t border-gray-800/65 pt-1.5 flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                  <span>Margem de Lucro Real:</span>
+                  <span className="text-[#10b981] font-bold">
+                    {monthlyEarnings() > 0 ? (((monthlyEarnings() - monthlyExpenses()) / monthlyEarnings()) * 100).toFixed(1) : 0}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedMetric === 'ordens' && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center font-sans">
+              <div className="md:col-span-8 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest bg-amber-950/50 border border-amber-800 text-amber-500 px-2 py-0.5 rounded font-bold uppercase">Métrica ativa: Produção e Pátio</span>
+                <h3 className="text-white font-extrabold text-lg flex items-center gap-1.5 font-display pt-1">
+                  🛠️ Capacidade Produtiva e Alocação do Pátio
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                  Total de ordens de serviço ativas atualmente sob cuidados da sua equipe de mecânicos. Certifique-se de atualizar o progresso de "Em execução" para diminuir tempos de gargalo de veículos pendentes no pátio físico.
+                </p>
+                <div className="pt-2 grid grid-cols-4 gap-2 text-[10px] font-mono text-center">
+                  <div className="bg-slate-900 border border-slate-850 p-1.5 rounded">
+                    <span className="block text-blue-400 font-bold">{ordensServico.filter(o => o.status === 'Aberta').length}</span>
+                    <span className="text-[8px] text-gray-500 uppercase">Abertas</span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-850 p-1.5 rounded">
+                    <span className="block text-yellow-500 font-bold">{ordensServico.filter(o => o.status === 'Em análise').length}</span>
+                    <span className="text-[8px] text-gray-400 uppercase">Análise</span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-850 p-1.5 rounded">
+                    <span className="block text-orange-400 font-bold">{ordensServico.filter(o => o.status === 'Aguardando peça').length}</span>
+                    <span className="text-[8px] text-gray-400 uppercase">Peças</span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-850 p-1.5 rounded">
+                    <span className="block text-red-500 font-bold">{ordensServico.filter(o => o.status === 'Em execução').length}</span>
+                    <span className="text-[8px] text-gray-405 uppercase">Execução</span>
+                  </div>
+                </div>
+              </div>
+              <div className="md:col-span-4 flex flex-col justify-center bg-[#070b14] border border-gray-850 p-4 rounded-xl space-y-2">
+                <div className="text-[10px] text-amber-500 font-mono">ORDENS ATIVAS HOJE:</div>
+                <div className="text-3xl font-display font-extrabold text-white text-left md:text-right">
+                  {activeOSCount}
+                </div>
+                <div className="border-t border-gray-800/65 pt-1.5 flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                  <span>Total Histórico Geral:</span>
+                  <span className="text-white font-bold">{ordensServico.length} OS</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedMetric === 'estoque' && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center font-sans">
+              <div className="md:col-span-8 space-y-1">
+                <span className="text-[9px] font-mono tracking-widest bg-red-950/50 border border-red-850 text-red-400 px-2 py-0.5 rounded font-bold uppercase">Métrica ativa: Alertas de Inventário</span>
+                <h3 className="text-white font-extrabold text-lg flex items-center gap-1.5 font-display pt-1">
+                  📦 Situação Crítica de Estoque de Reposição
+                </h3>
+                <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                  Número de peças e lubrificantes com quantidades em inventário iguais ou abaixo do limite mínimo configurado por segurança. Evitar rupturas é essencial para não atrasar a entrega de ordens de serviço complexas.
+                </p>
+                <div className="pt-2 font-mono text-[10px] text-gray-500">
+                  Total de SKU cadastrados: <span className="text-white font-bold">{produtos.length} itens</span>. Itens regulares: <span className="text-green-500 font-bold">{produtos.length - lowStockCount} itens</span>.
+                </div>
+              </div>
+              <div className="md:col-span-4 flex flex-col justify-center bg-[#070b14] border border-gray-850 p-4 rounded-xl space-y-2">
+                <div className="text-[10px] text-red-400 font-mono font-bold">ITENS ABAIXO DO MÍNIMO:</div>
+                <div className="text-2xl font-display font-extrabold text-[#ef4444] text-left md:text-right">
+                  {lowStockCount} SKU(s)
+                </div>
+                <div className="border-t border-gray-800/65 pt-1.5 flex justify-between items-center text-[10px] text-gray-500 font-mono">
+                  <span>Percentual de Alerta:</span>
+                  <span className="text-red-500 font-bold">{((lowStockCount / (produtos.length || 1)) * 100).toFixed(1)}%</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* CHARTS GRAPHICS */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
