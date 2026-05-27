@@ -602,24 +602,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
 
+    setClientes(prev => [newCliente, ...prev]);
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("clientes", id, newCliente, 'set');
-      if (!isOnlineWrite) {
-        setClientes(prev => [newCliente, ...prev]);
-      }
-    } else {
-      setClientes(prev => [newCliente, ...prev]);
+      await executeWrite("clientes", id, newCliente, 'set');
     }
   };
 
   const editCliente = async (id: string, updatedFields: Partial<Cliente>) => {
+    setClientes(prev => prev.map(c => c.id === id ? { ...c, ...updatedFields } : c));
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("clientes", id, updatedFields, 'merge');
-      if (!isOnlineWrite) {
-        setClientes(prev => prev.map(c => c.id === id ? { ...c, ...updatedFields } : c));
-      }
-    } else {
-      setClientes(prev => prev.map(c => c.id === id ? { ...c, ...updatedFields } : c));
+      await executeWrite("clientes", id, updatedFields, 'merge');
     }
   };
 
@@ -647,13 +641,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       empresaId: company.id
     };
 
+    setVeiculos(prev => [newVeiculo, ...prev]);
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("veiculos", id, newVeiculo, 'set');
-      if (!isOnlineWrite) {
-        setVeiculos(prev => [newVeiculo, ...prev]);
-      }
-    } else {
-      setVeiculos(prev => [newVeiculo, ...prev]);
+      await executeWrite("veiculos", id, newVeiculo, 'set');
     }
   };
 
@@ -665,35 +656,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       empresaId: company.id
     };
 
+    setProdutos(prev => [newProduto, ...prev]);
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("produtos", id, newProduto, 'set');
-      if (!isOnlineWrite) {
-        setProdutos(prev => [newProduto, ...prev]);
-      }
-    } else {
-      setProdutos(prev => [newProduto, ...prev]);
+      await executeWrite("produtos", id, newProduto, 'set');
     }
   };
 
   const updateProdutoStock = async (id: string, qty: number) => {
+    setProdutos(prev => prev.map(p => p.id === id ? { ...p, quantity: qty } : p));
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("produtos", id, { quantity: qty }, 'merge');
-      if (!isOnlineWrite) {
-        setProdutos(prev => prev.map(p => p.id === id ? { ...p, quantity: qty } : p));
-      }
-    } else {
-      setProdutos(prev => prev.map(p => p.id === id ? { ...p, quantity: qty } : p));
+      await executeWrite("produtos", id, { quantity: qty }, 'merge');
     }
   };
 
   const editProduto = async (id: string, updatedFields: Partial<Produto>) => {
+    setProdutos(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("produtos", id, updatedFields, 'merge');
-      if (!isOnlineWrite) {
-        setProdutos(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
-      }
-    } else {
-      setProdutos(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
+      await executeWrite("produtos", id, updatedFields, 'merge');
     }
   };
 
@@ -721,24 +703,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       empresaId: company.id
     };
 
+    setServicos(prev => [newServico, ...prev]);
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("servicos", id, newServico, 'set');
-      if (!isOnlineWrite) {
-        setServicos(prev => [newServico, ...prev]);
-      }
-    } else {
-      setServicos(prev => [newServico, ...prev]);
+      await executeWrite("servicos", id, newServico, 'set');
     }
   };
 
   const editServico = async (id: string, updatedFields: Partial<Servico>) => {
+    setServicos(prev => prev.map(s => s.id === id ? { ...s, ...updatedFields } : s));
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("servicos", id, updatedFields, 'merge');
-      if (!isOnlineWrite) {
-        setServicos(prev => prev.map(s => s.id === id ? { ...s, ...updatedFields } : s));
-      }
-    } else {
-      setServicos(prev => prev.map(s => s.id === id ? { ...s, ...updatedFields } : s));
+      await executeWrite("servicos", id, updatedFields, 'merge');
     }
   };
 
@@ -768,30 +744,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
 
-    if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("ordens_servico", id, newOS, 'set');
-      
-      // Deduct items used on OS from stock parts
-      os.parts.forEach(p => {
-        const product = produtos.find(item => item.id === p.id);
-        if (product) {
-          updateProdutoStock(product.id, Math.max(0, product.quantity - p.quantity));
-        }
-      });
+    setOrdensServico(prev => [newOS, ...prev]);
 
-      if (!isOnlineWrite) {
-        setOrdensServico(prev => [newOS, ...prev]);
+    // Deduct items used on OS from stock parts
+    os.parts.forEach(p => {
+      const product = produtos.find(item => item.id === p.id);
+      if (product) {
+        updateProdutoStock(product.id, Math.max(0, product.quantity - p.quantity));
       }
-    } else {
-      setOrdensServico(prev => [newOS, ...prev]);
+    });
 
-      // Deduct items used on OS from stock parts
-      os.parts.forEach(p => {
-        const product = produtos.find(item => item.id === p.id);
-        if (product) {
-          updateProdutoStock(product.id, Math.max(0, product.quantity - p.quantity));
-        }
-      });
+    if (firebaseUser) {
+      await executeWrite("ordens_servico", id, newOS, 'set');
     }
   };
 
@@ -801,13 +765,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString()
     };
 
+    setOrdensServico(prev => prev.map(item => item.id === id ? { ...item, ...updatedWithTime } : item));
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("ordens_servico", id, updatedWithTime, 'merge');
-      if (!isOnlineWrite) {
-        setOrdensServico(prev => prev.map(item => item.id === id ? { ...item, ...updatedWithTime } : item));
-      }
-    } else {
-      setOrdensServico(prev => prev.map(item => item.id === id ? { ...item, ...updatedWithTime } : item));
+      await executeWrite("ordens_servico", id, updatedWithTime, 'merge');
     }
   };
 
@@ -834,54 +795,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
     
+    setVendas(prev => [newVenda, ...prev]);
+    setFinanceiro(prev => [salesIncome, ...prev]);
+
+    // Deduct sold items from stock
+    v.items.forEach(sold => {
+      const product = produtos.find(p => p.id === sold.produtoId);
+      if (product) {
+        updateProdutoStock(product.id, Math.max(0, product.quantity - sold.quantity));
+      }
+    });
+
+    // Update current cash register balance
+    if (caixaStatus && caixaStatus.status === "Aberto") {
+      setCaixaStatus(prev => prev ? {
+        ...prev,
+        currentAmount: prev.currentAmount + v.total
+      } : null);
+    }
+
     if (firebaseUser) {
-      const w1 = await executeWrite("vendas", id, newVenda, 'set');
-      const w2 = await executeWrite("financeiro", finId, salesIncome, 'set');
+      await executeWrite("vendas", id, newVenda, 'set');
+      await executeWrite("financeiro", finId, salesIncome, 'set');
 
-      // Deduct sold items from stock
-      v.items.forEach(sold => {
-        const product = produtos.find(p => p.id === sold.produtoId);
-        if (product) {
-          updateProdutoStock(product.id, Math.max(0, product.quantity - sold.quantity));
-        }
-      });
-
-      // Update current cash register balance
-      let w3 = true;
       if (caixaStatus && caixaStatus.status === "Aberto") {
         const openedCaixaId = caixaStatus.id;
         const newAmt = caixaStatus.currentAmount + v.total;
-        w3 = await executeWrite("caixa", openedCaixaId, { currentAmount: newAmt }, 'merge');
-      }
-
-      if (!w1 || !w2 || !w3) {
-        setVendas(prev => [newVenda, ...prev]);
-        setFinanceiro(prev => [salesIncome, ...prev]);
-        if (caixaStatus && caixaStatus.status === "Aberto") {
-          setCaixaStatus(prev => prev ? {
-            ...prev,
-            currentAmount: prev.currentAmount + v.total
-          } : null);
-        }
-      }
-    } else {
-      setVendas(prev => [newVenda, ...prev]);
-      setFinanceiro(prev => [salesIncome, ...prev]);
-
-      // Deduct sold items from stock
-      v.items.forEach(sold => {
-        const product = produtos.find(p => p.id === sold.produtoId);
-        if (product) {
-          updateProdutoStock(product.id, Math.max(0, product.quantity - sold.quantity));
-        }
-      });
-
-      // Update current cash register balance
-      if (caixaStatus && caixaStatus.status === "Aberto") {
-        setCaixaStatus(prev => prev ? {
-          ...prev,
-          currentAmount: prev.currentAmount + v.total
-        } : null);
+        await executeWrite("caixa", openedCaixaId, { currentAmount: newAmt }, 'merge');
       }
     }
   };
@@ -895,24 +835,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
 
+    setFinanceiro(prev => [newEntry, ...prev]);
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("financeiro", id, newEntry, 'set');
-      if (!isOnlineWrite) {
-        setFinanceiro(prev => [newEntry, ...prev]);
-      }
-    } else {
-      setFinanceiro(prev => [newEntry, ...prev]);
+      await executeWrite("financeiro", id, newEntry, 'set');
     }
   };
 
   const editFinanceiro = async (id: string, fields: Partial<Financeiro>) => {
+    setFinanceiro(prev => prev.map(f => f.id === id ? { ...f, ...fields } : f));
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("financeiro", id, fields, 'merge');
-      if (!isOnlineWrite) {
-        setFinanceiro(prev => prev.map(f => f.id === id ? { ...f, ...fields } : f));
-      }
-    } else {
-      setFinanceiro(prev => prev.map(f => f.id === id ? { ...f, ...fields } : f));
+      await executeWrite("financeiro", id, fields, 'merge');
     }
   };
 
@@ -926,13 +860,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       openedAt: new Date().toISOString()
     };
 
+    setCaixaStatus(updatedCaixa);
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("caixa", updatedCaixa.id, updatedCaixa, 'set');
-      if (!isOnlineWrite) {
-        setCaixaStatus(updatedCaixa);
-      }
-    } else {
-      setCaixaStatus(updatedCaixa);
+      await executeWrite("caixa", updatedCaixa.id, updatedCaixa, 'set');
     }
   };
 
@@ -944,13 +875,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       closedAt: new Date().toISOString()
     };
 
+    setCaixaStatus(closedCaixa);
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("caixa", closedCaixa.id, closedCaixa, 'merge');
-      if (!isOnlineWrite) {
-        setCaixaStatus(closedCaixa);
-      }
-    } else {
-      setCaixaStatus(closedCaixa);
+      await executeWrite("caixa", closedCaixa.id, closedCaixa, 'merge');
     }
   };
 
@@ -962,24 +890,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       empresaId: company.id
     };
 
+    setFornecedores(prev => [newFornecedor, ...prev]);
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("fornecedores", id, newFornecedor, 'set');
-      if (!isOnlineWrite) {
-        setFornecedores(prev => [newFornecedor, ...prev]);
-      }
-    } else {
-      setFornecedores(prev => [newFornecedor, ...prev]);
+      await executeWrite("fornecedores", id, newFornecedor, 'set');
     }
   };
 
   const editFornecedor = async (id: string, updatedFields: Partial<Fornecedor>) => {
+    setFornecedores(prev => prev.map(f => f.id === id ? { ...f, ...updatedFields } : f));
+
     if (firebaseUser) {
-      const isOnlineWrite = await executeWrite("fornecedores", id, updatedFields, 'merge');
-      if (!isOnlineWrite) {
-        setFornecedores(prev => prev.map(f => f.id === id ? { ...f, ...updatedFields } : f));
-      }
-    } else {
-      setFornecedores(prev => prev.map(f => f.id === id ? { ...f, ...updatedFields } : f));
+      await executeWrite("fornecedores", id, updatedFields, 'merge');
     }
   };
 

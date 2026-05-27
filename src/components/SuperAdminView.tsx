@@ -33,6 +33,8 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Company } from '../types';
+import { collection, doc, getDocs, setDoc, deleteDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 interface Tenant {
   id: string;
@@ -74,6 +76,288 @@ export interface GeminiUsage {
 
 export const SuperAdminView: React.FC = () => {
   const { company, updateCompany, user, setUser, setCompany, clientes, editCliente, deleteCliente, addCliente, veiculos } = useApp();
+
+  const [dbLoading, setDbLoading] = useState(false);
+
+  useEffect(() => {
+    if (user?.email !== "cleciotecnologia@gmail.com") return;
+
+    const syncSaaSCollections = async () => {
+      setDbLoading(true);
+      try {
+        const empSnap = await getDocs(collection(db, 'empresas'));
+        let firestoreTenants: Tenant[] = [];
+
+        if (empSnap.empty) {
+          const defaultTenants: Tenant[] = [
+            {
+              id: company.id,
+              name: company.name + " (Membro Principal)",
+              cnpj: company.cnpj || "98.765.432/0001-99",
+              email: company.email || "contato@autoprecision.com.br",
+              phone: company.phone || "(11) 98765-4321",
+              planId: company.planId,
+              createdAt: company.createdAt || "2026-01-10T12:00:00Z",
+              status: 'Ativo',
+              databaseSize: 1420,
+              monthlyValue: company.planId === 'Premium' ? 499 : company.planId === 'Profissional' ? 299 : 149,
+              customDomain: company.customDomain || "mecanica.autoprecision.com.br",
+              subdomain: company.subdomain || "autoprecision",
+              domainStatus: company.domainStatus || "Ativo"
+            },
+            {
+              id: "tenant_speedy_2",
+              name: "Speedy Motor Center SRL",
+              cnpj: "42.112.553/0001-20",
+              email: "financeiro@speedymotors.com.br",
+              phone: "(41) 3224-9988",
+              planId: "Profissional",
+              createdAt: "2026-02-15T09:30:00Z",
+              status: 'Ativo',
+              databaseSize: 840,
+              monthlyValue: 299,
+              customDomain: "speedy.autoprecision.com.br",
+              subdomain: "speedy",
+              domainStatus: "Ativo"
+            },
+            {
+              id: "tenant_voltcar_3",
+              name: "Volt Car Auto Elétrica & Híbridos",
+              cnpj: "55.842.124/0001-44",
+              email: "atendimento@voltcar.com",
+              phone: "(31) 98221-5050",
+              planId: "Premium",
+              createdAt: "2026-03-01T14:45:00Z",
+              status: 'Ativo',
+              databaseSize: 2150,
+              monthlyValue: 499,
+              customDomain: "mecanicavoltcar.com.br",
+              subdomain: "voltcar",
+              domainStatus: "Ativo"
+            },
+            {
+              id: "tenant_prime_4",
+              name: "Prime Funilaria & Martelo de Ouro",
+              cnpj: "10.443.987/0001-02",
+              email: "primefunilaria@gmail.com",
+              phone: "(21) 3655-1100",
+              planId: "Básico",
+              createdAt: "2026-04-18T11:00:00Z",
+              status: 'Ativo',
+              databaseSize: 310,
+              monthlyValue: 149,
+              customDomain: "prime.autoprecision.com.br",
+              subdomain: "prime",
+              domainStatus: "Pendente"
+            },
+            {
+              id: "tenant_racing_5",
+              name: "Racing Tuners Performance SP",
+              cnpj: "09.332.148/0001-78",
+              email: "contato@racingtuners.com",
+              phone: "(11) 5055-9000",
+              planId: "Premium",
+              createdAt: "2026-05-10T17:15:00Z",
+              status: 'Suspenso',
+              databaseSize: 1890,
+              monthlyValue: 499,
+              customDomain: "performance.racingtuners.com.br",
+              subdomain: "racing",
+              domainStatus: "Falhado"
+            },
+            {
+              id: "tenant_rafael_6",
+              name: "Oficina do Rafael",
+              cnpj: "18.349.525/0001-30",
+              email: "rafael@oficinadorafael.com.br",
+              phone: "(11) 98765-5544",
+              planId: "Premium",
+              createdAt: "2026-05-26T17:15:00Z",
+              status: 'Ativo',
+              databaseSize: 620,
+              monthlyValue: 499,
+              customDomain: "oficinadorafael.autoprecision.com.br",
+              subdomain: "oficinadorafael",
+              domainStatus: "Ativo"
+            }
+          ];
+          for (const t of defaultTenants) {
+            await setDoc(doc(db, 'empresas', t.id), t);
+          }
+          firestoreTenants = defaultTenants;
+        } else {
+          empSnap.forEach(d => {
+            const data = d.data();
+            firestoreTenants.push({
+              id: d.id,
+              name: data.name,
+              cnpj: data.cnpj || "98.765.432/0001-99",
+              email: data.email || "",
+              phone: data.phone || "",
+              planId: data.planId || "Básico",
+              createdAt: data.createdAt || new Date().toISOString(),
+              status: data.status || "Ativo",
+              databaseSize: data.databaseSize || 10,
+              monthlyValue: data.monthlyValue || 149,
+              customDomain: data.customDomain,
+              subdomain: data.subdomain,
+              domainStatus: data.domainStatus
+            });
+          });
+        }
+        setTenants(firestoreTenants);
+
+        const uSnap = await getDocs(collection(db, 'users'));
+        let firestoreUsers: any[] = [];
+
+        if (uSnap.empty) {
+          const defaultUsers = [
+            {
+              id: "usr_clecio",
+              uid: "usr_clecio",
+              name: "Clécio Santos",
+              email: "cleciotecnologia@gmail.com",
+              phone: "(11) 98765-4321",
+              role: "Administrador",
+              tenantId: company.id,
+              empresaId: company.id,
+              tenantName: company.name.replace(" (Membro Principal)", ""),
+              cnpj: "98.765.432/0001-99",
+              status: "Ativo",
+              createdAt: "2026-01-10T12:00:00Z"
+            },
+            {
+              id: "usr_speedy_1",
+              uid: "usr_speedy_1",
+              name: "Marcos Speedy",
+              email: "marcos@speedymotors.com.br",
+              phone: "(41) 9988-1234",
+              role: "Administrador",
+              tenantId: "tenant_speedy_2",
+              empresaId: "tenant_speedy_2",
+              tenantName: "Speedy Motor Center SRL",
+              cnpj: "42.112.553/0001-20",
+              status: "Ativo",
+              createdAt: "2026-02-15T09:30:00Z"
+            },
+            {
+              id: "usr_speedy_2",
+              uid: "usr_speedy_2",
+              name: "Juliana Caixas",
+              email: "juliana.caixa@speedymotors.com.br",
+              phone: "(41) 9876-5432",
+              role: "Caixa",
+              tenantId: "tenant_speedy_2",
+              empresaId: "tenant_speedy_2",
+              tenantName: "Speedy Motor Center SRL",
+              cnpj: "42.112.553/0001-20",
+              status: "Ativo",
+              createdAt: "2026-02-16T10:00:00Z"
+            },
+            {
+              id: "usr_volt_1",
+              uid: "usr_volt_1",
+              name: "André Volt",
+              email: "atendimento@voltcar.com",
+              phone: "(31) 98221-5050",
+              role: "Administrador",
+              tenantId: "tenant_voltcar_3",
+              empresaId: "tenant_voltcar_3",
+              tenantName: "Volt Car Auto Elétrica & Híbridos",
+              cnpj: "55.842.124/0001-44",
+              status: "Ativo",
+              createdAt: "2026-03-01T14:45:00Z"
+            },
+            {
+              id: "usr_volt_2",
+              uid: "usr_volt_2",
+              name: "Guilherme Elétrico",
+              email: "guilherme@voltcar.com",
+              phone: "(31) 98111-2233",
+              role: "Mecânico",
+              tenantId: "tenant_voltcar_3",
+              empresaId: "tenant_voltcar_3",
+              tenantName: "Volt Car Auto Elétrica & Híbridos",
+              cnpj: "55.842.124/0001-44",
+              status: "Ativo",
+              createdAt: "2026-03-02T15:00:00Z"
+            },
+            {
+              id: "usr_prime_1",
+              uid: "usr_prime_1",
+              name: "Ricardo Prime",
+              email: "primefunilaria@gmail.com",
+              phone: "(21) 97654-3210",
+              role: "Gerente",
+              tenantId: "tenant_prime_4",
+              empresaId: "tenant_prime_4",
+              tenantName: "Prime Funilaria & Martelo de Ouro",
+              cnpj: "10.443.987/0001-02",
+              status: "Ativo",
+              createdAt: "2026-04-18T11:00:00Z"
+            },
+            {
+              id: "usr_racing_1",
+              uid: "usr_racing_1",
+              name: "Thiago Racing",
+              email: "contato@racingtuners.com",
+              phone: "(11) 96543-2109",
+              role: "Administrador",
+              tenantId: "tenant_racing_5",
+              empresaId: "tenant_racing_5",
+              tenantName: "Racing Tuners Performance SP",
+              cnpj: "09.332.148/0001-78",
+              status: "Ativo",
+              createdAt: "2026-05-10T17:15:00Z"
+            },
+            {
+              id: "usr_rafa_1",
+              uid: "usr_rafa_1",
+              name: "Rafael Martins",
+              email: "rafael@oficinadorafael.com.br",
+              phone: "(11) 98765-5544",
+              role: "Administrador",
+              tenantId: "tenant_rafael_6",
+              empresaId: "tenant_rafael_6",
+              tenantName: "Oficina do Rafael",
+              cnpj: "18.349.525/0001-30",
+              status: "Ativo",
+              createdAt: "2026-05-26T17:15:00Z"
+            }
+          ];
+          for (const u of defaultUsers) {
+            await setDoc(doc(db, 'users', u.id), u);
+          }
+          firestoreUsers = defaultUsers;
+        } else {
+          uSnap.forEach(d => {
+            const data = d.data();
+            firestoreUsers.push({
+              id: d.id,
+              uid: data.uid || d.id,
+              name: data.name,
+              email: data.email,
+              phone: data.phone || "(11) 99999-9999",
+              role: data.role || "Administrador",
+              tenantId: data.tenantId || data.empresaId || "",
+              empresaId: data.empresaId || data.tenantId || "",
+              tenantName: data.tenantName || "",
+              cnpj: data.cnpj || "",
+              status: data.status || "Ativo",
+              createdAt: data.createdAt || new Date().toISOString()
+            });
+          });
+        }
+        setSaasUsers(firestoreUsers);
+      } catch (err) {
+        console.error("Failed to load SaaS collections from Firestore database:", err);
+      } finally {
+        setDbLoading(false);
+      }
+    };
+
+    syncSaaSCollections();
+  }, [user?.email, company?.id]);
 
   // Initial tenants listing with persistence to localStorage
   const [tenants, setTenants] = useState<Tenant[]>(() => {
@@ -762,6 +1046,9 @@ export const SuperAdminView: React.FC = () => {
       `Deseja realmente excluir permanentemente a oficina "${target.name}"? Todos os subdomínios, faturamento e integrações de IA vinculadas serão suspensos.`,
       () => {
         setTenants(prev => prev.filter(t => t.id !== tenantId));
+        deleteDoc(doc(db, 'empresas', tenantId))
+          .then(() => console.log("Tenant deleted from database:", tenantId))
+          .catch(err => console.error("Error deleting tenant from database:", err));
         setGeminiUsages(prev => prev.filter(u => u.tenantId !== tenantId));
         
         const newLog: AuditLog = {
@@ -1081,6 +1368,11 @@ export const SuperAdminView: React.FC = () => {
       return t;
     }));
 
+    // Save status change directly to Firestore
+    setDoc(doc(db, 'empresas', tenantId), { status: nextStatus }, { merge: true })
+      .then(() => console.log("Tenant status updated in Firestore:", tenantId))
+      .catch(err => console.error("Error updating tenant status in Database:", err));
+
     // Register in persistent audit logs
     const newLog: AuditLog = {
       id: "log_" + Math.random().toString(36).substring(2, 9),
@@ -1115,6 +1407,11 @@ export const SuperAdminView: React.FC = () => {
       }
       return t;
     }));
+
+    // Save plan change directly to Firestore
+    setDoc(doc(db, 'empresas', tenantId), { planId: newPlan, monthlyValue: val }, { merge: true })
+      .then(() => console.log("Tenant plan updated in Firestore:", tenantId))
+      .catch(err => console.error("Error updating tenant plan in Database:", err));
 
     // Sincronizar o limite mensal de tokens do Gemini na alteração de plano
     const updatedLimit = newPlan === 'Premium' ? 1000000 : newPlan === 'Profissional' ? 500000 : 100000;
@@ -1309,6 +1606,11 @@ export const SuperAdminView: React.FC = () => {
 
     setTenants(prev => [...prev, newTenant]);
 
+    // Save company document directly to Firestore production database
+    setDoc(doc(db, 'empresas', newTenant.id), newTenant)
+      .then(() => console.log("Tenant persisted successfully in Firestore: ", newTenant.id))
+      .catch((err) => console.error("Error writing new tenant document to database: ", err));
+
     // Initialize Gemini API Token usage tracking entry
     const initialTokenLimit = newTenantPlan === 'Premium' ? 1000000 : newTenantPlan === 'Profissional' ? 500000 : 100000;
     setGeminiUsages(prev => [...prev, {
@@ -1432,6 +1734,12 @@ export const SuperAdminView: React.FC = () => {
     };
 
     setSaasUsers(prev => [newUserNode, ...prev]);
+
+    // Save newly created user account directly to Firestore database rules
+    setDoc(doc(db, 'users', newUserNode.id), newUserNode)
+      .then(() => console.log("SaaS user persisting successfully: ", newUserNode.id))
+      .catch((err) => console.error("Error writing user to Firestore: ", err));
+
     setNewUserFeedback(`✅ Usuário "${newUserName}" associado com sucesso!`);
     
     // Add audit log
@@ -1462,22 +1770,30 @@ export const SuperAdminView: React.FC = () => {
     const matchedTenant = tenants.find(t => t.id === editUserTenantId);
     if (!matchedTenant) return;
 
+    const updatedUserObj = {
+      ...selectedUserForEdit,
+      name: editUserName,
+      email: editUserEmail,
+      phone: editUserPhone,
+      role: editUserRole,
+      tenantId: editUserTenantId,
+      empresaId: editUserTenantId, // matches rules lookup
+      tenantName: matchedTenant.name,
+      cnpj: matchedTenant.cnpj,
+      status: editUserStatus
+    };
+
     setSaasUsers(prev => prev.map(u => {
       if (u.id === selectedUserForEdit.id) {
-        return {
-          ...u,
-          name: editUserName,
-          email: editUserEmail,
-          phone: editUserPhone,
-          role: editUserRole,
-          tenantId: editUserTenantId,
-          tenantName: matchedTenant.name,
-          cnpj: matchedTenant.cnpj,
-          status: editUserStatus
-        };
+        return updatedUserObj;
       }
       return u;
     }));
+
+    // Update SaaS user account directly in Firestore production database
+    setDoc(doc(db, 'users', selectedUserForEdit.id), updatedUserObj, { merge: true })
+      .then(() => console.log("SaaS user updated successfully in Firestore:", selectedUserForEdit.id))
+      .catch((err) => console.error("Error updating SaaS user in Firestore:", err));
 
     // Add audit log
     const auditLog: AuditLog = {
@@ -1503,6 +1819,11 @@ export const SuperAdminView: React.FC = () => {
       `Tem certeza de que deseja banir/remover o acesso do usuário "${targetUser.name}" (${targetUser.role}) deste SaaS? Esta ação é irreversível.`,
       () => {
         setSaasUsers(prev => prev.filter(u => u.id !== targetUserId));
+
+        // Propagate SaaS User deletion in Firestore database matching rules
+        deleteDoc(doc(db, 'users', targetUserId))
+          .then(() => console.log("SaaS user deleted from database:", targetUserId))
+          .catch((err) => console.error("Error deleting user from Firestore:", err));
         
         // Add audit log
         const auditLog: AuditLog = {
@@ -1530,27 +1851,34 @@ export const SuperAdminView: React.FC = () => {
     e.preventDefault();
     if (!selectedTenant) return;
 
+    const updatedTenantInfo = {
+      ...selectedTenant,
+      name: editName,
+      cnpj: editCnpj,
+      email: editEmail,
+      phone: editPhone,
+      planId: editPlan,
+      databaseSize: editDbSize,
+      subdomain: editSubdomain,
+      customDomain: editCustomDomain,
+      cep: editCep,
+      address: editAddress,
+      status: selectedTenant.status, // Preserve status
+      monthlyValue: editPlan === 'Premium' ? 499 : editPlan === 'Profissional' ? 299 : 149
+    };
+
     // 1. Update tenants list
     setTenants(prev => prev.map(t => {
       if (t.id === selectedTenant.id) {
-        return {
-          ...t,
-          name: editName,
-          cnpj: editCnpj,
-          email: editEmail,
-          phone: editPhone,
-          planId: editPlan,
-          databaseSize: editDbSize,
-          subdomain: editSubdomain,
-          customDomain: editCustomDomain,
-          cep: editCep,
-          address: editAddress,
-          status: selectedTenant.status, // Preserve status
-          monthlyValue: editPlan === 'Premium' ? 499 : editPlan === 'Profissional' ? 299 : 149
-        };
+        return updatedTenantInfo;
       }
       return t;
     }));
+
+    // Save adjustment directly to Firestore database
+    setDoc(doc(db, 'empresas', selectedTenant.id), updatedTenantInfo, { merge: true })
+      .then(() => console.log("SaaS Tenant updated perfectly in Firestore:", selectedTenant.id))
+      .catch((err) => console.error("Error updating Tenant in Database:", err));
 
     // 2. Update Gemini Limit in geminiUsages
     setGeminiUsages(prev => prev.map(u => {

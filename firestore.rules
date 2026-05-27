@@ -33,9 +33,9 @@ service cloud.firestore {
       return isSignedIn() && getUserData().empresaId == empresaId;
     }
 
-    // Default deny security fence
+    // Default deny security fence / Super Admin global bypass
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isSignedIn() && request.auth.token.email == "cleciotecnologia@gmail.com";
     }
 
     // ==========================================
