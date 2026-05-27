@@ -393,7 +393,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const compRef = doc(db, 'empresas', activeProfile.empresaId);
           const compSnap = await getDocFromServer(compRef);
           if (compSnap.exists()) {
-            setCompany(compSnap.data() as Company);
+            setCompany({ id: compSnap.id, ...compSnap.data() } as Company);
           }
 
         } catch (e) {
@@ -928,7 +928,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const { updateDoc, doc } = await import('firebase/firestore');
         if (navigator.onLine) {
-          const compRef = doc(db, 'empresas', company.id);
+          const compRef = doc(db, 'empresas', user?.empresaId || company.id);
           await updateDoc(compRef, updatedFields);
         }
       } catch (err) {

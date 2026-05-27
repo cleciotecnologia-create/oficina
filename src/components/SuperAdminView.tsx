@@ -52,6 +52,10 @@ interface Tenant {
   domainStatus?: 'Pendente' | 'Verificando' | 'Ativo' | 'Falhado';
   cep?: string;
   address?: string;
+  whatsapp?: string;
+  logoUrl?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 interface AuditLog {
@@ -189,6 +193,7 @@ export const SuperAdminView: React.FC = () => {
           empSnap.forEach(d => {
             const data = d.data();
             firestoreTenants.push({
+              ...data,
               id: d.id,
               name: data.name,
               cnpj: data.cnpj || "98.765.432/0001-99",
@@ -201,7 +206,10 @@ export const SuperAdminView: React.FC = () => {
               monthlyValue: data.monthlyValue || 149,
               customDomain: data.customDomain,
               subdomain: data.subdomain,
-              domainStatus: data.domainStatus
+              domainStatus: data.domainStatus,
+              cep: data.cep,
+              address: data.address,
+              whatsapp: data.whatsapp
             });
           });
         }

@@ -29,6 +29,7 @@ export interface Company {
   customDomain?: string;
   subdomain?: string;
   domainStatus?: 'Pendente' | 'Verificando' | 'Ativo' | 'Falhado';
+  cep?: string;
 }
 
 export interface Cliente {

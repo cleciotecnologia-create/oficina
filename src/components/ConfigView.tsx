@@ -49,9 +49,27 @@ export const ConfigView: React.FC = () => {
   const [cnpjStr, setCnpjStr] = useState(company.cnpj);
   const [phoneStr, setPhoneStr] = useState(company.phone);
   const [addressStr, setAddressStr] = useState(company.address);
-  const [companyCep, setCompanyCep] = useState('');
+  const [companyCep, setCompanyCep] = useState(company.cep || '');
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (company) {
+      setCompanyName(company.name || '');
+      setCnpjStr(company.cnpj || '');
+      setPhoneStr(company.phone || '');
+      setAddressStr(company.address || '');
+      setCompanyCep(company.cep || '');
+      setEmailStr(company.email || 'contato@autoprecision.com.br');
+      setWhatsappStr(company.whatsapp || '(11) 98765-4321');
+      setLatVal(company.latitude || -23.6015);
+      setLngVal(company.longitude || -46.6974);
+      setLogoUrlStr(company.logoUrl || '');
+      setCustomDomainStr(company.customDomain || '');
+      setSubdomainStr(company.subdomain || '');
+      setDomainStatusVal(company.domainStatus || 'Pendente');
+    }
+  }, [company]);
 
   const handleFetchCompanyCep = async (cepCode: string) => {
     const clean = cepCode.replace(/\D/g, "");
@@ -298,6 +316,7 @@ export const ConfigView: React.FC = () => {
         cnpj: cnpjStr,
         phone: phoneStr,
         address: addressStr,
+        cep: companyCep,
         email: emailStr,
         whatsapp: whatsappStr,
         latitude: latVal,
