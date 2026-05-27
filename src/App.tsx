@@ -106,7 +106,7 @@ function AppContent() {
         <div className="w-16 h-16 rounded-2xl bg-red-650 bg-red-600 flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.5)] animate-pulse mb-6">
           <Wrench className="w-8 h-8 text-white text-white rotate-45" />
         </div>
-        <span className="font-mono text-xs tracking-widest text-slate-400">CARREGANDO SISTEMA ERP AUTOTECH...</span>
+        <span className="font-mono text-xs tracking-widest text-slate-400">CARREGANDO SISTEMA OFICINA PDV...</span>
       </div>
     );
   }
@@ -239,9 +239,9 @@ function AppContent() {
             )}
             <div>
               <span className="font-display font-bold text-sm tracking-tight text-white">
-                AUTO<span className="text-red-500">TECH</span>
+                SISTEMA OFICINA <span className="text-red-500">PDV</span>
               </span>
-              <span className="block text-[8px] text-gray-500 font-mono tracking-widest leading-none">ERP PREMIUM</span>
+              <span className="block text-[8px] text-gray-500 font-mono tracking-widest leading-none">SOFTWARE DE GESTÃO</span>
             </div>
           </div>
           
@@ -432,7 +432,7 @@ function AppContent() {
 
           {/* Sidebar Footer info */}
           <div className="border-t border-gray-850 pt-3 text-[10px] font-mono text-slate-500 text-left ">
-            <span>Licença Gold AutoTech</span>
+            <span>Licença Sistema Oficina PDV</span>
             <span className="block mt-1">Status: ✦ Versão Premium ✦</span>
           </div>
 
@@ -451,7 +451,7 @@ function AppContent() {
               <div className="flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-red-400 animate-spin" />
                 <div>
-                  <span className="font-bold text-white text-xs block font-mono">AUTOTECH MECHANIC CO-PILOT</span>
+                  <span className="font-bold text-white text-xs block font-mono">SISTEMA OFICINA CO-PILOT</span>
                   <span className="text-[9px] text-red-400 font-mono block">Inteligência Artificial Gemini Conectada</span>
                 </div>
               </div>
