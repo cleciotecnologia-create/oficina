@@ -46,6 +46,8 @@ import {
 interface AppContextType {
   user: UserProfile | null;
   company: Company;
+  setUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
+  setCompany: React.Dispatch<React.SetStateAction<Company>>;
   clientes: Cliente[];
   veiculos: Veiculo[];
   produtos: Produto[];
@@ -351,23 +353,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [firebaseUser]);
 
-  // Authenticate user changes and sync
+  // Authenticate user changes and sync profile and company
   useEffect(() => {
-    let activeUnsubs: (() => void)[] = [];
-
-    const cleanAllListeners = () => {
-      activeUnsubs.forEach(unsub => {
-        try {
-          unsub();
-        } catch (err) {
-          console.warn("Unsubscribe listener error: ", err);
-        }
-      });
-      activeUnsubs = [];
-    };
-
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
-      cleanAllListeners();
       setLoading(true);
 
       if (u) {
@@ -408,110 +396,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setCompany(compSnap.data() as Company);
           }
 
-          const targetEmpId = activeProfile.empresaId;
-
-          // Real-time Reactive isolated multi-tenant sync subscriptions with RLS approval
-          const unsubClientes = onSnapshot(
-            query(collection(db, 'clientes'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: Cliente[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Cliente));
-              if (list.length > 0) setClientes(list);
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "clientes")
-          );
-          activeUnsubs.push(unsubClientes);
-
-          const unsubVeiculos = onSnapshot(
-            query(collection(db, 'veiculos'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: Veiculo[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Veiculo));
-              if (list.length > 0) setVeiculos(list);
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "veiculos")
-          );
-          activeUnsubs.push(unsubVeiculos);
-
-          const unsubProdutos = onSnapshot(
-            query(collection(db, 'produtos'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: Produto[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Produto));
-              if (list.length > 0) setProdutos(list);
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "produtos")
-          );
-          activeUnsubs.push(unsubProdutos);
-
-          const unsubServicos = onSnapshot(
-            query(collection(db, 'servicos'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: Servico[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Servico));
-              if (list.length > 0) setServicos(list);
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "servicos")
-          );
-          activeUnsubs.push(unsubServicos);
-
-          const unsubOS = onSnapshot(
-            query(collection(db, 'ordens_servico'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: OrdemServico[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as OrdemServico));
-              if (list.length > 0) setOrdensServico(list);
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "ordens_servico")
-          );
-          activeUnsubs.push(unsubOS);
-
-          const unsubFin = onSnapshot(
-            query(collection(db, 'financeiro'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: Financeiro[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Financeiro));
-              if (list.length > 0) setFinanceiro(list);
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "financeiro")
-          );
-          activeUnsubs.push(unsubFin);
-
-          const unsubCaixa = onSnapshot(
-            query(collection(db, 'caixa'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: Caixa[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Caixa));
-              if (list.length > 0) {
-                setCaixaStatus(list[0]);
-              }
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "caixa")
-          );
-          activeUnsubs.push(unsubCaixa);
-
-          const unsubVendas = onSnapshot(
-            query(collection(db, 'vendas'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: Venda[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Venda));
-              if (list.length > 0) setVendas(list);
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "vendas")
-          );
-          activeUnsubs.push(unsubVendas);
-
-          const unsubFornecedores = onSnapshot(
-            query(collection(db, 'fornecedores'), where('empresaId', '==', targetEmpId)),
-            (snap) => {
-              const list: Fornecedor[] = [];
-              snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Fornecedor));
-              if (list.length > 0) setFornecedores(list);
-            },
-            (err) => handleFirestoreError(err, OperationType.LIST, "fornecedores")
-          );
-          activeUnsubs.push(unsubFornecedores);
-
         } catch (e) {
           console.error("Firestore Loading error, using secure fallback mode: ", e);
         }
@@ -523,10 +407,140 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return () => {
-      cleanAllListeners();
       unsubscribe();
     };
   }, []);
+
+  // Reactive Multi-tenant Real-time subscriptions triggered dynamically by active company/user changes
+  useEffect(() => {
+    if (!user || !company?.id) return;
+
+    let activeUnsubs: (() => void)[] = [];
+
+    const cleanAllListeners = () => {
+      activeUnsubs.forEach(unsub => {
+        try {
+          unsub();
+        } catch (err) {
+          console.warn("Unsubscribe listener error: ", err);
+        }
+      });
+      activeUnsubs = [];
+    };
+
+    const targetEmpId = company.id;
+
+    try {
+      // Real-time Reactive isolated multi-tenant sync subscriptions with RLS approval
+      const unsubClientes = onSnapshot(
+        query(collection(db, 'clientes'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Cliente[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Cliente));
+          if (list.length > 0) setClientes(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "clientes")
+      );
+      activeUnsubs.push(unsubClientes);
+
+      const unsubVeiculos = onSnapshot(
+        query(collection(db, 'veiculos'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Veiculo[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Veiculo));
+          if (list.length > 0) setVeiculos(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "veiculos")
+      );
+      activeUnsubs.push(unsubVeiculos);
+
+      const unsubProdutos = onSnapshot(
+        query(collection(db, 'produtos'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Produto[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Produto));
+          if (list.length > 0) setProdutos(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "produtos")
+      );
+      activeUnsubs.push(unsubProdutos);
+
+      const unsubServicos = onSnapshot(
+        query(collection(db, 'servicos'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Servico[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Servico));
+          if (list.length > 0) setServicos(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "servicos")
+      );
+      activeUnsubs.push(unsubServicos);
+
+      const unsubOS = onSnapshot(
+        query(collection(db, 'ordens_servico'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: OrdemServico[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as OrdemServico));
+          if (list.length > 0) setOrdensServico(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "ordens_servico")
+      );
+      activeUnsubs.push(unsubOS);
+
+      const unsubFin = onSnapshot(
+        query(collection(db, 'financeiro'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Financeiro[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Financeiro));
+          if (list.length > 0) setFinanceiro(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "financeiro")
+      );
+      activeUnsubs.push(unsubFin);
+
+      const unsubCaixa = onSnapshot(
+        query(collection(db, 'caixa'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Caixa[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Caixa));
+          if (list.length > 0) {
+            setCaixaStatus(list[0]);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "caixa")
+      );
+      activeUnsubs.push(unsubCaixa);
+
+      const unsubVendas = onSnapshot(
+        query(collection(db, 'vendas'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Venda[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Venda));
+          if (list.length > 0) setVendas(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "vendas")
+      );
+      activeUnsubs.push(unsubVendas);
+
+      const unsubFornecedores = onSnapshot(
+        query(collection(db, 'fornecedores'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Fornecedor[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Fornecedor));
+          if (list.length > 0) setFornecedores(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "fornecedores")
+      );
+      activeUnsubs.push(unsubFornecedores);
+
+    } catch (e) {
+      console.error("Firestore loading subscription error: ", e);
+    }
+
+    return () => {
+      cleanAllListeners();
+    };
+  }, [user?.uid, company?.id]);
 
   // Login actions
   const loginWithGoogle = async () => {
@@ -1046,6 +1060,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider value={{
       user,
       company,
+      setUser,
+      setCompany,
       clientes,
       veiculos,
       produtos,

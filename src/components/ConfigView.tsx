@@ -628,31 +628,45 @@ export const ConfigView: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Subdomínio AutoPrecision (Grátis)</label>
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Subdomínio Temporário (Hospedagem Vercel)</label>
+                  <span className="text-[9px] bg-purple-950/40 text-purple-400 border border-purple-900/40 px-1.5 py-0.2 rounded font-mono font-bold uppercase">Grátis & Ativo</span>
+                </div>
                 <div className="flex items-center">
+                  <span className="bg-[#050912] border border-gray-850 border-r-0 rounded-l-lg py-2 px-2.5 text-gray-400 text-[10px] font-mono select-none">
+                    oficina-eta-teal.vercel.app/
+                  </span>
                   <input 
                     type="text" 
                     placeholder="ex: speedy-car"
-                    className="bg-[#080c16] border border-gray-850 border-r-0 rounded-l-lg py-2 px-3 text-white text-xs text-right focus:outline-none focus:border-purple-500 flex-1 font-mono"
+                    className="bg-[#080c16] border border-gray-850 rounded-r-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-purple-500 flex-1 font-mono"
                     value={subdomainStr}
                     onChange={(e) => {
                       const cleanValue = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
                       setSubdomainStr(cleanValue);
                     }}
                   />
-                  <span className="bg-[#050912] border border-gray-850 rounded-r-lg py-2 px-2.5 text-gray-400 text-xs font-mono select-none">
-                    .autoprecision.com.br
-                  </span>
                 </div>
                 {subdomainStr && (
-                  <span className="text-[9px] text-purple-400/90 font-sans block mt-1">
-                    Link de atalho: <a href={`https://${subdomainStr}.autoprecision.com.br`} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-0.5">{subdomainStr}.autoprecision.com.br <ExternalLink className="w-2.5 h-2.5" /></a>
-                  </span>
+                  <div className="mt-1 flex flex-col gap-1 font-sans text-[10px]">
+                    <span className="text-purple-400/95 font-bold">
+                      🚀 Servidor Edge Vercel (Ativo):{' '}
+                      <a href={`https://oficina-eta-teal.vercel.app/${subdomainStr}`} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-0.5 hover:text-purple-300">
+                        oficina-eta-teal.vercel.app/{subdomainStr} <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </span>
+                    <span className="text-gray-500">
+                      Redirecionamento alternativo:{' '}
+                      <a href={`https://${subdomainStr}.autoprecision.com.br`} target="_blank" rel="noreferrer" className="underline inline-flex items-center gap-0.5 hover:text-gray-450">
+                        {subdomainStr}.autoprecision.com.br <ExternalLink className="w-2 h-2" />
+                      </a>
+                    </span>
+                  </div>
                 )}
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Domínio Customizado Profissional</label>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Domínio Próprio Definitivo</label>
                 <input 
                   type="text" 
                   placeholder="ex: oficina.seusite.com.br"
@@ -663,7 +677,9 @@ export const ConfigView: React.FC = () => {
                     if (domainStatusVal === 'Ativo') setDomainStatusVal('Pendente');
                   }}
                 />
-                <span className="text-[9px] text-gray-500 font-sans block mt-1">Ex: se você comprou um domínio no Registro.br ou GoDaddy.</span>
+                <span className="text-[9px] text-gray-400 font-sans block mt-1">
+                  💡 <strong>Domínio Profissional:</strong> Vincule seu domínio próprio para substituir o link provisório da Vercel.
+                </span>
               </div>
             </div>
 

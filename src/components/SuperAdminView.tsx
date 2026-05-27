@@ -25,6 +25,7 @@ import {
   Sparkles,
   Lock,
   UserCheck,
+  UserPlus,
   History,
   Plus,
   ExternalLink,
@@ -72,7 +73,7 @@ export interface GeminiUsage {
 }
 
 export const SuperAdminView: React.FC = () => {
-  const { company, updateCompany, user, clientes, editCliente, deleteCliente, addCliente, veiculos } = useApp();
+  const { company, updateCompany, user, setUser, setCompany, clientes, editCliente, deleteCliente, addCliente, veiculos } = useApp();
 
   // Initial tenants listing with persistence to localStorage
   const [tenants, setTenants] = useState<Tenant[]>(() => {
@@ -204,6 +205,140 @@ export const SuperAdminView: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('saas_tenants', JSON.stringify(tenants));
   }, [tenants]);
+
+  // --- STATE FOR SAAS USER ACCOUNTS CONTROL ---
+  const [saasUsers, setSaasUsers] = useState<any[]>(() => {
+    const saved = localStorage.getItem('saas_users');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.length > 0) return parsed;
+      } catch (e) {
+        console.error("Error parsing saas_users from localStorage", e);
+      }
+    }
+    return [
+      {
+        id: "usr_clecio",
+        name: "Clécio Santos",
+        email: "cleciotecnologia@gmail.com",
+        phone: "(11) 98765-4321",
+        role: "Administrador",
+        tenantId: company.id,
+        tenantName: company.name.replace(" (Membro Principal)", ""),
+        cnpj: "98.765.432/0001-99",
+        status: "Ativo",
+        createdAt: "2026-01-10T12:00:00Z"
+      },
+      {
+        id: "usr_speedy_1",
+        name: "Marcos Speedy",
+        email: "marcos@speedymotors.com.br",
+        phone: "(41) 9988-1234",
+        role: "Administrador",
+        tenantId: "tenant_speedy_2",
+        tenantName: "Speedy Motor Center SRL",
+        cnpj: "42.112.553/0001-20",
+        status: "Ativo",
+        createdAt: "2026-02-15T09:30:00Z"
+      },
+      {
+        id: "usr_speedy_2",
+        name: "Juliana Caixas",
+        email: "juliana.caixa@speedymotors.com.br",
+        phone: "(41) 9876-5432",
+        role: "Caixa",
+        tenantId: "tenant_speedy_2",
+        tenantName: "Speedy Motor Center SRL",
+        cnpj: "42.112.553/0001-20",
+        status: "Ativo",
+        createdAt: "2026-02-16T10:00:00Z"
+      },
+      {
+        id: "usr_volt_1",
+        name: "André Volt",
+        email: "atendimento@voltcar.com",
+        phone: "(31) 98221-5050",
+        role: "Administrador",
+        tenantId: "tenant_voltcar_3",
+        tenantName: "Volt Car Auto Elétrica & Híbridos",
+        cnpj: "55.842.124/0001-44",
+        status: "Ativo",
+        createdAt: "2026-03-01T14:45:00Z"
+      },
+      {
+        id: "usr_volt_2",
+        name: "Guilherme Elétrico",
+        email: "guilherme@voltcar.com",
+        phone: "(31) 98111-2233",
+        role: "Mecânico",
+        tenantId: "tenant_voltcar_3",
+        tenantName: "Volt Car Auto Elétrica & Híbridos",
+        cnpj: "55.842.124/0001-44",
+        status: "Ativo",
+        createdAt: "2026-03-02T15:00:00Z"
+      },
+      {
+        id: "usr_prime_1",
+        name: "Ricardo Prime",
+        email: "primefunilaria@gmail.com",
+        phone: "(21) 97654-3210",
+        role: "Gerente",
+        tenantId: "tenant_prime_4",
+        tenantName: "Prime Funilaria & Martelo de Ouro",
+        cnpj: "10.443.987/0001-02",
+        status: "Ativo",
+        createdAt: "2026-04-18T11:00:00Z"
+      },
+      {
+        id: "usr_racing_1",
+        name: "Thiago Racing",
+        email: "contato@racingtuners.com",
+        phone: "(11) 96543-2109",
+        role: "Administrador",
+        tenantId: "tenant_racing_5",
+        tenantName: "Racing Tuners Performance SP",
+        cnpj: "09.332.148/0001-78",
+        status: "Ativo",
+        createdAt: "2026-05-10T17:15:00Z"
+      },
+      {
+        id: "usr_rafa_1",
+        name: "Rafael Martins",
+        email: "rafael@oficinadorafael.com.br",
+        phone: "(11) 98765-5544",
+        role: "Administrador",
+        tenantId: "tenant_rafael_6",
+        tenantName: "Oficina do Rafael",
+        cnpj: "18.349.525/0001-30",
+        status: "Ativo",
+        createdAt: "2026-05-26T17:15:00Z"
+      }
+    ];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('saas_users', JSON.stringify(saasUsers));
+  }, [saasUsers]);
+
+  const [showNewUserForm, setShowNewUserForm] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPhone, setNewUserPhone] = useState('');
+  const [newUserRole, setNewUserRole] = useState<'Administrador' | 'Gerente' | 'Mecânico' | 'Caixa' | 'Estoquista'>('Administrador');
+  const [newUserTenantId, setNewUserTenantId] = useState('');
+  const [newUserStatus, setNewUserStatus] = useState<'Ativo' | 'Bloqueado'>('Ativo');
+  const [newUserFeedback, setNewUserFeedback] = useState<string | null>(null);
+
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<any | null>(null);
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserEmail, setEditUserEmail] = useState('');
+  const [editUserPhone, setEditUserPhone] = useState('');
+  const [editUserRole, setEditUserRole] = useState<'Administrador' | 'Gerente' | 'Mecânico' | 'Caixa' | 'Estoquista'>('Administrador');
+  const [editUserTenantId, setEditUserTenantId] = useState('');
+  const [editUserStatus, setEditUserStatus] = useState<'Ativo' | 'Bloqueado'>('Ativo');
+
+  const [saasUsersSearchTerm, setSaasUsersSearchTerm] = useState('');
 
   // State for Gemini CoPilot API Token Monitor by Tenant with persistence
   const [geminiUsages, setGeminiUsages] = useState<GeminiUsage[]>(() => {
@@ -1221,30 +1356,174 @@ export const SuperAdminView: React.FC = () => {
   };
 
   // Impersonate / masquerade trigger
-  const handleImpersonate = (tenant: Tenant) => {
-    if (impersonatingId === tenant.id) {
+  const handleImpersonate = (tenant: Tenant, simulatedUser?: any) => {
+    const isCurrentlyImpersonating = !!localStorage.getItem('original_saas_admin_user');
+    
+    if (isCurrentlyImpersonating) {
       setImpersonatingId(null);
       // restore active session back to default context and log
-      updateCompany({ 
-        name: company.name.replace(" (Impersonado)", ""),
-        planId: company.planId
-      });
+      const origUser = localStorage.getItem('original_saas_admin_user');
+      const origComp = localStorage.getItem('original_saas_admin_company');
+      if (origUser && origComp) {
+        setUser(JSON.parse(origUser));
+        setCompany(JSON.parse(origComp));
+        localStorage.removeItem('original_saas_admin_user');
+        localStorage.removeItem('original_saas_admin_company');
+      }
       const timestamp = new Date().toLocaleTimeString();
       setLogs(l => [...l, `[${timestamp}] 👤 IMPERSONATE END: Conexão administrativa principal restaurada.`]);
     } else {
-      setImpersonatingId(tenant.id);
-      // Impersonate the context's company dynamically
-      updateCompany({
-        name: tenant.name + " (Impersonado)",
+      // Save current master status
+      localStorage.setItem('original_saas_admin_user', JSON.stringify(user));
+      localStorage.setItem('original_saas_admin_company', JSON.stringify(company));
+      
+      const targetUser = simulatedUser || {
+        uid: "simulated_" + tenant.id,
+        name: "Gerente " + tenant.name,
+        email: tenant.email,
+        role: "Administrador",
+        empresaId: tenant.id,
+        createdAt: new Date().toISOString()
+      };
+
+      const targetComp: Company = {
+        id: tenant.id,
+        name: tenant.name,
         cnpj: tenant.cnpj,
         phone: tenant.phone,
+        address: tenant.address || "Endereço Cadastrado, CEP via ViaCEP",
         planId: tenant.planId,
-        address: "Av. do Negócio Adjudicado Secundário, 100"
-      });
+        customDomain: tenant.customDomain,
+        subdomain: tenant.subdomain,
+        createdAt: tenant.createdAt,
+        email: tenant.email
+      };
+
+      setUser(targetUser);
+      setCompany(targetComp);
+      setImpersonatingId(tenant.id);
 
       const timestamp = new Date().toLocaleTimeString();
-      setLogs(l => [...l, `[${timestamp}] 👤 SECURE IMPERSONATING: Simulando ambiente operacional de [${tenant.name}]`]);
+      setLogs(l => [...l, `[${timestamp}] 👤 SECURE IMPERSONATING: Simulando ambiente operacional de [${tenant.name}] como [${targetUser.name}]`]);
     }
+  };
+
+  const handleAddSaasUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUserName.trim() || !newUserEmail.trim() || !newUserTenantId) {
+      setNewUserFeedback("❌ Preencha os campos obrigatórios.");
+      return;
+    }
+
+    const matchedTenant = tenants.find(t => t.id === newUserTenantId);
+    if (!matchedTenant) return;
+
+    const newUserNode = {
+      id: "usr_" + Math.random().toString(36).substring(2, 9),
+      name: newUserName,
+      email: newUserEmail,
+      phone: newUserPhone || "(11) 99999-9999",
+      role: newUserRole,
+      tenantId: newUserTenantId,
+      tenantName: matchedTenant.name,
+      cnpj: matchedTenant.cnpj,
+      status: newUserStatus,
+      createdAt: new Date().toISOString()
+    };
+
+    setSaasUsers(prev => [newUserNode, ...prev]);
+    setNewUserFeedback(`✅ Usuário "${newUserName}" associado com sucesso!`);
+    
+    // Add audit log
+    const auditLog: AuditLog = {
+      id: "log_" + Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      tenantName: matchedTenant.name,
+      changeType: "Status",
+      newValue: `Criado Usuário: ${newUserName} (${newUserRole})`,
+      oldValue: "Sem Cadastro",
+      adminEmail: user?.email || "cleciotecnologia@gmail.com"
+    };
+    setAuditLogs(prev => [auditLog, ...prev]);
+
+    setTimeout(() => {
+      setNewUserFeedback(null);
+      setShowNewUserForm(false);
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPhone('');
+    }, 2000);
+  };
+
+  const handleEditSaasUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserForEdit) return;
+
+    const matchedTenant = tenants.find(t => t.id === editUserTenantId);
+    if (!matchedTenant) return;
+
+    setSaasUsers(prev => prev.map(u => {
+      if (u.id === selectedUserForEdit.id) {
+        return {
+          ...u,
+          name: editUserName,
+          email: editUserEmail,
+          phone: editUserPhone,
+          role: editUserRole,
+          tenantId: editUserTenantId,
+          tenantName: matchedTenant.name,
+          cnpj: matchedTenant.cnpj,
+          status: editUserStatus
+        };
+      }
+      return u;
+    }));
+
+    // Add audit log
+    const auditLog: AuditLog = {
+      id: "log_" + Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      tenantName: matchedTenant.name,
+      changeType: "Status",
+      newValue: `Editado: ${editUserName} (${editUserRole}) - Status: ${editUserStatus}`,
+      oldValue: `${selectedUserForEdit.name} (${selectedUserForEdit.role})`,
+      adminEmail: user?.email || "cleciotecnologia@gmail.com"
+    };
+    setAuditLogs(prev => [auditLog, ...prev]);
+
+    setSelectedUserForEdit(null);
+  };
+
+  const handleDeleteSaasUser = (targetUserId: string) => {
+    const targetUser = saasUsers.find(u => u.id === targetUserId);
+    if (!targetUser) return;
+
+    triggerConfirm(
+      "Remover Usuário",
+      `Tem certeza de que deseja banir/remover o acesso do usuário "${targetUser.name}" (${targetUser.role}) deste SaaS? Esta ação é irreversível.`,
+      () => {
+        setSaasUsers(prev => prev.filter(u => u.id !== targetUserId));
+        
+        // Add audit log
+        const auditLog: AuditLog = {
+          id: "log_" + Math.random().toString(36).substring(2, 9),
+          timestamp: new Date().toISOString(),
+          tenantName: targetUser.tenantName,
+          changeType: "Status",
+          newValue: "Acesso Deletado do SaaS",
+          oldValue: `Usuário ${targetUser.name}`,
+          adminEmail: user?.email || "cleciotecnologia@gmail.com"
+        };
+        setAuditLogs(prev => [auditLog, ...prev]);
+
+        // Term log
+        const timestamp = new Date().toLocaleTimeString();
+        setLogs(l => [...l, `[${timestamp}] ❌ USER_DELETE: Usuário [${targetUser.name}] removido da oficina [${targetUser.tenantName}].`]);
+      },
+      true, // isDanger
+      "Banir de Imediato",
+      "Manter Usuário"
+    );
   };
 
   const handleSaveTenantAdjustments = (e: React.FormEvent) => {
@@ -1834,30 +2113,42 @@ export const SuperAdminView: React.FC = () => {
         <div className="lg:col-span-8 flex flex-col gap-4">
           
           {/* VIEW SWITCHER / SaaS CATEGORY NAV */}
-          <div className="grid grid-cols-2 gap-3 bg-[#0a0f1d] border border-gray-850 p-1.5 rounded-xl">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-[#0a0f1d] border border-gray-850 p-1.5 rounded-xl">
             <button
               type="button"
               onClick={() => setSuperAdminViewTab('tenants')}
-              className={`py-2 px-3 rounded-lg font-mono text-[10.5px] font-extrabold tracking-wider transition-all flex items-center justify-center gap-2 select-none cursor-pointer border ${
+              className={`py-2 px-3 rounded-lg font-mono text-[10px] font-extrabold tracking-wider transition-all flex items-center justify-center gap-1.5 select-none cursor-pointer border ${
                 superAdminViewTab === 'tenants'
                   ? 'bg-purple-950/60 border-purple-900 text-purple-300 shadow-md shadow-purple-950/40 font-bold'
-                  : 'bg-[#050912]/50 border-transparent text-gray-505 text-gray-500 hover:text-gray-300'
+                  : 'bg-[#050912]/50 border-transparent text-gray-500 hover:text-gray-300'
               }`}
             >
-              <Building className="w-3.5 h-3.5" />
-              OFICINAS PARCEIRAS (SaaS TENANTS)
+              <Building className="w-3.5 h-3.5 shrink-0" />
+              LOJAS & OFICINAS PARCEIRAS ({tenants.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSuperAdminViewTab('saas-users')}
+              className={`py-2 px-3 rounded-lg font-mono text-[10px] font-extrabold tracking-wider transition-all flex items-center justify-center gap-1.5 select-none cursor-pointer border ${
+                superAdminViewTab === 'saas-users'
+                  ? 'bg-purple-900/60 border-purple-900 text-purple-300 shadow-md shadow-purple-950/40 font-bold'
+                  : 'bg-[#050912]/50 border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5 shrink-0" />
+              CONTAS USUÁRIOS SAAS ({saasUsers.length})
             </button>
             <button
               type="button"
               onClick={() => setSuperAdminViewTab('crm-clients')}
-              className={`py-2 px-3 rounded-lg font-mono text-[10.5px] font-extrabold tracking-wider transition-all flex items-center justify-center gap-2 select-none cursor-pointer border ${
+              className={`py-2 px-3 rounded-lg font-mono text-[10px] font-extrabold tracking-wider transition-all flex items-center justify-center gap-1.5 select-none cursor-pointer border ${
                 superAdminViewTab === 'crm-clients'
                   ? 'bg-purple-950/60 border-purple-900 text-purple-300 shadow-md shadow-purple-950/40 font-bold'
-                  : 'bg-[#050912]/50 border-transparent text-gray-550 text-gray-500 hover:text-gray-300'
+                  : 'bg-[#050912]/50 border-transparent text-gray-500 hover:text-gray-300'
               }`}
             >
-              <Users className="w-3.5 h-3.5" />
-              CLIENTES CRM (CARROS & DONOS)
+              <Users className="w-3.5 h-3.5 shrink-0" />
+              CLIENTES CRM GLOBAIS
             </button>
           </div>
 
@@ -1907,7 +2198,7 @@ export const SuperAdminView: React.FC = () => {
                 <div className="flex justify-between items-center border-b border-gray-850 pb-2">
                   <h4 className="font-mono text-xs text-purple-400 font-extrabold flex items-center gap-1.5">
                     <Sparkles className="w-4 h-4 text-purple-400 animate-pulse" />
-                    CADASTRAR NOVA OFICINA PARCEIRA (TENANT)
+                    CADASTRAR NOVA OFICINA & LOJA (TENANT)
                   </h4>
                   <span className="text-[9px] font-mono bg-purple-950/20 text-purple-400 border border-purple-900/40 px-2 py-0.5 rounded uppercase">Inquilinato Isolado</span>
                 </div>
@@ -1920,7 +2211,7 @@ export const SuperAdminView: React.FC = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-gray-400 font-bold uppercase">Nome da Oficina / Razão Social *</label>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Nome da Oficina & Loja / Razão Social *</label>
                     <input 
                       type="text" 
                       required
@@ -2136,18 +2427,32 @@ export const SuperAdminView: React.FC = () => {
                     {(tenant.subdomain || tenant.customDomain) && (
                       <div className="border-t border-gray-850/50 pt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[10px] items-center text-gray-500">
                         {tenant.subdomain && (
-                          <div className="flex items-center gap-1 bg-[#050912]/80 px-2.5 py-1 rounded border border-gray-850">
-                            <span className="text-gray-450 text-gray-400">🌐 Link do Portal:</span>
-                            <a 
-                              href={`https://${tenant.subdomain}.autoprecision.com.br`} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-purple-400 font-bold hover:text-purple-300 hover:underline flex items-center gap-1 transition-all"
-                            >
-                              {tenant.subdomain}.autoprecision.com.br
-                              <ExternalLink className="w-2.5 h-2.5 text-purple-400" />
-                            </a>
-                          </div>
+                          <>
+                            <div className="flex items-center gap-1 bg-[#050912]/80 px-2.5 py-1 rounded border border-gray-850">
+                              <span className="text-gray-400">⚡ Hospedagem Vercel:</span>
+                              <a 
+                                href={`https://oficina-eta-teal.vercel.app/${tenant.subdomain}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-purple-400 font-bold hover:text-purple-300 hover:underline flex items-center gap-1 transition-all"
+                              >
+                                oficina-eta-teal.vercel.app/{tenant.subdomain}
+                                <ExternalLink className="w-2.5 h-2.5 text-purple-400" />
+                              </a>
+                            </div>
+                            <div className="flex items-center gap-1 bg-[#050912]/80 px-2.5 py-1 rounded border border-gray-850">
+                              <span className="text-gray-400">🌐 Redirecionamento:</span>
+                              <a 
+                                href={`https://${tenant.subdomain}.autoprecision.com.br`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="text-gray-500 hover:text-gray-400 hover:underline flex items-center gap-1 transition-all"
+                              >
+                                {tenant.subdomain}.autoprecision.com.br
+                                <ExternalLink className="w-2 h-2 text-gray-500" />
+                              </a>
+                            </div>
+                          </>
                         )}
                         {tenant.customDomain && (
                           <div className="flex items-center gap-1.5 bg-[#050912]/80 px-2.5 py-1 rounded border border-gray-850">
@@ -2279,6 +2584,407 @@ export const SuperAdminView: React.FC = () => {
             </div>
 
           </div>
+          ) : superAdminViewTab === 'saas-users' ? (
+            <div className="bg-[#0c1223] border border-gray-800 rounded-2xl p-5 flex flex-col gap-4 text-left">
+              <div className="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b border-gray-850 pb-3">
+                <div>
+                  <h3 className="font-display font-semibold text-white text-base flex items-center gap-1.5">
+                    <Users className="w-5 h-5 text-purple-400" />
+                    Contas e Acessos de Usuários do SaaS (Multitenant)
+                  </h3>
+                  <p className="text-[10px] font-mono text-gray-400">
+                    Gerencie, adicione, edite credenciais e simule acessos de suporte para resolver dúvidas de clientes.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNewUserForm(!showNewUserForm);
+                    setNewUserName('');
+                    setNewUserEmail('');
+                    setNewUserPhone('');
+                    setNewUserTenantId(tenants[0]?.id || '');
+                    setSelectedUserForEdit(null);
+                  }}
+                  className="py-1.5 px-3 bg-purple-650 hover:bg-purple-700 bg-purple-600 font-mono text-[10.5px] font-bold text-white tracking-wide rounded-lg cursor-pointer flex items-center gap-1 shrink-0 select-none border-none"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  {showNewUserForm ? "FECHAR FORMULÁRIO" : "RECRUTAR / CRIAR USUÁRIO"}
+                </button>
+              </div>
+
+              {/* SEARCH BAR & GENERAL METRICS */}
+              <div className="flex flex-col sm:flex-row items-center gap-3 justify-between bg-slate-950/20 p-3 rounded-lg border border-gray-850/60">
+                <div className="relative w-full sm:max-w-md">
+                  <input
+                    type="text"
+                    placeholder="Buscar usuários por nome, email, oficina ou CNPJ..."
+                    value={saasUsersSearchTerm}
+                    onChange={(e) => setSaasUsersSearchTerm(e.target.value)}
+                    className="bg-[#050912] border border-gray-850 rounded-lg py-1.5 pl-8 pr-3 text-white text-xs font-mono focus:outline-none focus:border-purple-500 w-full"
+                  />
+                  <div className="absolute left-2.5 top-2.5 text-gray-500">
+                    <Search className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4 text-[10px] font-mono text-gray-400 shrink-0">
+                  <div>Ativos: <strong className="text-green-400">{saasUsers.filter(u => u.status === 'Ativo').length}</strong></div>
+                  <div>Bloqueados: <strong className="text-red-400">{saasUsers.filter(u => u.status === 'Bloqueado').length}</strong></div>
+                  <div>Total de Contas: <strong className="text-white">{saasUsers.length}</strong></div>
+                </div>
+              </div>
+
+              {/* NEW USER FORM COLLAPSIBLE */}
+              {showNewUserForm && (
+                <form onSubmit={handleAddSaasUser} className="bg-slate-950/40 p-4 rounded-xl border border-purple-900/40 flex flex-col gap-3.5">
+                  <h4 className="text-xs font-mono font-bold text-purple-300 uppercase tracking-widest flex items-center gap-1.5">
+                    <UserPlus className="w-4 h-4 text-purple-400" /> Cadastrar Novo Usuário SaaS
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Nome Completo *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Carlos Mecânico"
+                        value={newUserName}
+                        onChange={(e) => setNewUserName(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-purple-500 font-mono"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Email de Login / Acesso *</label>
+                      <input
+                        type="email"
+                        required
+                        placeholder="Ex: carlos@mecanicahorizonte.com.br"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-purple-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Telefone / WhatsApp</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: (11) 98765-4321"
+                        value={newUserPhone}
+                        onChange={(e) => setNewUserPhone(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-purple-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Cargo / Função Administrativa</label>
+                      <select
+                        value={newUserRole}
+                        onChange={(e: any) => setNewUserRole(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-purple-500 font-mono"
+                      >
+                        <option value="Administrador">Administrador (Acesso Geral)</option>
+                        <option value="Gerente">Gerente Geral</option>
+                        <option value="Mecânico">Mecânico Operacional</option>
+                        <option value="Caixa">Caixa / Financeiro</option>
+                        <option value="Estoquista">Estoquista / Logística</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Oficina Associada (Tenant) *</label>
+                      <select
+                        required
+                        value={newUserTenantId}
+                        onChange={(e) => setNewUserTenantId(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-purple-500 font-mono"
+                      >
+                        <option value="">-- Selecione uma Mecânica --</option>
+                        {tenants.map(t => (
+                          <option key={t.id} value={t.id}>{t.name} ({t.cnpj})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Status da Conta</label>
+                      <select
+                        value={newUserStatus}
+                        onChange={(e: any) => setNewUserStatus(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-purple-500 font-mono"
+                      >
+                        <option value="Ativo">Ativo (Acesso Liberado)</option>
+                        <option value="Bloqueado">Bloqueado (Suspenso)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center mt-1 pt-2 border-t border-gray-850">
+                    <span className="text-[10px] text-gray-400 font-mono select-none">
+                      {newUserFeedback || "* Campos obrigatórios para validação de acesso."}
+                    </span>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-gradient-to-r from-purple-650 via-purple-600 to-indigo-600 hover:opacity-90 font-mono text-xs font-bold text-white rounded-lg cursor-pointer border-none"
+                    >
+                      🚀 CRIAR CONTA E SALVAR
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* SELECTED USER EDIT PANEL COLLAPSIBLE */}
+              {selectedUserForEdit && (
+                <form onSubmit={handleEditSaasUser} className="bg-slate-950/70 p-4 rounded-xl border border-yellow-600/40 flex flex-col gap-3.5">
+                  <div className="flex justify-between items-center border-b border-gray-850 pb-2">
+                    <h4 className="text-xs font-mono font-bold text-yellow-500 uppercase tracking-widest flex items-center gap-1.5">
+                      ✏️ Editar Credenciais do Usuário SaaS
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserForEdit(null)}
+                      className="text-xs font-mono text-gray-500 hover:text-white"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Nome</label>
+                      <input
+                        type="text"
+                        required
+                        value={editUserName}
+                        onChange={(e) => setEditUserName(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-yellow-500 font-mono"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Email de Login</label>
+                      <input
+                        type="email"
+                        required
+                        value={editUserEmail}
+                        onChange={(e) => setEditUserEmail(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-yellow-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Telefone / WhatsApp</label>
+                      <input
+                        type="text"
+                        value={editUserPhone}
+                        onChange={(e) => setEditUserPhone(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-yellow-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Cargo / Função</label>
+                      <select
+                        value={editUserRole}
+                        onChange={(e: any) => setEditUserRole(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-yellow-500 font-mono"
+                      >
+                        <option value="Administrador">Administrador (Acesso Geral)</option>
+                        <option value="Gerente">Gerente Geral</option>
+                        <option value="Mecânico">Mecânico Operacional</option>
+                        <option value="Caixa">Caixa / Financeiro</option>
+                        <option value="Estoquista">Estoquista / Logística</option>
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Oficina Associada (Tenant)</label>
+                      <select
+                        required
+                        value={editUserTenantId}
+                        onChange={(e) => setEditUserTenantId(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-yellow-500 font-mono"
+                      >
+                        {tenants.map(t => (
+                          <option key={t.id} value={t.id}>{t.name} ({t.cnpj})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-mono font-bold text-slate-400">Status de Permissão</label>
+                      <select
+                        value={editUserStatus}
+                        onChange={(e: any) => setEditUserStatus(e.target.value)}
+                        className="bg-[#050912] border border-gray-800 rounded p-2 text-white text-xs focus:outline-none focus:border-yellow-500 font-mono"
+                      >
+                        <option value="Ativo">Ativo (Acesso Liberado)</option>
+                        <option value="Bloqueado">Bloqueado (Suspenso)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2.5 mt-2 border-t border-gray-850 pt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserForEdit(null)}
+                      className="px-4 py-1.5 bg-slate-900 border border-slate-800 text-[10.5px] font-bold text-slate-400 font-mono rounded-lg hover:text-white cursor-pointer"
+                    >
+                      DESCARTAR ALTERAÇÕES
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-[10.5px] font-bold text-black font-mono rounded-lg cursor-pointer border-none"
+                    >
+                      💾 SALVAR COMPACTO DE SEGURANÇA
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* USER DATABASE TABLE / GRID LISTING */}
+              <div className="flex flex-col gap-3">
+                {saasUsers.filter(u => {
+                  const term = saasUsersSearchTerm.toLowerCase();
+                  return (
+                    u.name.toLowerCase().includes(term) ||
+                    u.email.toLowerCase().includes(term) ||
+                    u.role.toLowerCase().includes(term) ||
+                    u.tenantName.toLowerCase().includes(term) ||
+                    u.cnpj.includes(term)
+                  );
+                }).length === 0 ? (
+                  <div className="text-center py-10 bg-slate-950/20 rounded-xl border border-gray-850 p-4">
+                    <p className="font-mono text-xs text-slate-400">Nenhum cadastro de usuário encontrado para o filtro "{saasUsersSearchTerm}".</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    {saasUsers.filter(u => {
+                      const term = saasUsersSearchTerm.toLowerCase();
+                      return (
+                        u.name.toLowerCase().includes(term) ||
+                        u.email.toLowerCase().includes(term) ||
+                        u.role.toLowerCase().includes(term) ||
+                        u.tenantName.toLowerCase().includes(term) ||
+                        u.cnpj.includes(term)
+                      );
+                    }).map((usr) => {
+                      const associatedTenantNode = tenants.find(t => t.id === usr.tenantId);
+                      const isSimulatedRightNow = localStorage.getItem('original_saas_admin_user') && user?.email === usr.email;
+
+                      return (
+                        <div 
+                          key={usr.id} 
+                          className={`bg-[#0d1326] border rounded-xl p-4 flex flex-col gap-3 relative hover:scale-[1.005] duration-150 transition-all text-left ${
+                            isSimulatedRightNow 
+                              ? 'border-yellow-600 shadow-lg shadow-yellow-950/10' 
+                              : usr.status === 'Bloqueado'
+                                ? 'border-red-950/70 opacity-75'
+                                : 'border-gray-850'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start gap-2.5">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                                usr.status === 'Bloqueado'
+                                  ? 'bg-red-900/40 text-red-350'
+                                  : isSimulatedRightNow
+                                    ? 'bg-yellow-600 text-black font-extrabold animate-pulse'
+                                    : 'bg-purple-900/40 text-purple-300'
+                              }`}>
+                                {usr.name.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="text-left">
+                                <h4 className="font-display font-bold text-white text-xs flex items-center gap-1.5 leading-none">
+                                  {usr.name}
+                                  {isSimulatedRightNow && <span className="bg-yellow-600 text-black text-[7.5px] font-mono px-1.5 py-0.2 rounded font-extrabold uppercase animate-pulse">Ativo Imersão</span>}
+                                </h4>
+                                <span className="text-[10px] font-mono text-slate-400 block mt-0.5">{usr.email}</span>
+                              </div>
+                            </div>
+                            
+                            <span className={`px-2 py-0.5 text-[8.5px] font-mono tracking-wider font-extrabold rounded select-none ${
+                              usr.status === 'Ativo'
+                                ? 'bg-green-950/30 border border-green-900/50 text-green-400'
+                                : 'bg-red-950/40 border border-red-900/50 text-red-500'
+                            }`}>
+                              {usr.status.toUpperCase()}
+                            </span>
+                          </div>
+
+                          {/* DETAILS GRID */}
+                          <div className="grid grid-cols-2 gap-2 text-[10px] bg-slate-950/30 p-2.5 rounded-lg border border-gray-850/40 text-left">
+                            <div>
+                              <span className="text-gray-550 text-gray-500 block uppercase font-bold text-[8.5px]">🏢 Empresa Vinculada:</span>
+                              <strong className="text-slate-300 block truncate" title={usr.tenantName}>{usr.tenantName}</strong>
+                            </div>
+                            <div>
+                              <span className="text-gray-550 text-gray-500 block uppercase font-bold text-[8.5px]">📇 CPF / CNPJ:</span>
+                              <strong className="text-slate-300 block font-mono">{usr.cnpj}</strong>
+                            </div>
+                            <div>
+                              <span className="text-gray-550 text-gray-500 block uppercase font-bold text-[8.5px]">🛡️ Cargo / Permissão:</span>
+                              <strong className="text-purple-300 block font-bold">{usr.role}</strong>
+                            </div>
+                            <div>
+                              <span className="text-gray-550 text-gray-500 block uppercase font-bold text-[8.5px]">📞 Contato:</span>
+                              <strong className="text-slate-300 block font-mono">{usr.phone || "Não Cadastrado"}</strong>
+                            </div>
+                          </div>
+
+                          {/* ACTION BUTTONS BAR */}
+                          <div className="border-t border-gray-850/50 pt-2 mt-1 flex justify-between gap-2 flex-wrap items-center">
+                            <span className="text-[8.5px] font-mono text-gray-550 text-gray-500">Cadastro: {new Date(usr.createdAt).toLocaleDateString()}</span>
+                            
+                            <div className="flex gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedUserForEdit(usr);
+                                  setEditUserName(usr.name);
+                                  setEditUserEmail(usr.email);
+                                  setEditUserPhone(usr.phone || '');
+                                  setEditUserRole(usr.role);
+                                  setEditUserTenantId(usr.tenantId);
+                                  setEditUserStatus(usr.status);
+                                  setShowNewUserForm(false);
+                                }}
+                                className="py-1 px-2.5 bg-[#050912] border border-gray-850 hover:bg-slate-800 text-[9.5px] text-slate-300 font-bold rounded cursor-pointer duration-100"
+                              >
+                                Editar
+                              </button>
+                              
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteSaasUser(usr.id)}
+                                className="py-1 px-2.5 bg-rose-950/15 hover:bg-rose-950/45 text-[9.5px] text-rose-450 border border-rose-900/30 rounded cursor-pointer duration-100"
+                              >
+                                Excluir
+                              </button>
+                              
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (associatedTenantNode) {
+                                    handleImpersonate(associatedTenantNode, usr);
+                                  }
+                                }}
+                                className="py-1 px-3 bg-purple-950 hover:bg-purple-900 border border-purple-800/40 text-[9.5px] text-purple-200 rounded cursor-pointer duration-100 font-bold flex items-center gap-1"
+                              >
+                                <Zap className="w-2.5 h-2.5 text-purple-400" />
+                                {isSimulatedRightNow ? "FECHAR SESSÃO" : "FILTRAR ACESSO"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="bg-[#0c1223] border border-gray-800 rounded-2xl p-5 flex flex-col gap-4">
               
@@ -2401,14 +3107,14 @@ export const SuperAdminView: React.FC = () => {
                     </div>
 
                     <div className="flex flex-col gap-1 sm:col-span-2">
-                      <label className="text-[10px] text-gray-400 font-bold uppercase w-full text-left">Oficina / Tenant Associado *</label>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase w-full text-left">Oficina & Loja / Tenant Associado *</label>
                       <select
                         required
                         value={newCrmTenantId}
                         onChange={(e) => setNewCrmTenantId(e.target.value)}
                         className="bg-[#0a0f1d] border border-gray-850 rounded py-1.5 px-2.5 text-white focus:border-purple-500 focus:outline-none cursor-pointer"
                       >
-                        <option value="">-- Selecione a oficina autorizada --</option>
+                        <option value="">-- Selecione a oficina & loja autorizada --</option>
                         {tenants.map(t => (
                           <option key={t.id} value={t.id}>{t.name}</option>
                         ))}

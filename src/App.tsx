@@ -44,6 +44,8 @@ function AppContent() {
   const { 
     user, 
     company, 
+    setUser,
+    setCompany,
     loginWithGoogle, 
     loginDemo, 
     logout, 
@@ -181,6 +183,34 @@ function AppContent() {
   return (
     <div className="min-h-screen bg-[#060913] text-gray-100 flex flex-col font-sans">
       
+      {/* IMPERSONATION BANNER CARD */}
+      {localStorage.getItem('original_saas_admin_user') && (
+        <div className="bg-gradient-to-r from-purple-900 via-indigo-900 to-blue-900 border-b border-purple-650 px-4 py-2.5 text-center flex flex-col sm:flex-row items-center justify-between gap-2.5 z-50 text-[11px] font-mono shadow-md shadow-purple-950/20">
+          <div className="flex items-center gap-2 text-purple-200">
+            <ShieldAlert className="w-4 h-4 text-purple-300 animate-pulse shrink-0" />
+            <span>
+              🔧 <strong>MODO SUPORTE DE ADMINISTRAÇÃO SAAS ATIVO:</strong> Simulando acesso à empresa <strong>{company.name}</strong> (CPF/CNPJ: {company.cnpj}) como o funcionário <strong>{user?.name}</strong>.
+            </span>
+          </div>
+          <button
+            onClick={() => {
+              const origUser = localStorage.getItem('original_saas_admin_user');
+              const origComp = localStorage.getItem('original_saas_admin_company');
+              if (origUser && origComp) {
+                setUser(JSON.parse(origUser));
+                setCompany(JSON.parse(origComp));
+                localStorage.removeItem('original_saas_admin_user');
+                localStorage.removeItem('original_saas_admin_company');
+                setActiveRoute('superadmin');
+              }
+            }}
+            className="px-3 py-1 bg-red-650 hover:bg-red-700 bg-red-650 rounded text-[10px] text-white tracking-wider cursor-pointer border-none transition-all active:scale-95 shrink-0"
+          >
+            🔒 ENCERRAR SIMULAÇÃO DE ACESSO
+          </button>
+        </div>
+      )}
+
       {/* GLOBAL ADMINISTRATIVE TOP NAV HEADER */}
       <header className="bg-[#080d1a] border-b border-gray-850 px-4 py-3 sticky top-0 z-40 flex justify-between items-center">
         
@@ -332,7 +362,7 @@ function AppContent() {
               onClick={() => { setActiveRoute('pdv'); setMobileSidebarOpen(false); }}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'pdv' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
             >
-              <ShoppingBag className="w-4 h-4 shrink-0" /> PDV Caixa Rápido
+              <ShoppingBag className="w-4 h-4 shrink-0" /> PDV Loja & Oficina
             </button>
 
             <button 

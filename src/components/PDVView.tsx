@@ -317,7 +317,7 @@ export const PDVView: React.FC = () => {
           </div>
           <div>
             <h3 className="font-display font-bold text-lg text-white">Abertura de Caixa Requerida</h3>
-            <p className="text-xs text-gray-400 font-mono">Abra o caixa diário antes de iniciar as operações da loja de autopeças e oficina.</p>
+            <p className="text-xs text-gray-400 font-mono">Abra o caixa diário unificado antes de iniciar as operações integradas da loja e oficina.</p>
           </div>
         </div>
 
@@ -340,7 +340,7 @@ export const PDVView: React.FC = () => {
             onClick={() => abrirCaixa(parseFloat(openingAmountStr) || 0)}
             className="w-full mt-2 py-4 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl font-bold text-white shadow-lg shadow-red-950/40 text-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
           >
-            🔓 ABRIR CAIXA OPERACIONAL DA LOJA
+            🔓 ABRIR CAIXA UNIFICADO (LOJA & OFICINA)
           </button>
         </div>
       </div>
@@ -357,9 +357,9 @@ export const PDVView: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-800 pb-4">
           <div>
             <h2 className="font-display font-extrabold text-xl text-white flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-red-500" /> LOJA & PDV OFICINA
+              <ShoppingBag className="w-5 h-5 text-red-500" /> PDV INTEGRADO (LOJA & OFICINA)
             </h2>
-            <span className="text-[10px] text-gray-500 font-mono block uppercase">Frente de Caixa Rápido: Peças, Lubrificantes e Serviços Expressos</span>
+            <span className="text-[10px] text-gray-500 font-mono block uppercase">Frente de Caixa Rápido e Unificado: Peças, Consumíveis e Serviços Técnicos da Oficina</span>
           </div>
 
           {/* Barcode Quick Submission Filter */}
@@ -882,7 +882,7 @@ export const PDVView: React.FC = () => {
         {/* Closing Register Widget */}
         <div className="bg-[#0b0f19] p-4 rounded-xl border border-gray-900 text-xs flex justify-between items-center text-left">
           <div className="flex flex-col gap-0.5">
-            <span className="text-gray-400 block font-semibold leading-none uppercase text-[8.5px] font-mono tracking-wider">Conta Caixa da Oficina</span>
+            <span className="text-gray-400 block font-semibold leading-none uppercase text-[8.5px] font-mono tracking-wider">Caixa Unificado Loja & Oficina</span>
             <span className="text-[10px] text-gray-500 font-mono">Abertura: R$ {caixaStatus.initialAmount.toFixed(2)}</span>
             <span className="text-xs text-white font-mono font-bold mt-0.5">Dinheiro em Caixa: <strong className="text-red-400 font-display">R$ {caixaStatus.currentAmount.toFixed(2)}</strong></span>
           </div>
