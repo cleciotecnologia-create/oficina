@@ -393,6 +393,50 @@ export const SuperAdminView: React.FC = () => {
     localStorage.setItem('saas_suggestions', JSON.stringify(suggestions));
   }, [suggestions]);
 
+  // --- CUSTOM ALERT AND CONFIRMATION STATES TO BYPASS IFRAME SANDBOX LIMITATIONS ---
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error' | 'info'} | null>(null);
+  
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => {
+      setNotification(null);
+    }, 4500);
+  };
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    isDanger?: boolean;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const triggerConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    isDanger: boolean = false,
+    confirmText: string = "Confirmar",
+    cancelText: string = "Cancelar"
+  ) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      isDanger,
+      onConfirm: onConfirm
+    });
+  };
+
   // --- STATE FOR INTEGRATED CO-MANAGEMEMT OF SAAS CLIENTS DATA & CRM CLIENTS ---
   const [superAdminViewTab, setSuperAdminViewTab] = useState<'tenants' | 'crm-clients'>('tenants');
   const [activeCorrectionTab, setActiveCorrectionTab] = useState<'profile' | 'domain' | 'contact' | 'address'>('profile');
@@ -574,43 +618,59 @@ export const SuperAdminView: React.FC = () => {
     
     // Safety check - do not delete the main active session group
     if (tenantId === company.id) {
-      alert("Não é permitido excluir o inquilino principal ativo desta sessão administrativa.");
+      showToast("Não é permitido excluir o inquilino principal ativo desta sessão administrativa.", "error");
       return;
     }
 
-    if (confirm(`Deseja realmente excluir permanentemente a oficina "${target.name}"? Todos os subdomínios, faturamento e integrações de IA vinculadas serão suspensos.`)) {
-      setTenants(prev => prev.filter(t => t.id !== tenantId));
-      setGeminiUsages(prev => prev.filter(u => u.tenantId !== tenantId));
-      
-      const newLog: AuditLog = {
-        id: "log_" + Math.random().toString(36).substring(2, 9),
-        timestamp: new Date().toISOString(),
-        tenantName: target.name,
-        changeType: 'Status',
-        newValue: 'Excluído Permanentemente',
-        oldValue: target.status,
-        adminEmail: user?.email || "cleciotecnologia@gmail.com"
-      };
-      setAuditLogs(prev => [newLog, ...prev]);
+    triggerConfirm(
+      "CONFIRMAR EXCLUSÃO DE OFICINA",
+      `Deseja realmente excluir permanentemente a oficina "${target.name}"? Todos os subdomínios, faturamento e integrações de IA vinculadas serão suspensos.`,
+      () => {
+        setTenants(prev => prev.filter(t => t.id !== tenantId));
+        setGeminiUsages(prev => prev.filter(u => u.tenantId !== tenantId));
+        
+        const newLog: AuditLog = {
+          id: "log_" + Math.random().toString(36).substring(2, 9),
+          timestamp: new Date().toISOString(),
+          tenantName: target.name,
+          changeType: 'Status',
+          newValue: 'Excluído Permanentemente',
+          oldValue: target.status,
+          adminEmail: user?.email || "cleciotecnologia@gmail.com"
+        };
+        setAuditLogs(prev => [newLog, ...prev]);
 
-      const termTimestamp = new Date().toLocaleTimeString();
-      setLogs(l => [...l, `[${termTimestamp}] ❌ EXCLUSÃO OFICINA: Oficina [${target.name}] foi excluída do SaaS pelo Admin.`]);
-    }
+        const termTimestamp = new Date().toLocaleTimeString();
+        setLogs(l => [...l, `[${termTimestamp}] ❌ EXCLUSÃO OFICINA: Oficina [${target.name}] foi excluída do SaaS pelo Admin.`]);
+        showToast(`Oficina "${target.name}" excluída com sucesso!`, "success");
+      },
+      true,
+      "Sim, Excluir",
+      "Não, Cancelar"
+    );
   };
 
   const handleDeleteCrmClient = async (cliId: string) => {
     const target = clientes.find(c => c.id === cliId);
     if (!target) return;
 
-    if (confirm(`Deseja realmente remover permanentemente o cliente "${target.name}" da base geral?`)) {
-      try {
-        await deleteCliente(cliId);
-        const timestamp = new Date().toLocaleTimeString();
-        setLogs(l => [...l, `[${timestamp}] 🗑️ EXCLUSÃO_CLIENTE_CRM: Cliente [${target.name}] removido com sucesso.`]);
-      } catch (err) {
-        alert("Erro ao excluir cliente.");
-      }
-    }
+    triggerConfirm(
+      "CONFIRMAR REMOÇÃO DE CLIENTE CRM",
+      `Deseja realmente remover permanentemente o cliente "${target.name}" da base geral?`,
+      async () => {
+        try {
+          await deleteCliente(cliId);
+          const timestamp = new Date().toLocaleTimeString();
+          setLogs(l => [...l, `[${timestamp}] 🗑️ EXCLUSÃO_CLIENTE_CRM: Cliente [${target.name}] removido com sucesso.`]);
+          showToast(`Cliente "${target.name}" removido com sucesso.`, "success");
+        } catch (err) {
+          showToast("Erro ao excluir cliente do CRM.", "error");
+        }
+      },
+      true,
+      "Sim, Remover",
+      "Não, Cancelar"
+    );
   };
 
   const handleOpenEditCrmClient = (cli: any) => {
@@ -641,11 +701,11 @@ export const SuperAdminView: React.FC = () => {
       const timeStr = new Date().toLocaleTimeString();
       setLogs(l => [...l, `[${timeStr}] 👤 CORREÇÃO_CLIENTE: Cadastro do cliente de CRM [${editCrmClientName}] corrigido com sucesso.`]);
       
-      alert("Cadastro do cliente do CRM corrigido com sucesso!");
+      showToast("Cadastro do cliente do CRM corrigido com sucesso!", "success");
       setSelectedCrmClient(null);
     } catch (err) {
       console.error(err);
-      alert("Erro ao salvar correção de cliente.");
+      showToast("Erro ao salvar correção de cliente.", "error");
     }
   };
 
@@ -1242,7 +1302,7 @@ export const SuperAdminView: React.FC = () => {
     const timeStr = new Date().toLocaleTimeString();
     setLogs(l => [...l, `[${timeStr}] 🛠️ AJUSTE_SALVO: Oficina [${editName}] foi reconfigurada com sucesso pelo Admin.`]);
 
-    alert("Ajustes da oficina salvos com sucesso!");
+    showToast("Ajustes da oficina salvos com sucesso!", "success");
     setSelectedTenant(null);
   };
 
@@ -1269,7 +1329,7 @@ export const SuperAdminView: React.FC = () => {
     // Reset inputs
     setNewSugTitle('');
     setNewSugDesc('');
-    alert("Sugestão adicionada com sucesso!");
+    showToast("Sugestão adicionada com sucesso!", "success");
   };
 
   const handleToggleSuggestionStatus = (sugId: string) => {
@@ -1283,9 +1343,17 @@ export const SuperAdminView: React.FC = () => {
   };
 
   const handleDeleteSuggestion = (sugId: string) => {
-    if (confirm("Deseja realmente excluir esta sugestão de suporte?")) {
-      setSuggestions(prev => prev.filter(s => s.id !== sugId));
-    }
+    triggerConfirm(
+      "EXTINGUIR SUGESTÃO",
+      "Deseja realmente excluir esta sugestão de suporte?",
+      () => {
+        setSuggestions(prev => prev.filter(s => s.id !== sugId));
+        showToast("Sugestão de suporte removida.", "success");
+      },
+      true,
+      "Sim, Excluir",
+      "Cancelar"
+    );
   };
 
   // Peak simulation logic trigger
@@ -2567,7 +2635,7 @@ export const SuperAdminView: React.FC = () => {
               onClick={() => {
                 const timestamp = new Date().toLocaleTimeString();
                 setLogs(l => [...l, `[${timestamp}] 💾 CONFIG_SAVE: Tabela fiscal de planos ajustada no banco de dados.`]);
-                alert("Valores atualizados com sucesso no motor financeiro do SaaS!");
+                showToast("Valores atualizados com sucesso no motor financeiro do SaaS!", "success");
               }}
               className="py-2.5 px-4 bg-purple-655 bg-purple-600 hover:bg-purple-700 text-white font-mono text-[11px] font-bold rounded-xl mt-1 tracking-wider text-center cursor-pointer select-none transition-colors border-0"
             >
@@ -3329,6 +3397,63 @@ export const SuperAdminView: React.FC = () => {
 
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Custom Confirmation Dialog Modal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
+          <div className="bg-[#0a101d] border border-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl text-left font-sans">
+            <h3 className="font-mono text-xs font-extrabold text-white pb-3 border-b border-gray-850 flex items-center gap-2">
+              ⚠️ {confirmModal.title}
+            </h3>
+            <p className="text-[11px] text-gray-300 font-sans mt-4 leading-relaxed whitespace-pre-line">
+              {confirmModal.message}
+            </p>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                type="button"
+                className="py-1.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-gray-300 font-mono text-[10px] uppercase font-bold cursor-pointer border-0 transition-all select-none"
+                onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+              >
+                {confirmModal.cancelText || "Cancelar"}
+              </button>
+              <button
+                type="button"
+                className={`py-1.5 px-5 rounded-lg text-white font-mono text-[10px] uppercase font-bold cursor-pointer border-0 transition-all select-none ${
+                  confirmModal.isDanger
+                    ? 'bg-red-600 hover:bg-red-700 active:scale-95 shadow-lg shadow-red-900/20'
+                    : 'bg-purple-600 hover:bg-purple-700 active:scale-95 shadow-lg shadow-purple-900/20'
+                }`}
+                onClick={() => {
+                  confirmModal.onConfirm();
+                  setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                }}
+              >
+                {confirmModal.confirmText || "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Toast/Notification Snackbar Overlay */}
+      {notification && (
+        <div className="fixed bottom-5 right-5 z-[9999] p-4 rounded-xl border flex items-center gap-3 shadow-2xl font-mono text-xs max-w-sm bg-[#090f1d] border-purple-900/50">
+          <div className="flex-1 text-white pr-2 text-left">
+            <span className="block text-[9px] font-bold text-gray-400 uppercase tracking-widest">
+              SaaS SYSTEM NOTIFICATION
+            </span>
+            <span className="text-[11px] text-gray-200 mt-1 block leading-tight">
+              {notification.message}
+            </span>
+          </div>
+          <button
+            onClick={() => setNotification(null)}
+            className="text-gray-500 hover:text-white transition-colors cursor-pointer text-xs font-bold font-sans border-0 bg-transparent p-1"
+          >
+            ✕
+          </button>
         </div>
       )}
 
