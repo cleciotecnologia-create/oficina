@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Package, 
   Plus, 
@@ -17,7 +17,9 @@ import {
   Edit,
   Calculator,
   TrendingUp,
-  MessageSquare
+  MessageSquare,
+  Barcode,
+  Camera
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Produto, Fornecedor } from '../types';
@@ -98,6 +100,101 @@ export const EstoqueView: React.FC = () => {
   // CSV Import state
   const [csvFileSelected, setCsvFileSelected] = useState<boolean>(false);
   const [csvFeedback, setCsvFeedback] = useState<string | null>(null);
+
+  // Barcode helper states & quick scan simulated triggers
+  const [showStockScannerModal, setShowStockScannerModal] = useState(false);
+  const [stockScannerTarget, setStockScannerTarget] = useState<'new' | 'edit'>('new');
+  const [stockScanToast, setStockScanToast] = useState<string | null>(null);
+
+  const playStockBeeper = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1450, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } catch(e){}
+  };
+
+  const handleGenerateEan = (target: 'new' | 'edit') => {
+    let randCode = "789" + Math.floor(100000000 + Math.random() * 900000000).toString();
+    let sum = 0;
+    for (let i = 0; i < 12; i++) {
+      sum += parseInt(randCode[i]) * (i % 2 === 0 ? 1 : 3);
+    }
+    let checkDigit = (10 - (sum % 10)) % 10;
+    randCode += checkDigit.toString();
+
+    playStockBeeper();
+    
+    if (target === 'new') {
+      setNewProdBarcode(randCode);
+    } else {
+      setEditingProdBarcode(randCode);
+    }
+
+    setStockScanToast(`Código Auto-Gerado: ${randCode}`);
+    setTimeout(() => setStockScanToast(null), 2500);
+  };
+
+  // Keyboard rapid-typing scanner listener for physical gun inside inventory adding
+  useEffect(() => {
+    let rawBuffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+      lastKeyTime = currentTime;
+
+      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') {
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        const barcodeText = rawBuffer.trim();
+        if (barcodeText.length >= 3) {
+          playStockBeeper();
+          
+          if (editingProdId) {
+            setEditingProdBarcode(barcodeText);
+            setStockScanToast(`Bipado (Edição): ${barcodeText}`);
+            setTimeout(() => setStockScanToast(null), 3000);
+          } else {
+            setNewProdBarcode(barcodeText);
+            setStockScanToast(`Bipado (Novo Cadastro): ${barcodeText}`);
+            setTimeout(() => setStockScanToast(null), 3000);
+          }
+          rawBuffer = '';
+          e.preventDefault();
+        }
+        rawBuffer = '';
+        return;
+      }
+
+      if (e.key.length === 1) {
+        const activeEl = document.activeElement;
+        const isInput = activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement;
+        
+        if (timeDiff > 120 && !isInput) {
+          rawBuffer = '';
+        }
+        rawBuffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [editingProdId]);
 
   // Filter products
   const filteredProducts = produtos.filter(p => {
@@ -517,13 +614,27 @@ export const EstoqueView: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col gap-1">
-                  <label className="text-[10px] font-mono text-gray-400">CÓDIGO DE BARRAS (EAN)</label>
-                  <input 
-                    type="text" 
-                    value={editingProdBarcode}
-                    onChange={(e) => setEditingProdBarcode(e.target.value)}
-                    className="bg-[#080c16] border border-gray-700 rounded-lg p-2 text-xs text-white font-mono"
-                  />
+                  <div className="flex justify-between items-center">
+                    <label className="text-[10px] font-mono text-gray-400">CÓDIGO DE BARRAS (EAN)</label>
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateEan('edit')}
+                      className="text-[9px] font-mono bg-purple-950/40 text-purple-300 border border-purple-900/40 hover:bg-purple-600 hover:text-white px-1.5 py-0.5 rounded transition-all cursor-pointer font-bold uppercase"
+                      title="Auto-gerar código de barras"
+                    >
+                      ⚡ Gerar EAN
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Barcode className="absolute left-2.5 top-2.5 w-4 h-4 text-purple-500/60" />
+                    <input 
+                      type="text" 
+                      value={editingProdBarcode}
+                      onChange={(e) => setEditingProdBarcode(e.target.value)}
+                      placeholder="Sem código [Digite ou Bipe]"
+                      className="bg-[#080c16] border border-gray-750 border-gray-700 rounded-lg p-2 pl-9 text-xs text-white font-mono w-full"
+                    />
+                  </div>
                 </div>
 
                 <div className="col-span-1 sm:col-span-2 flex flex-col gap-1">
@@ -1048,14 +1159,35 @@ export const EstoqueView: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-400">CÓDIGO DE BARRAS (EAN)</label>
-              <input 
-                type="text"
-                placeholder="Ex: 7891002003001"
-                value={newProdBarcode}
-                onChange={(e) => setNewProdBarcode(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono"
-              />
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-mono text-gray-400">CÓDIGO DE BARRAS (EAN)</label>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateEan('new')}
+                    className="text-[9px] font-mono bg-[#1a0f30]/60 text-purple-300 border border-purple-900/40 hover:bg-purple-600 hover:text-white px-2 py-0.5 rounded transition-all cursor-pointer font-bold uppercase"
+                  >
+                    ⚡ GERAR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { playStockBeeper(); setStockScannerTarget('new'); setShowStockScannerModal(true); }}
+                    className="text-[9px] font-mono bg-red-950/40 text-red-400 border border-red-900/40 hover:bg-red-650 hover:text-white px-2 py-0.5 rounded transition-all cursor-pointer font-bold uppercase flex items-center gap-0.5"
+                  >
+                    <Camera className="w-2.5 h-2.5" /> SCAN
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                <Barcode className="absolute left-3 top-3 w-4 h-4 text-red-500/60" />
+                <input 
+                  type="text"
+                  placeholder="Bipe com leitor óptico ou digite..."
+                  value={newProdBarcode}
+                  onChange={(e) => setNewProdBarcode(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 pl-9 text-xs text-white font-mono w-full font-bold"
+                />
+              </div>
             </div>
 
             <div className="md:col-span-2 flex flex-col gap-1">
@@ -1257,6 +1389,120 @@ export const EstoqueView: React.FC = () => {
           >
             🚀 PROCESSAR IMPORTAÇÃO DE PRODUTOS
           </button>
+        </div>
+      )}
+
+      {/* 🚀 INVENTORY BARCODE SUCCESS TOAST POPUP */}
+      {stockScanToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#160d2d] border-2 border-purple-500 rounded-xl p-4 shadow-[0_4px_25px_rgba(147,51,234,0.30)] flex items-center gap-3 max-w-sm animate-bounce text-left">
+          <div className="p-2.5 rounded-full bg-purple-950 text-purple-300">
+            <Barcode className="w-6 h-6 animate-pulse" />
+          </div>
+          <div>
+            <span className="text-[9px] font-mono text-purple-300 block font-bold uppercase tracking-wider">⚡ DETECTOR ASSISTIDO</span>
+            <p className="text-xs text-white font-bold leading-tight">{stockScanToast}</p>
+            <span className="text-[10px] text-gray-400 font-mono mt-0.5 block">Pronto para cadastro / Gravação</span>
+          </div>
+        </div>
+      )}
+
+      {/* 📹 INVENTORY ADVANCED SIMULATOR BARCODE SCAN MODAL */}
+      {showStockScannerModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm text-left">
+          <div className="bg-[#0b101d] border border-gray-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative flex flex-col gap-5">
+            
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="bg-purple-950/40 border border-purple-900 border-dashed text-purple-400 font-mono text-[9px] uppercase tracking-widest font-extrabold px-2.5 py-1 rounded w-max">
+                  🎥 MÓDULO ÓPTICO RECEPTOR
+                </span>
+                <h3 className="text-base font-display font-extrabold text-white mt-2 flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-purple-400 animate-pulse" />
+                  Escanear código de barras para {stockScannerTarget === 'new' ? 'Novo Produto' : 'Edição'}
+                </h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowStockScannerModal(false)}
+                className="text-gray-400 hover:text-white bg-slate-900/40 hover:bg-slate-800 border border-gray-800 rounded-xl p-2 cursor-pointer transition-colors"
+              >
+                X
+              </button>
+            </div>
+
+            {/* Visual Camera Scan Line & Target grid */}
+            <div className="bg-slate-950 border border-purple-900/10 rounded-2xl p-4 flex flex-col items-center justify-center relative overflow-hidden h-44">
+              <div className="absolute inset-0 bg-[#030712] border-2 border-dashed border-purple-950/40 rounded-xl flex items-center justify-center pointer-events-none">
+                <div className="w-40 h-20 border border-purple-500/30 rounded flex items-center justify-center relative">
+                  <div className="absolute left-0 right-0 h-[2px] bg-purple-500 shadow-[0_0_8px_rgba(168,85,247,0.7)] animate-bounce" style={{ animationDuration: '2s' }} />
+                  <div className="flex gap-0.5 items-center opacity-25 select-none">
+                    <div className="w-1 h-12 bg-white" />
+                    <div className="w-0.5 h-12 bg-white" />
+                    <div className="w-1 h-12 bg-white" />
+                    <div className="w-1.5 h-12 bg-white" />
+                    <div className="w-0.5 h-12 bg-white" />
+                    <div className="w-1 h-12 bg-white" />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="z-10 bg-slate-900/90 p-2 rounded border border-gray-800 text-center mt-6">
+                <span className="text-[9px] font-mono text-purple-300 uppercase tracking-widest block animate-pulse">● Câmera Ativa</span>
+                <span className="text-[9px] text-gray-400 block max-w-[240px] leading-tight">Mire o código de barras ou use as amostras abaixo para importar.</span>
+              </div>
+            </div>
+
+            {/* Simulated target shortcuts to instantly fill the input */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] font-mono font-bold text-gray-400">AMOSTRE UM PRODUTO PADRÃO DO MERCADO:</span>
+              
+              <div className="grid grid-cols-1 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                {[
+                  { name: "Pastilhas de Freio Bosch Premium", code: "7891002003001" },
+                  { name: "Filtro de Óleo Fram ExtraGuard", code: "7892201103002" },
+                  { name: "Óleo de Motor Castrol Magnatec 5W30", code: "7891102203301" },
+                  { name: "Jogo de Velas de Ignição NGK Iridium", code: "7893004005001" },
+                  { name: "Bucha da Barra Estabilizadora Cofap", code: "7894506007001" }
+                ].map((item, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      playStockBeeper();
+                      if (stockScannerTarget === 'new') {
+                        setNewProdBarcode(item.code);
+                      } else {
+                        setEditingProdBarcode(item.code);
+                      }
+                      setStockScanToast(`Código ${item.code} atribuído com sucesso!`);
+                      setTimeout(() => setStockScanToast(null), 2500);
+                      setShowStockScannerModal(false);
+                    }}
+                    className="p-2 rounded bg-[#0c1223] border border-gray-850 hover:border-purple-500/30 font-sans text-xs text-left text-white flex justify-between items-center transition-all cursor-pointer"
+                  >
+                    <div>
+                      <span className="font-bold block">{item.name}</span>
+                      <span className="text-[9px] text-gray-450 font-mono text-slate-400">Código EAN: {item.code}</span>
+                    </div>
+                    <span className="text-[10px] bg-purple-950 text-purple-400 px-2 py-0.5 rounded border border-purple-900/40 uppercase font-mono tracking-widest font-extrabold font-bold">
+                      BIPAR
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-gray-850 pt-3">
+              <button 
+                type="button"
+                onClick={() => setShowStockScannerModal(false)}
+                className="py-2 px-4 bg-slate-900 hover:bg-slate-800 text-gray-400 hover:text-white font-mono text-[10px] uppercase font-bold border border-gray-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Voltar
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 

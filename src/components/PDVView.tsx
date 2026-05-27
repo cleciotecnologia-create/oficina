@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ShoppingBag, 
   Search, 
@@ -23,7 +23,9 @@ import {
   Percent,
   CheckCircle,
   HelpCircle,
-  X
+  X,
+  Camera,
+  Sparkles
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Produto, Servico, Cliente, SaleItem } from '../types';
@@ -52,6 +54,30 @@ export const PDVView: React.FC = () => {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'Cartão' | 'Dinheiro'>('PIX');
   const [commissionPct, setCommissionPct] = useState(5); // Default 5% seller fee
+  
+  // Barcode and Simulated optical scanner states
+  const [showBarcodeModal, setShowBarcodeModal] = useState(false);
+  const [scanToast, setScanToast] = useState<{ show: boolean; message: string; code: string }>({ show: false, message: '', code: '' });
+  const [simulationCategory, setSimulationCategory] = useState<string>('Todas');
+
+  const playScannerBeep = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1450, ctx.currentTime);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.09);
+    } catch (err) {
+      console.warn('Audio Context failed or blocked:', err);
+    }
+  };
   
   // Workshop linked OS tracking
   const [linkedOSId, setLinkedOSId] = useState<string | null>(null);
@@ -176,13 +202,78 @@ export const PDVView: React.FC = () => {
     }
   };
 
+  // Global Keyboard listener for physical handheld USB barcode scanners
+  useEffect(() => {
+    let rawBuffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+      lastKeyTime = currentTime;
+
+      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') {
+        return;
+      }
+
+      if (e.key === 'Enter') {
+        const barcodeText = rawBuffer.trim();
+        if (barcodeText.length >= 3) {
+          const found = produtos.find(p => p.barcode === barcodeText || p.internalSku.toLowerCase() === barcodeText.toLowerCase());
+          if (found) {
+            e.preventDefault();
+            playScannerBeep();
+            handleAddToBasket(found);
+            setScanToast({
+              show: true,
+              message: `Leitor Óptico Detectou: ${found.name}`,
+              code: barcodeText
+            });
+            setTimeout(() => {
+              setScanToast(prev => ({ ...prev, show: false }));
+            }, 3000);
+            rawBuffer = '';
+            
+            if (document.activeElement instanceof HTMLElement) {
+              document.activeElement.blur();
+            }
+          }
+        }
+        rawBuffer = '';
+        return;
+      }
+
+      if (e.key.length === 1) {
+        const activeElPlaceholder = document.activeElement?.getAttribute('placeholder') || '';
+        const isEditingBarcodeField = activeElPlaceholder.includes('Código de barras') || activeElPlaceholder.includes('SKU');
+        
+        if (timeDiff > 120 && !isEditingBarcodeField) {
+          rawBuffer = '';
+        }
+        rawBuffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [produtos, basket]);
+
   // Quick scan simulation
   const handleBarcodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!barcodeInput.trim()) return;
     const found = produtos.find(p => p.barcode === barcodeInput || p.internalSku.toLowerCase() === barcodeInput.toLowerCase());
     if (found) {
+      playScannerBeep();
       handleAddToBasket(found);
+      setScanToast({
+        show: true,
+        message: `Peça Registrada: ${found.name}`,
+        code: found.barcode || found.internalSku
+      });
+      setTimeout(() => setScanToast(prev => ({ ...prev, show: false })), 2500);
       setBarcodeInput('');
     } else {
       alert("Nenhuma peça cadastrada com este código de barras ou SKU!");
@@ -363,24 +454,35 @@ export const PDVView: React.FC = () => {
           </div>
 
           {/* Barcode Quick Submission Filter */}
-          <form onSubmit={handleBarcodeSubmit} className="flex gap-2 w-full sm:w-auto">
-            <div className="relative flex-1 sm:flex-none">
-              <Barcode className="absolute left-3 top-2.5 w-4 h-4 text-gray-500" />
-              <input 
-                type="text" 
-                placeholder="Código de barras ou SKU..."
-                value={barcodeInput}
-                onChange={(e) => setBarcodeInput(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 pl-9 text-xs focus:outline-none focus:border-red-500 text-white font-mono w-full sm:w-48 placeholder-gray-600"
-              />
-            </div>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-stretch sm:items-center">
+            <form onSubmit={handleBarcodeSubmit} className="flex gap-2 flex-1 sm:flex-none">
+              <div className="relative flex-1 sm:flex-none">
+                <Barcode className="absolute left-3 top-2.5 w-4 h-4 text-gray-500 animate-pulse" />
+                <input 
+                  type="text" 
+                  placeholder="Código de barras ou SKU..."
+                  value={barcodeInput}
+                  onChange={(e) => setBarcodeInput(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 pl-9 text-xs focus:outline-none focus:border-red-500 text-white font-mono w-full sm:w-44 placeholder-gray-600"
+                />
+              </div>
+              <button 
+                type="submit" 
+                className="px-2.5 bg-red-950/20 text-red-400 text-xs font-bold font-mono rounded-lg border border-red-900/40 hover:bg-red-600 hover:text-white transition-all cursor-pointer select-none"
+              >
+                BIPAR
+              </button>
+            </form>
+            
             <button 
-              type="submit" 
-              className="px-3 bg-red-950/20 text-red-400 text-xs font-bold font-mono rounded-lg border border-red-900/40 hover:bg-red-600 hover:text-white transition-all cursor-pointer"
+              type="button"
+              onClick={() => { playScannerBeep(); setShowBarcodeModal(true); }}
+              className="flex items-center justify-center gap-1.5 py-2 px-3 bg-red-600 text-white hover:bg-red-700 text-xs font-bold font-mono rounded-lg transition-all cursor-pointer shadow-md shadow-red-950/20 select-none uppercase tracking-wide"
             >
-              BUSCAR
+              <Camera className="w-3.5 h-3.5 font-bold" />
+              <span>Câmera / Scanner</span>
             </button>
-          </form>
+          </div>
         </div>
 
         {/* Tab Controls: Products / Services */}
@@ -1012,6 +1114,177 @@ export const PDVView: React.FC = () => {
                 className="flex-1 py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center"
               >
                 Fechar Recibo
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+ 
+      {/* 🔮 GLOBAL SCAN SUCCESS FLOATING TOAST POPUP */}
+      {scanToast.show && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#061e14] border-2 border-emerald-500 rounded-xl p-4 shadow-[0_4px_25px_rgba(16,185,129,0.3)] flex items-center gap-3 max-w-sm animate-bounce text-left">
+          <div className="p-2.5 rounded-full bg-emerald-950 text-emerald-400">
+            <Barcode className="w-6 h-6 animate-pulse" />
+          </div>
+          <div>
+            <span className="text-[9px] font-mono text-emerald-400 block font-bold uppercase tracking-wider">⚡ LEITOR DE CÓDIGO ATIVO</span>
+            <p className="text-xs text-white font-bold leading-tight">{scanToast.message}</p>
+            <span className="text-[10px] text-gray-400 font-mono mt-0.5 block">EAN/SKU: {scanToast.code}</span>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setScanToast({ ...scanToast, show: false })}
+            className="text-gray-400 hover:text-white p-1 ml-auto"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* 📹 ADVANCED CAMERA & SIMULATION BARCODE SCAN MODAL */}
+      {showBarcodeModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm text-left">
+          <div className="bg-[#0b101d] border border-gray-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col gap-5">
+            
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="bg-red-950/40 border border-red-900 border-dashed text-red-500 font-mono text-[9px] uppercase tracking-widest font-extrabold px-2.5 py-1 rounded w-max">
+                  🎥 MÓDULO ÓPTICO DE CAPTURA
+                </span>
+                <h3 className="text-lg font-display font-extrabold text-white mt-2 flex items-center gap-2">
+                  <Camera className="w-5 h-5 text-red-500 animate-pulse" />
+                  Módulo Integrado: Scanner de Código de Barras
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Funciona com qualquer leitor físico USB (Bipe e adicione em qualquer lugar) ou utilize o simulador de câmera de checkout abaixo.
+                </p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowBarcodeModal(false)}
+                className="text-gray-400 hover:text-white bg-slate-900/40 hover:bg-slate-800 border border-gray-800 rounded-xl p-2 cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Virtual Camera Viewfinder & Sound Testing Console */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              
+              {/* Box 1: Beautiful animated laser viewfinder */}
+              <div className="bg-slate-950 border border-red-900/30 rounded-2xl p-5 flex flex-col items-center justify-center relative overflow-hidden h-60">
+                {/* Visual Camera Scan Line & Target grid */}
+                <div className="absolute inset-0 bg-[#030712] border-4 border-dashed border-gray-900/60 rounded-xl flex items-center justify-center pointer-events-none">
+                  <div className="w-48 h-28 border-2 border-red-600/40 rounded flex items-center justify-center relative">
+                    <div className="absolute left-0 right-0 h-[3px] bg-red-600 shadow-[0_0_12px_rgba(220,38,38,0.85)] animate-bounce" style={{ animationDuration: '2.5s' }} />
+                    <div className="absolute top-2 left-2 w-3.5 h-3.5 border-t-2 border-l-2 border-red-500" />
+                    <div className="absolute top-2 right-2 w-3.5 h-3.5 border-t-2 border-r-2 border-red-500" />
+                    <div className="absolute bottom-2 left-2 w-3.5 h-3.5 border-b-2 border-l-2 border-red-500" />
+                    <div className="absolute bottom-2 right-2 w-3.5 h-3.5 border-b-2 border-r-2 border-red-500" />
+                    
+                    <div className="flex gap-1 items-center opacity-30 select-none">
+                      <div className="w-1.5 h-16 bg-white" />
+                      <div className="w-0.5 h-16 bg-white" />
+                      <div className="w-1.5 h-16 bg-white" />
+                      <div className="w-2.5 h-16 bg-white" />
+                      <div className="w-0.5 h-16 bg-white" />
+                      <div className="w-1.5 h-16 bg-white" />
+                      <div className="w-2 h-16 bg-white" />
+                      <div className="w-0.5 h-16 bg-white" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="z-10 bg-slate-950 p-3 rounded-lg border border-gray-800 max-w-xs flex flex-col gap-1.5 text-center mt-12 shadow-lg">
+                  <span className="text-[10px] font-mono font-bold text-red-400 uppercase tracking-widest animate-pulse">● Câmera Virtual Ativa</span>
+                  <span className="text-[9.5px] text-gray-400">Posicione o código de barras no feixe de laser vermelho para captura ótica automática.</span>
+                </div>
+              </div>
+
+              {/* Box 2: Quick sim click list & configuration */}
+              <div className="bg-[#060a12]/50 border border-gray-850 rounded-2xl p-4 flex flex-col gap-3 h-60 overflow-y-auto">
+                <div className="flex justify-between items-center pb-2 border-b border-gray-800">
+                  <span className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wide">💡 AMOSTRE EM TELA PARA PIPAR</span>
+                  <span className="text-[9px] text-slate-500 font-bold">Mire e clique no produto</span>
+                </div>
+
+                {/* Categories of shortcuts */}
+                <div className="flex gap-1.5 flex-wrap">
+                  {['Todas', 'Freios', 'Filtros', 'Lubrificantes', 'Suspensão'].map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSimulationCategory(cat)}
+                      className={`px-2 py-0.5 text-[9px] font-mono font-bold rounded cursor-pointer ${
+                        simulationCategory === cat ? 'bg-red-950 border border-red-900 text-red-400' : 'bg-slate-950 text-gray-500 hover:text-white'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Filtered list of products */}
+                <div className="flex flex-col gap-1.5 mt-1">
+                  {produtos
+                    .filter(p => simulationCategory === 'Todas' || p.category === simulationCategory)
+                    .map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => {
+                          playScannerBeep();
+                          handleAddToBasket(p);
+                          setScanToast({
+                            show: true,
+                            message: `Simulador detectou: Adicionado ${p.name}`,
+                            code: p.barcode || p.internalSku
+                          });
+                          setTimeout(() => setScanToast(prev => ({ ...prev, show: false })), 2000);
+                        }}
+                        className="py-1.5 px-2.5 rounded bg-slate-950/65 hover:bg-slate-900 border border-gray-850 hover:border-red-900/50 flex justify-between items-center text-left text-[11px] text-white transition-all cursor-pointer font-sans"
+                      >
+                        <div className="flex flex-col truncate pr-2">
+                          <span className="font-bold truncate">{p.name}</span>
+                          <span className="text-[9px] font-mono text-slate-550 text-gray-400">EAN: {p.barcode || "N/A"} | SKU: {p.internalSku}</span>
+                        </div>
+                        <span className="text-[10px] font-mono font-extrabold text-emerald-400 shrink-0">
+                          R$ {p.sellPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+            </div>
+
+            {/* General setup guide for physical checkout hardware */}
+            <div className="bg-[#050912]/80 border border-red-950/30 rounded-2xl p-4 flex gap-3 text-left">
+              <span className="text-xl shrink-0 mt-0.5">🔌</span>
+              <div className="flex flex-col gap-1 text-[11px] text-gray-400 leading-normal font-sans">
+                <strong className="text-white">COMO VINCULAR LEITORES DE GAVETA / BALCÃO (BEMATECH, ELGIN, HONEYWELL):</strong>
+                <p>
+                  Basta conectar o leitor óptico via porta USB ou parear por Bluetooth em seu computador ou tablet. O computador entenderá o leitor como um teclado padrão. Com o PDV aberto, <strong>qualquer bipe físico adicionará o item instantaneamente ao carrinho operacional</strong> com som de aviso, sem precisar focar em campos.
+                </p>
+              </div>
+            </div>
+
+            {/* Simple footer buttons */}
+            <div className="flex justify-end gap-2 border-t border-gray-850 pt-3">
+              <button 
+                type="button"
+                onClick={() => playScannerBeep()}
+                className="py-2 px-4 bg-slate-950 hover:bg-slate-900 text-gray-400 hover:text-white font-mono text-[10px] uppercase font-bold border border-gray-800 rounded-xl transition-colors cursor-pointer"
+              >
+                🔊 Testar Som Bipe
+              </button>
+              <button 
+                type="button"
+                onClick={() => setShowBarcodeModal(false)}
+                className="py-2 px-5 bg-red-650 bg-red-600 hover:bg-red-700 text-white font-mono text-[10.5px] font-extrabold rounded-xl transition-colors cursor-pointer border-0 select-none uppercase font-bold"
+              >
+                Concluir Captura
               </button>
             </div>
 
