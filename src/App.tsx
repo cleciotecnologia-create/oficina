@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { AppProvider, useApp } from './context/AppContext';
 import { LandingPage } from './components/LandingPage';
 import { DashboardView } from './components/DashboardView';
@@ -11,6 +12,7 @@ import { FinanceiroView } from './components/FinanceiroView';
 import { RelatoriosView } from './components/RelatoriosView';
 import { ConfigView } from './components/ConfigView';
 import { SuperAdminView } from './components/SuperAdminView';
+import { ManualView } from './components/ManualView';
 
 import { 
   Wrench, 
@@ -37,7 +39,12 @@ import {
   ShieldAlert,
   WifiOff,
   RefreshCw,
-  Hammer
+  Hammer,
+  Mail,
+  User,
+  BookOpen,
+  Bell,
+  AlertCircle
 } from 'lucide-react';
 
 function AppContent() {
@@ -47,6 +54,8 @@ function AppContent() {
     setUser,
     setCompany,
     loginWithGoogle, 
+    loginWithEmail,
+    registerWithEmail,
     loginDemo, 
     logout, 
     loading, 
@@ -56,14 +65,22 @@ function AppContent() {
     isOnline,
     pendingActionsCount,
     syncPendingActions,
-    syncing
+    syncing,
+    ordensServico
   } = useApp();
 
-  const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin'>('landing');
+  const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual'>('landing');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   
-  // AI Co-Pilot Chat
+  // Email & Password Auth State
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [userName, setUserName] = useState('');
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authFeedback, setAuthFeedback] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
     { role: 'assistant', text: 'Olá! Sou o Assistente Técnico Integrado AutoTech. Posso tirar dúvidas sobre torque de cabeçote, diagnósticos OBD-II, compatibilidade de peças e até sugerir mensagens de WhatsApp de cobrança. Como posso te auxiliar?' }
@@ -80,6 +97,7 @@ function AppContent() {
       case 'crm': return <CRMView />;
       case 'finance': return <FinanceiroView />;
       case 'reports': return <RelatoriosView />;
+      case 'manual': return <ManualView />;
       case 'settings': return <ConfigView />;
       case 'superadmin': return <SuperAdminView />;
       default: return <DashboardView />;
@@ -97,6 +115,34 @@ function AppContent() {
     // Fetch from AI endpoint in context
     const response = await sendChatMessage([...chatMessages, userMsg]);
     setChatMessages(prev => [...prev, { role: 'assistant', text: response }]);
+  };
+
+  const handleEmailAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setAuthFeedback("Por favor, preencha todos os campos.");
+      return;
+    }
+    if (authMode === 'register' && !userName) {
+      setAuthFeedback("Por favor, preencha seu nome.");
+      return;
+    }
+    setAuthSubmitting(true);
+    setAuthFeedback(null);
+    try {
+      if (authMode === 'login') {
+        await loginWithEmail(email, password);
+        setActiveRoute('dashboard');
+      } else {
+        await registerWithEmail(email, password, userName);
+        setActiveRoute('dashboard');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAuthFeedback(err.message || "Erro de credenciais ou rede.");
+    } finally {
+      setAuthSubmitting(false);
+    }
   };
 
   // 1. Loading Overlay state
@@ -128,10 +174,10 @@ function AppContent() {
   if (!user) {
     return (
       <div className="min-h-screen bg-[#060913] flex flex-col justify-center items-center p-4 bg-radial-[circle_at_bottom_left] from-red-950/10 via-[#060913]">
-        <div className="max-w-sm w-full glass-panel p-8 rounded-2xl border border-gray-800 shadow-2xl relative text-left">
+        <div className="max-w-md w-full glass-panel p-8 rounded-2xl border border-gray-800 shadow-2xl relative text-left bg-[#0c1223]/90 backdrop-blur-md">
           
-          <div className="flex justify-center items-center gap-2 mb-8">
-            <div className="w-10 h-10 rounded-xl bg-red-650 bg-red-600 flex items-center justify-center">
+          <div className="flex justify-center items-center gap-2 mb-6">
+            <div className="w-10 h-10 rounded-xl bg-red-650 bg-red-600 flex items-center justify-center shadow-[0_0_15px_rgba(220,38,38,0.4)]">
               <Wrench className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -140,38 +186,145 @@ function AppContent() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 text-center">
-            <h2 className="text-lg font-bold text-white font-sans">Acesse o Sistema Administrativo</h2>
-            <p className="text-xs text-gray-400">Configure com o Google Auth para começar a gerenciar sua mecânica com persistência.</p>
-
-            <button 
-              onClick={loginWithGoogle}
-              className="w-full mt-2 py-3 bg-white text-black font-semibold rounded-xl text-xs flex items-center justify-center gap-2 border border-gray-200 shadow-sm cursor-pointer"
-            >
-              <Cpu className="w-4 h-4 text-red-500" />
-              Entrar com Google Cloud Auth
-            </button>
-
-            <div className="relative my-2">
-              <span className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-800"></span></span>
-              <span className="relative bg-[#0c1223] px-3 text-[10px] text-gray-500 font-mono uppercase">Ou experimente o pátio</span>
+          <div className="flex flex-col gap-4">
+            <div className="flex bg-[#050812] p-1 rounded-lg border border-gray-900 mb-2">
+              <button
+                type="button"
+                id="btn-switch-login"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthFeedback(null);
+                }}
+                className={`flex-1 py-1.5 text-center text-xs font-mono font-bold uppercase rounded-md transition-all cursor-pointer ${authMode === 'login' ? 'bg-red-600 text-white shadow-md' : 'text-gray-400 hover:text-white bg-transparent'}`}
+              >
+                Fazer Login
+              </button>
+              <button
+                type="button"
+                id="btn-switch-register"
+                onClick={() => {
+                  setAuthMode('register');
+                  setAuthFeedback(null);
+                }}
+                className={`flex-1 py-1.5 text-center text-xs font-mono font-bold uppercase rounded-md transition-all cursor-pointer ${authMode === 'register' ? 'bg-red-600 text-white shadow-md' : 'text-gray-400 hover:text-white bg-transparent'}`}
+              >
+                Criar Conta
+              </button>
             </div>
 
-            <button 
-              onClick={async () => {
-                await loginDemo();
-                setActiveRoute('dashboard');
-              }}
-              className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs tracking-widest font-mono cursor-pointer shadow-lg shadow-red-950/40"
-            >
-              🔓 ENTRAR DE MODO DEMONSTRATIVO
-            </button>
+            <div className="text-center mb-1">
+              <h2 className="text-md font-bold text-white font-sans">
+                {authMode === 'login' ? 'Identifique-se para acessar' : 'Crie sua nova conta de oficina'}
+              </h2>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                {authMode === 'login' 
+                  ? 'Acesse com suas credenciais ou integre com Google.' 
+                  : 'Preencha seus dados para habilitar sua sandbox isolada.'}
+              </p>
+            </div>
 
-            {loginError && (
-              <span className="text-[10px] text-red-400 font-mono bg-red-950/20 p-2.5 rounded border border-red-900/30">
-                {loginError}
-              </span>
-            )}
+            <form onSubmit={handleEmailAuthSubmit} className="flex flex-col gap-3">
+              {authMode === 'register' && (
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="reg-name" className="text-[10px] text-gray-400 font-mono uppercase font-bold tracking-wider">Seu Nome</label>
+                  <div className="relative">
+                    <User className="absolute left-3.5 top-2.5 w-4 h-4 text-gray-500" />
+                    <input
+                      id="reg-name"
+                      type="text"
+                      placeholder="Ex: Clécio Santos"
+                      value={userName}
+                      onChange={(e) => setUserName(e.target.value)}
+                      className="w-full bg-[#050810] border border-gray-800 rounded-xl py-2 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-red-500 transition-colors"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="auth-email" className="text-[10px] text-gray-400 font-mono uppercase font-bold tracking-wider">E-mail Corporativo</label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-2.5 w-4 h-4 text-gray-500" />
+                  <input
+                    id="auth-email"
+                    type="email"
+                    placeholder="email@mecanica.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-[#050810] border border-gray-800 rounded-xl py-2 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-red-500 transition-colors"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="auth-pass" className="text-[10px] text-gray-400 font-mono uppercase font-bold tracking-wider">Sua Senha</label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-2.5 w-4 h-4 text-gray-500" />
+                  <input
+                    id="auth-pass"
+                    type="password"
+                    placeholder="Sua senha secreta"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-[#050810] border border-gray-800 rounded-xl py-2 pl-10 pr-4 text-xs text-white focus:outline-none focus:border-red-500 transition-colors"
+                    required
+                  />
+                </div>
+              </div>
+
+              {(authFeedback || loginError) && (
+                <div className="text-[10px] text-red-400 font-mono bg-red-950/25 p-2.5 rounded-lg border border-red-900/35 leading-tight">
+                  ⚠️ {authFeedback || loginError}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                id="btn-auth-submit"
+                disabled={authSubmitting}
+                className="w-full mt-1.5 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs tracking-widest font-mono cursor-pointer shadow-lg shadow-red-950/40 transition-all flex items-center justify-center gap-2"
+              >
+                {authSubmitting ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : authMode === 'login' ? (
+                  '🔐 ENTRAR COM EMAIL & SENHA'
+                ) : (
+                  '🚀 CADASTRAR & INICIALIZAR PATIO'
+                )}
+              </button>
+            </form>
+
+            <div className="relative my-1">
+              <span className="absolute inset-0 flex items-center"><span className="w-full border-t border-gray-850"></span></span>
+              <span className="relative bg-[#0c1223] px-3 text-[9px] text-gray-500 font-mono uppercase block text-center">Conexão Rapida & Opções</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button 
+                type="button"
+                id="btn-login-google"
+                onClick={loginWithGoogle}
+                className="py-2.5 bg-[#050810] hover:bg-slate-900 text-white font-medium rounded-xl text-[10px] flex items-center justify-center gap-1.5 border border-gray-800 shadow-sm cursor-pointer transition-colors"
+              >
+                <Cpu className="w-3.5 h-3.5 text-blue-400" />
+                Google Login
+              </button>
+
+              <button 
+                type="button"
+                id="btn-login-demo"
+                onClick={async () => {
+                  await loginDemo();
+                  setActiveRoute('dashboard');
+                }}
+                className="py-2.5 bg-[#050810] hover:bg-slate-900 text-cyan-400 hover:text-cyan-300 font-medium rounded-xl text-[10px] flex items-center justify-center gap-1.5 border border-gray-800 cursor-pointer transition-colors"
+              >
+                ⚡ Modo Demo
+              </button>
+            </div>
+
           </div>
 
         </div>
@@ -274,10 +427,124 @@ function AppContent() {
             </div>
           )}
 
+          {/* Notification Bell with 'Aguardando peça' trigger */}
+          {(() => {
+            const waitingPartsOS = ordensServico ? ordensServico.filter(os => os.status === 'Aguardando peça') : [];
+            return (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                  title="Alertas de Peças em Falta"
+                  className={`p-2 rounded-full relative transition-all cursor-pointer outline-none ${
+                    isNotificationOpen 
+                      ? 'bg-orange-950/35 text-orange-400 border border-orange-900/40' 
+                      : 'bg-slate-900 hover:bg-slate-800 text-gray-400 hover:text-white border border-gray-850'
+                  }`}
+                >
+                  <Bell className="w-4 h-4" />
+                  {waitingPartsOS.length > 0 && (
+                    <>
+                      <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full animate-ping" />
+                      <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] bg-orange-600 text-[8px] font-mono font-bold text-white flex items-center justify-center px-1 rounded-full border border-gray-950 shadow-md">
+                        {waitingPartsOS.length}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                <AnimatePresence>
+                  {isNotificationOpen && (
+                    <>
+                      {/* Invisible backdrop to close dropdown */}
+                      <div className="fixed inset-0 z-40" onClick={() => setIsNotificationOpen(false)} />
+                      
+                      <motion.div
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        transition={{ duration: 0.18 }}
+                        className="absolute right-0 mt-2.5 w-80 sm:w-96 bg-[#0c1223] border border-gray-800 rounded-2xl shadow-[0_10px_35px_rgba(0,0,0,0.6)] z-50 p-4 flex flex-col gap-3 text-left overflow-hidden"
+                      >
+                        {/* Header of dropdown */}
+                        <div className="flex justify-between items-center border-b border-gray-850 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-orange-500" />
+                            <span className="text-[10px] font-mono font-bold text-white uppercase tracking-wider">
+                              Peças em Falta ({waitingPartsOS.length})
+                            </span>
+                          </div>
+                          <span className="text-[9px] bg-orange-950/40 text-orange-400 border border-orange-900/30 rounded px-1.5 py-0.5 font-mono font-medium">
+                            Aguardando Peça
+                          </span>
+                        </div>
+
+                        {/* List container */}
+                        <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
+                          {waitingPartsOS.length > 0 ? (
+                            waitingPartsOS.map((os) => (
+                              <div 
+                                key={os.id}
+                                className="p-3 bg-gray-950/40 rounded-xl border border-gray-900 hover:border-orange-900/30 transition-all flex flex-col gap-2 relative group"
+                              >
+                                <div className="flex justify-between items-start">
+                                  <div className="flex flex-col">
+                                    <span className="text-[11px] font-bold text-white font-mono">{os.id}</span>
+                                    <span className="text-[10px] text-gray-400 mt-0.5 font-sans">
+                                      👤 {os.clienteName || "Sem cliente"}
+                                    </span>
+                                  </div>
+                                  <span className="text-[8px] font-mono text-gray-500">
+                                    {new Date(os.createdAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+
+                                <div className="p-2 bg-[#050912]/80 border border-gray-900 rounded-lg text-[10px] text-gray-400 font-mono">
+                                  <div className="text-[9px] text-gray-500 uppercase font-extrabold pb-0.5">Veículo:</div>
+                                  <div className="text-white truncate">{os.veiculoInfo || os.plate || "N/A"}</div>
+                                  <div className="text-[9px] text-gray-500 uppercase font-extrabold pt-1.5 pb-0.5">Diagnóstico Técnico:</div>
+                                  <div className="text-slate-300 truncate">{os.diagnosis || os.problem || "Falta especificação de peça"}</div>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 mt-1">
+                                  <button
+                                    onClick={() => {
+                                      setActiveRoute('os');
+                                      setIsNotificationOpen(false);
+                                    }}
+                                    className="flex-1 py-1.5 px-3 bg-orange-950/20 hover:bg-orange-950/40 border border-orange-900/30 text-[9px] font-mono font-bold text-orange-400 hover:text-white rounded-lg text-center transition-all cursor-pointer"
+                                  >
+                                    📞 Entrar em contato / Follow-Up Fornecedor
+                                  </button>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-6 flex flex-col items-center gap-2 text-gray-500 font-sans">
+                              <span className="p-2.5 rounded-full bg-green-950/20 text-green-500 border border-green-900/20">✔️</span>
+                              <span className="text-xs">Nenhuma O.S. pendente de peças!</span>
+                              <span className="text-[9px] font-mono text-gray-600">Oficina fluindo a 100% no pátio</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Footer message explaining */}
+                        <div className="text-[9px] text-gray-500 font-mono border-t border-gray-850 pt-2 flex items-center gap-1.5 leading-tight">
+                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0" />
+                          <span>Monitore faturamento, compre reposições a tempo e reduza dias ociosos no elevador!</span>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })()}
+
           {/* AI CoPilot Toggle Button */}
           <button 
             onClick={() => setIsAiDrawerOpen(!isAiDrawerOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 text-[10px] font-bold font-mono text-red-400 animate-pulse cursor-pointer shadow-inner"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-red-950/20 hover:bg-red-950/40 border border-red-900/30 text-[10px] font-bold font-mono text-red-100 animate-pulse cursor-pointer shadow-inner"
           >
             <Sparkles className="w-3.5 h-3.5 text-red-500" /> ✨ ASSISTENTE MECÂNICO COPILOT
           </button>
@@ -408,6 +675,13 @@ function AppContent() {
             </button>
 
             <button 
+              onClick={() => { setActiveRoute('manual'); setMobileSidebarOpen(false); }}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'manual' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
+            >
+              <BookOpen className="w-4 h-4 shrink-0" /> Manual do Sistema (eBook)
+            </button>
+
+            <button 
               onClick={() => { setActiveRoute('settings'); setMobileSidebarOpen(false); }}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'settings' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
             >
@@ -439,8 +713,19 @@ function AppContent() {
         </aside>
 
         {/* ACTIVE MODULE CONTAINER SHEET */}
-        <main className="flex-grow p-4 lg:p-8 overflow-x-hidden min-h-[calc(100vh-57px)] relative z-10">
-          {renderActiveView()}
+        <main className="flex-grow p-4 lg:p-8 overflow-x-hidden min-h-[calc(100vh-57px)] relative z-10 flex flex-col">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeRoute}
+              initial={{ opacity: 0, y: 12, filter: 'blur(4px)' }}
+              animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -12, filter: 'blur(4px)' }}
+              transition={{ duration: 0.22, ease: "easeInOut" }}
+              className="flex-grow flex flex-col w-full"
+            >
+              {renderActiveView()}
+            </motion.div>
+          </AnimatePresence>
         </main>
 
         {/* SLIDING GOOGLE GEMINI CHAT COPILOT DRAWER (RIGHT PANEL) */}

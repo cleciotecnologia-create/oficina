@@ -41,7 +41,10 @@ export const ConfigView: React.FC = () => {
     ordensServico,
     financeiro,
     fornecedores,
-    vendas
+    vendas,
+    autoBackups,
+    triggerDailyBackup,
+    deleteAutoBackup
   } = useApp();
 
   // Primary Company fields state
@@ -304,6 +307,22 @@ export const ConfigView: React.FC = () => {
         setIsGenerating(false);
       }
     }, 1200);
+  };
+
+  const handleDownloadAutoBackup = (backup: any) => {
+    try {
+      const blob = new Blob([backup.payload], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = backup.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Failed to download auto backup:", err);
+    }
   };
 
   // Main configuration save triggers database write helper
@@ -903,14 +922,106 @@ export const ConfigView: React.FC = () => {
               </div>
             )}
 
-            <button
-              onClick={handleExportBackup}
-              disabled={isGenerating}
-              className={`py-3 px-4 rounded-xl font-mono text-xs font-bold w-full flex items-center justify-center gap-2 cursor-pointer transition-all ${isGenerating ? 'bg-slate-800 text-gray-500' : 'bg-red-650 bg-red-600 hover:bg-red-700 text-white'}`}
-            >
-              <Download className="w-4 h-4" />
-              {isGenerating ? "GERANDO PACOTE..." : "EXPORTE BACKUP GERAL (JSON)"}
-            </button>
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={handleExportBackup}
+                disabled={isGenerating}
+                className={`py-3 px-4 rounded-xl font-mono text-xs font-bold w-full flex items-center justify-center gap-2 cursor-pointer transition-all ${isGenerating ? 'bg-slate-800 text-gray-500' : 'bg-red-650 bg-red-600 hover:bg-red-700 text-white'}`}
+              >
+                <Download className="w-4 h-4" />
+                {isGenerating ? "GERANDO PACOTE..." : "CRIAR BACKUP MANUAL IMEDIATO"}
+              </button>
+            </div>
+
+            {/* Daily Automated Backup Compliance & Log Section */}
+            <div className="border-t border-gray-800 pt-5 flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                <span className="font-mono text-[11px] font-bold text-gray-300 uppercase tracking-wider">Histórico de Auditoria Automática (Dump JSON)</span>
+              </div>
+
+              <p className="text-[10px] text-gray-400 font-sans leading-relaxed">
+                Em conformidade com as regras de <strong>Backup &amp; Segurança</strong>, o banco de dados é exportado de forma automática em formato <strong>JSON</strong> diariamente, ou sempre que uma nova sessão administrativa é iniciada em um novo dia.
+              </p>
+
+              <div className="bg-[#050912] border border-gray-900 rounded-xl p-3.5 flex flex-col gap-3">
+                <div className="flex justify-between items-center text-[10px] font-mono border-b border-gray-850 pb-2 text-gray-400">
+                  <span>FREQUÊNCIA CONFIGURADA:</span>
+                  <span className="text-emerald-500 bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-900/60 font-bold">DIÁRIA (AUTO)</span>
+                </div>
+                
+                <div className="flex justify-between items-center text-[10px] font-mono text-gray-400">
+                  <span>ÚLTIMA ROTINA EXECUTADA:</span>
+                  <strong className="text-white">
+                    {autoBackups.length > 0 ? autoBackups[0].date.substring(0, 10) : "Agendado para hoje"}
+                  </strong>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => triggerDailyBackup(true)}
+                  className="py-2 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded-lg text-[10px] font-mono text-cyan-400 font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer mt-1"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin-hover" />
+                  SIMULAR DISPARO DIÁRIO AGORA (TESTAR AUDITORIA)
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <span className="font-mono text-[10px] text-gray-500 uppercase tracking-wider block">Últimos Dumps de Exportação (Logs):</span>
+                
+                {autoBackups.length === 0 ? (
+                  <div className="p-4 bg-[#050912]/50 border border-dashed border-gray-850 rounded-xl text-center text-gray-500 font-mono text-[10px]">
+                    Nenhum dump diário automático gravado hoje ainda.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2 max-h-[220px] overflow-y-auto pr-1">
+                    {autoBackups.map((bak) => (
+                      <div 
+                        key={bak.id} 
+                        className="bg-[#050912] border border-gray-900 rounded-xl p-3 flex flex-col gap-2 transition-all hover:border-gray-800 text-xs font-mono"
+                      >
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-white font-bold text-[11px] truncate" title={bak.fileName}>
+                              {bak.fileName}
+                            </span>
+                            <span className="text-[9px] text-gray-500">
+                              Gerado em: {bak.date}
+                            </span>
+                          </div>
+                          <span className="shrink-0 bg-gray-900 text-gray-400 border border-gray-800 text-[9px] px-1.5 py-0.5 rounded-md font-bold">
+                            {bak.sizeKb} KB
+                          </span>
+                        </div>
+
+                        <div className="flex justify-between items-center gap-2 pt-1 border-t border-gray-950 text-[10px]">
+                          <span className="text-gray-400">
+                            {bak.totalRecords} registros auditados
+                          </span>
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadAutoBackup(bak)}
+                              className="text-emerald-500 hover:text-white bg-emerald-950/20 hover:bg-emerald-800/40 border border-emerald-900/40 px-2 py-0.5 rounded text-[9px] font-bold transition-colors cursor-pointer"
+                            >
+                              Baixar Dump
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteAutoBackup(bak.id)}
+                              className="text-red-400 hover:text-white bg-red-950/20 hover:bg-red-800/40 border border-red-900/30 px-2 py-0.5 rounded text-[9px] font-medium transition-colors cursor-pointer"
+                            >
+                              Excluir
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

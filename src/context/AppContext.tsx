@@ -16,7 +16,10 @@ import {
   GoogleAuthProvider, 
   signOut,
   User as FirebaseUser,
-  signInAnonymously
+  signInAnonymously,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile
 } from 'firebase/auth';
 import { db, auth, OperationType, handleFirestoreError } from '../lib/firebase';
 import { 
@@ -30,7 +33,9 @@ import {
   Fornecedor, 
   UserProfile, 
   Company, 
-  Venda 
+  Venda,
+  AutoBackupItem,
+  LocalAuditLog
 } from '../types';
 import { 
   INITIAL_COMPANY, 
@@ -63,6 +68,8 @@ interface AppContextType {
   
   // Actions
   loginWithGoogle: () => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  registerWithEmail: (email: string, pass: string, name: string) => Promise<void>;
   loginDemo: () => Promise<void>;
   logout: () => Promise<void>;
   
@@ -71,6 +78,8 @@ interface AppContextType {
   editCliente: (id: string, c: Partial<Cliente>) => Promise<void>;
   deleteCliente: (id: string) => Promise<void>;
   addVeiculo: (v: Omit<Veiculo, 'id' | 'empresaId'>) => Promise<void>;
+  editVeiculo: (id: string, v: Partial<Veiculo>) => Promise<void>;
+  deleteVeiculo: (id: string) => Promise<void>;
   addProduto: (p: Omit<Produto, 'id' | 'empresaId'>) => Promise<void>;
   updateProdutoStock: (id: string, qty: number) => Promise<void>;
   editProduto: (id: string, p: Partial<Produto>) => Promise<void>;
@@ -80,11 +89,12 @@ interface AppContextType {
   deleteServico: (id: string) => Promise<void>;
   addOS: (os: Omit<OrdemServico, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
   editOS: (id: string, os: Partial<OrdemServico>) => Promise<void>;
+  deleteOS: (id: string) => Promise<void>;
   addVenda: (v: Omit<Venda, 'id' | 'empresaId' | 'date'>) => Promise<void>;
   addFinanceiro: (f: Omit<Financeiro, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
   editFinanceiro: (id: string, f: Partial<Financeiro>) => Promise<void>;
   abrirCaixa: (amount: number) => Promise<void>;
-  fecharCaixa: () => Promise<void>;
+  fecharCaixa: (closedDetails?: Partial<Caixa> & Record<string, any>) => Promise<void>;
   addFornecedor: (f: Omit<Fornecedor, 'id' | 'empresaId'>) => Promise<void>;
   editFornecedor: (id: string, f: Partial<Fornecedor>) => Promise<void>;
   deleteFornecedor: (id: string) => Promise<void>;
@@ -99,6 +109,15 @@ interface AppContextType {
   pendingActionsCount: number;
   syncPendingActions: () => Promise<void>;
   syncing: boolean;
+
+  // Daily Automatic Backups
+  autoBackups: AutoBackupItem[];
+  triggerDailyBackup: (isManual?: boolean) => void;
+  deleteAutoBackup: (id: string) => void;
+
+  // Local Audit Logs
+  localAuditLogs: LocalAuditLog[];
+  addLocalAuditLog: (action: string, details: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -134,6 +153,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     openedAt: ""
   });
   const [vendas, setVendas] = useState<Venda[]>([]);
+  const [autoBackups, setAutoBackups] = useState<AutoBackupItem[]>([]);
+  const [localAuditLogs, setLocalAuditLogs] = useState<LocalAuditLog[]>([]);
 
   // Sandbox data seeder for first-use / new multi-tenant SaaS trial sandbox
   const seedSandboxData = async (empId: string) => {
@@ -557,6 +578,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const loginWithEmail = async (email: string, pass: string) => {
+    setLoading(true);
+    setLoginError(null);
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (error: any) {
+      console.error("Login Error: ", error);
+      let translatedMessage = "Erro ao autenticar. Verifique suas credenciais.";
+      if (error?.code === "auth/user-not-found" || error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
+        translatedMessage = "E-mail ou senha incorretos.";
+      } else if (error?.code === "auth/invalid-email") {
+        translatedMessage = "E-mail informado é inválido.";
+      }
+      setLoginError(translatedMessage);
+      throw new Error(translatedMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const registerWithEmail = async (email: string, pass: string, name: string) => {
+    setLoading(true);
+    setLoginError(null);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+      if (userCredential.user) {
+        await updateProfile(userCredential.user, {
+          displayName: name
+        });
+      }
+    } catch (error: any) {
+      console.error("Registration Error: ", error);
+      let translatedMessage = "Erro ao cadastrar usuário.";
+      if (error?.code === "auth/email-already-in-use") {
+        translatedMessage = "Este e-mail já está em uso.";
+      } else if (error?.code === "auth/weak-password") {
+        translatedMessage = "A senha deve ter pelo menos 6 caracteres.";
+      } else if (error?.code === "auth/invalid-email") {
+        translatedMessage = "E-mail informado é inválido.";
+      }
+      setLoginError(translatedMessage);
+      throw new Error(translatedMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loginDemo = async () => {
     setLoading(true);
     setLoginError(null);
@@ -618,6 +686,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteCliente = async (id: string) => {
+    const currentCli = clientes.find(c => c.id === id);
+    const cliName = currentCli ? currentCli.name : id;
+    addLocalAuditLog("Exclusão de Cliente", `Cliente '${cliName}' excluído do sistema.`);
+
     if (firebaseUser) {
       setClientes(prev => prev.filter(c => c.id !== id));
       try {
@@ -648,6 +720,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const editVeiculo = async (id: string, updatedFields: Partial<Veiculo>) => {
+    setVeiculos(prev => prev.map(v => v.id === id ? { ...v, ...updatedFields } : v));
+
+    if (firebaseUser) {
+      await executeWrite("veiculos", id, updatedFields, 'merge');
+    }
+  };
+
+  const deleteVeiculo = async (id: string) => {
+    const currentV = veiculos.find(v => v.id === id);
+    const vInfo = currentV ? `${currentV.brand} ${currentV.model} (${currentV.plate})` : id;
+    addLocalAuditLog("Exclusão de Veículo", `Veículo '${vInfo}' excluído do cadastro.`);
+
+    if (firebaseUser) {
+      setVeiculos(prev => prev.filter(v => v.id !== id));
+      try {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          await deleteDoc(doc(db, "veiculos", id));
+        }
+      } catch (err) {
+        console.warn("Direct online deletion failed, local cache updated.", err);
+      }
+    } else {
+      setVeiculos(prev => prev.filter(v => v.id !== id));
+    }
+  };
+
   const addProduto = async (p: Omit<Produto, 'id' | 'empresaId'>) => {
     const id = "prod_" + Math.random().toString(36).substr(2, 9);
     const newProduto: Produto = {
@@ -672,6 +772,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const editProduto = async (id: string, updatedFields: Partial<Produto>) => {
+    const currentProd = produtos.find(p => p.id === id);
+    if (currentProd && updatedFields.sellPrice !== undefined && updatedFields.sellPrice !== currentProd.sellPrice) {
+      addLocalAuditLog("Alteração de Preço de Venda", `Preço de venda de '${currentProd.name}' modificado de R$ ${currentProd.sellPrice} para R$ ${updatedFields.sellPrice}`);
+    } else {
+      const pName = currentProd ? currentProd.name : id;
+      addLocalAuditLog("Alteração de Produto", `Cadastro do produto '${pName}' atualizado.`);
+    }
+
     setProdutos(prev => prev.map(p => p.id === id ? { ...p, ...updatedFields } : p));
 
     if (firebaseUser) {
@@ -680,6 +788,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteProduto = async (id: string) => {
+    const currentProd = produtos.find(p => p.id === id);
+    const prodName = currentProd ? currentProd.name : id;
+    addLocalAuditLog("Exclusão de Produto", `Produto/Peça '${prodName}' excluído do estoque.`);
+
     if (firebaseUser) {
       setProdutos(prev => prev.filter(p => p.id !== id));
       try {
@@ -744,6 +856,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
 
+    addLocalAuditLog("Abertura de OS", `Nova Ordem de Serviço criada: ${id} para veículo placa ${os.plate}`);
+
     setOrdensServico(prev => [newOS, ...prev]);
 
     // Deduct items used on OS from stock parts
@@ -760,6 +874,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const editOS = async (id: string, fields: Partial<OrdemServico>) => {
+    const currentOS = ordensServico.find(o => o.id === id);
+    if (currentOS && fields.status && fields.status !== currentOS.status) {
+      addLocalAuditLog("Alteração de Status de OS", `OS #${id} (Placa ${currentOS.plate}) alterada de '${currentOS.status}' para '${fields.status}'`);
+    } else {
+      addLocalAuditLog("Edição de OS", `Dados da Ordem de Serviço #${id} atualizados.`);
+    }
+
     const updatedWithTime = {
       ...fields,
       updatedAt: new Date().toISOString()
@@ -772,6 +893,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const deleteOS = async (id: string) => {
+    const currentOS = ordensServico.find(o => o.id === id);
+    const details = currentOS ? `OS #${id} (Placa ${currentOS.plate}, Cliente: ${currentOS.clienteName || "Não Informado"}) excluída permanentemente.` : `OS #${id} excluída.`;
+    addLocalAuditLog("Exclusão de OS", details);
+
+    setOrdensServico(prev => prev.filter(o => o.id !== id));
+
+    if (firebaseUser) {
+      try {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          await deleteDoc(doc(db, "ordens_servico", id));
+        }
+      } catch (err) {
+        console.warn("Direct online deletion failed, local cache updated.", err);
+      }
+    }
+  };
+
   const addVenda = async (v: Omit<Venda, 'id' | 'empresaId' | 'date'>) => {
     const id = "vnd_" + Math.random().toString(36).substr(2, 9);
     const newVenda: Venda = {
@@ -780,6 +920,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       empresaId: company.id,
       date: new Date().toISOString()
     };
+
+    addLocalAuditLog("Nova Venda Balcão", `Venda Balcão #${id.toUpperCase()} registrada no total de R$ ${v.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
 
     // Create a financial entry for cash income
     const finId = "fin_" + Math.random().toString(36).substr(2, 9);
@@ -835,6 +977,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
 
+    addLocalAuditLog("Inserção Financeira", `Novo lançamento de ${f.type === 'Receita' ? 'Receita' : 'Despesa'}: '${f.description}' de R$ ${f.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
+
     setFinanceiro(prev => [newEntry, ...prev]);
 
     if (firebaseUser) {
@@ -843,6 +987,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const editFinanceiro = async (id: string, fields: Partial<Financeiro>) => {
+    addLocalAuditLog("Edição Financeira", `Lançamento financeiro #${id} foi atualizado.`);
     setFinanceiro(prev => prev.map(f => f.id === id ? { ...f, ...fields } : f));
 
     if (firebaseUser) {
@@ -860,6 +1005,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       openedAt: new Date().toISOString()
     };
 
+    addLocalAuditLog("Abertura de Caixa", `Operador de caixa iniciou o caixa com R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
+
     setCaixaStatus(updatedCaixa);
 
     if (firebaseUser) {
@@ -867,13 +1014,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const fecharCaixa = async () => {
+  const fecharCaixa = async (closedDetails?: Partial<Caixa> & Record<string, any>) => {
     if (!caixaStatus) return;
     const closedCaixa: Caixa = {
       ...caixaStatus,
+      ...closedDetails,
       status: "Fechado",
       closedAt: new Date().toISOString()
     };
+
+    addLocalAuditLog("Fechamento de Caixa", `Operador fechou o caixa com o saldo de R$ ${closedCaixa.currentAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`);
 
     setCaixaStatus(closedCaixa);
 
@@ -978,6 +1128,150 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const triggerDailyBackup = (isManual?: boolean) => {
+    try {
+      const backupPayload = {
+        metadata: {
+          appName: "AutoTech ERP",
+          exportedAt: new Date().toISOString(),
+          tenantId: company.id,
+          companyName: company.name,
+          backupType: isManual ? "Manual (Disparado Audit)" : "Automático (Diário)",
+          totalRecords: 
+            clientes.length +
+            veiculos.length +
+            produtos.length +
+            ordensServico.length +
+            financeiro.length +
+            fornecedores.length +
+            vendas.length
+        },
+        collections: {
+          company,
+          clientes,
+          veiculos,
+          produtos,
+          ordensServico,
+          financeiro,
+          fornecedores,
+          vendas
+        }
+      };
+
+      const payloadStr = JSON.stringify(backupPayload, null, 2);
+      const sizeKb = parseFloat((payloadStr.length / 1024).toFixed(2));
+      const formattedDate = new Date().toISOString().substring(0, 10);
+      const formattedTime = new Date().toLocaleTimeString('pt-BR');
+      
+      const newBackup: AutoBackupItem = {
+        id: "backup_" + Math.random().toString(36).substring(2, 11),
+        date: `${formattedDate} ${formattedTime}`,
+        totalRecords: backupPayload.metadata.totalRecords,
+        fileName: `autotech_auto_backup_${isManual ? 'manual' : 'diario'}_${formattedDate}_${Date.now()}.json`,
+        sizeKb,
+        payload: payloadStr
+      };
+
+      let existing: AutoBackupItem[] = [];
+      const stored = localStorage.getItem("autotech_auto_backups");
+      if (stored) {
+        try {
+          existing = JSON.parse(stored);
+        } catch (_) {}
+      }
+
+      const updated = [newBackup, ...existing];
+      localStorage.setItem("autotech_auto_backups", JSON.stringify(updated));
+      setAutoBackups(updated);
+      
+      if (!isManual) {
+        localStorage.setItem("autotech_last_auto_backup_date", formattedDate);
+      }
+    } catch (err) {
+      console.error("Failed to run automatic backup:", err);
+    }
+  };
+
+  const deleteAutoBackup = (id: string) => {
+    const stored = localStorage.getItem("autotech_auto_backups");
+    if (stored) {
+      try {
+        const existing: AutoBackupItem[] = JSON.parse(stored);
+        const filtered = existing.filter(b => b.id !== id);
+        localStorage.setItem("autotech_auto_backups", JSON.stringify(filtered));
+        setAutoBackups(filtered);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  const addLocalAuditLog = (action: string, details: string) => {
+    try {
+      const timestamp = new Date().toISOString();
+      const newLog: LocalAuditLog = {
+        id: "log_" + Math.random().toString(36).substring(2, 11),
+        empresaId: company.id || "sandbox",
+        action,
+        details,
+        userName: user?.name || "Visitante / Sandbox",
+        userEmail: user?.email || "sandbox@mecanica.com",
+        timestamp
+      };
+
+      let existing: LocalAuditLog[] = [];
+      const stored = localStorage.getItem("autotech_local_audit_logs");
+      if (stored) {
+        try {
+          existing = JSON.parse(stored);
+        } catch (_) {}
+      }
+
+      const updated = [newLog, ...existing].slice(0, 50);
+      localStorage.setItem("autotech_local_audit_logs", JSON.stringify(updated));
+      setLocalAuditLogs(updated);
+    } catch (err) {
+      console.error("Failed to add local audit log:", err);
+    }
+  };
+
+  // Load local audit logs on startup
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("autotech_local_audit_logs");
+      if (stored) {
+        setLocalAuditLogs(JSON.parse(stored));
+      }
+    } catch (err) {
+      console.error("Failed to load local audit logs:", err);
+    }
+  }, []);
+
+  // Load and check daily automatic backup trigger on startup and updates
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem("autotech_auto_backups");
+      if (stored) {
+        setAutoBackups(JSON.parse(stored));
+      }
+    } catch (err) {
+      console.error("Failed to parse auto backup history", err);
+    }
+
+    const checkDailyBackup = () => {
+      const todayDate = new Date().toISOString().substring(0, 10);
+      const lastBackupDate = localStorage.getItem("autotech_last_auto_backup_date");
+      
+      if (lastBackupDate !== todayDate) {
+        console.log("⏱️ Automatic daily database backup triggered.");
+        triggerDailyBackup(false);
+      }
+    };
+
+    const timer = setTimeout(checkDailyBackup, 3000);
+    return () => clearTimeout(timer);
+  }, [clientes, veiculos, produtos, ordensServico, financeiro, fornecedores, vendas, company]);
+
   return (
     <AppContext.Provider value={{
       user,
@@ -998,6 +1292,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loginError,
       
       loginWithGoogle,
+      loginWithEmail,
+      registerWithEmail,
       loginDemo,
       logout,
       
@@ -1005,6 +1301,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       editCliente,
       deleteCliente,
       addVeiculo,
+      editVeiculo,
+      deleteVeiculo,
       addProduto,
       updateProdutoStock,
       editProduto,
@@ -1031,7 +1329,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isOnline,
       pendingActionsCount,
       syncPendingActions,
-      syncing
+      syncing,
+
+      // Daily Automatic Backups
+      autoBackups,
+      triggerDailyBackup,
+      deleteAutoBackup,
+
+      // Local Audit Logs
+      localAuditLogs,
+      addLocalAuditLog
     }}>
       {children}
     </AppContext.Provider>

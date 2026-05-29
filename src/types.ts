@@ -154,6 +154,9 @@ export interface OrdemServico {
   total: number;
   createdAt: string;
   updatedAt?: string;
+  reminderEnabled?: boolean;
+  vencimentoDays?: number;
+  reminderDays?: number;
 }
 
 export interface Fornecedor {
@@ -198,3 +201,24 @@ export interface Caixa {
     timestamp: string;
   }[];
 }
+
+export interface AutoBackupItem {
+  id: string;
+  date: string;
+  totalRecords: number;
+  fileName: string;
+  sizeKb: number;
+  payload: string; // stringified JSON
+}
+
+export interface LocalAuditLog {
+  id: string;
+  empresaId: string;
+  action: string;
+  details: string;
+  userName: string;
+  userEmail: string;
+  timestamp: string;
+}
+
+

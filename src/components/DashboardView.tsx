@@ -37,7 +37,8 @@ export const DashboardView: React.FC = () => {
     ordensServico, 
     financeiro, 
     caixaStatus,
-    company
+    company,
+    localAuditLogs
   } = useApp();
 
   const [selectedMetric, setSelectedMetric] = React.useState<'diario' | 'mensal' | 'despesas' | 'lucro' | 'ordens' | 'estoque'>('mensal');
@@ -205,82 +206,115 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* 💡 SAAS ADMINISTRATIVE SUPPORT SUGGESTIONS BOX */}
-      {sugList.length > 0 && (
-        <div className="bg-gradient-to-r from-purple-950/20 to-indigo-950/15 border border-purple-900/40 rounded-2xl p-5 flex flex-col gap-4 text-left">
-          <div className="flex items-center gap-2 pb-2.5 border-b border-gray-850/60">
-            <span className="bg-purple-950/50 border border-purple-800 text-purple-400 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded font-mono">
-              💡 CANAL DE SUPORTE SaaS
-            </span>
-            <strong className="text-white text-xs font-sans">
-              Recomendações e Dicas Administrativas do SuperAdmin
-            </strong>
-          </div>
+      <AnimatePresence>
+        {sugList.length > 0 && (
+          <motion.div 
+            initial={{ opacity: 0, y: -15, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -15, scale: 0.98 }}
+            transition={{ duration: 0.35, ease: "easeInOut" }}
+            className="bg-gradient-to-r from-purple-950/20 to-indigo-950/15 border border-purple-900/40 rounded-2xl p-5 flex flex-col gap-4 text-left"
+          >
+            <div className="flex items-center gap-2 pb-2.5 border-b border-gray-850/60 font-sans">
+              <span className="bg-purple-950/50 border border-purple-800 text-purple-400 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded font-mono">
+                💡 CANAL DE SUPORTE SaaS
+              </span>
+              <strong className="text-white text-xs font-sans">
+                Recomendações e Dicas Administrativas do SuperAdmin
+              </strong>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {sugList.map((sug) => (
-              <div 
-                key={sug.id} 
-                className={`p-4 rounded-xl border transition-all text-xs flex flex-col gap-2 ${
-                  sug.status === 'Resolvido' 
-                    ? 'bg-[#050912]/40 border-gray-900/50 opacity-60' 
-                    : 'bg-[#070b16] border-purple-950 hover:border-purple-900/60'
-                }`}
-              >
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
-                      {sug.category === 'Marketing' && '📢'}
-                      {sug.category === 'Ajuste' && '🛠️'}
-                      {sug.category === 'Suporte' && '⚙️'}
-                      {sug.category === 'Melhoria' && '📈'}
-                      <span className={sug.status === 'Resolvido' ? 'line-through text-slate-500' : ''}>
-                        {sug.title}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {sugList.map((sug, idx) => (
+                <motion.div 
+                  key={sug.id} 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3, delay: idx * 0.08 }}
+                  className={`p-4 rounded-xl border transition-all text-xs flex flex-col gap-2 relative ${
+                    sug.status === 'Resolvido' 
+                      ? 'bg-[#050912]/40 border-gray-900/50 opacity-60' 
+                      : 'bg-[#070b16] border-purple-950 hover:border-purple-900/60'
+                  }`}
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[11px] font-bold text-white flex items-center gap-1.5">
+                        {sug.category === 'Marketing' && '📢'}
+                        {sug.category === 'Ajuste' && '🛠️'}
+                        {sug.category === 'Suporte' && '⚙️'}
+                        {sug.category === 'Melhoria' && '📈'}
+                        <span className={sug.status === 'Resolvido' ? 'line-through text-slate-500' : ''}>
+                          {sug.title}
+                        </span>
                       </span>
-                    </span>
-                    <span className="text-[9px] font-mono text-gray-500">
-                      Enviado em: {new Date(sug.createdAt).toLocaleDateString()}
+                      <span className="text-[9px] font-mono text-gray-500">
+                        Enviado em: {new Date(sug.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    
+                    <span className={`px-1.5 py-0.2 rounded text-[8px] font-mono font-bold uppercase ${
+                      sug.status === 'Resolvido' 
+                        ? 'bg-green-950/20 border border-green-950 text-green-600' 
+                        : 'bg-amber-950/30 border border-amber-900/50 text-amber-400 animate-pulse'
+                    }`}>
+                      {sug.status === 'Resolvido' ? 'CONCLUÍDO' : 'PENDENTE'}
                     </span>
                   </div>
-                  
-                  <span className={`px-1.5 py-0.2 rounded text-[8px] font-mono font-bold uppercase ${
-                    sug.status === 'Resolvido' 
-                      ? 'bg-green-950/20 border border-green-950 text-green-600' 
-                      : 'bg-amber-950/30 border border-amber-900/50 text-amber-400 animate-pulse'
-                  }`}>
-                    {sug.status === 'Resolvido' ? 'CONCLUÍDO' : 'PENDENTE'}
-                  </span>
-                </div>
 
-                <p className={`text-slate-350 text-[11px] leading-relaxed ${sug.status === 'Resolvido' ? 'line-through text-slate-500' : ''}`}>
-                  {sug.description}
-                </p>
+                  <p className={`text-slate-350 text-[11px] leading-relaxed ${sug.status === 'Resolvido' ? 'line-through text-slate-500' : ''}`}>
+                    {sug.description}
+                  </p>
 
-                <div className="flex justify-end mt-1 pt-2 border-t border-gray-850/30">
-                  <button
-                    type="button"
-                    onClick={() => handleMarkAsResolved(sug.id)}
-                    className={`py-1 px-2.5 rounded text-[9.5px] font-mono cursor-pointer transition-colors flex items-center gap-1.5 ${
-                      sug.status === 'Resolvido'
-                        ? 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
-                        : 'bg-purple-950/40 text-purple-300 hover:bg-purple-900/30 border border-purple-900/50 font-bold'
-                    }`}
-                  >
-                    {sug.status === 'Resolvido' ? ' Reabrir Dica' : '✔️ Marcar como Lido'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+                  <div className="flex justify-end mt-1 pt-2 border-t border-gray-850/30">
+                    <button
+                      type="button"
+                      onClick={() => handleMarkAsResolved(sug.id)}
+                      className={`py-1 px-2.5 rounded text-[9.5px] font-mono cursor-pointer transition-colors flex items-center gap-1.5 ${
+                        sug.status === 'Resolvido'
+                          ? 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                          : 'bg-purple-950/40 text-purple-300 hover:bg-purple-900/30 border border-purple-900/50 font-bold'
+                      }`}
+                    >
+                      {sug.status === 'Resolvido' ? ' Reabrir Dica' : '✔️ Marcar como Lido'}
+                    </button>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* KPI CARDS */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+      <motion.div 
+        initial="hidden"
+        animate="visible"
+        variants={{
+          hidden: { opacity: 0 },
+          visible: {
+            opacity: 1,
+            transition: {
+              staggerChildren: 0.05
+            }
+          }
+        }}
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4"
+      >
         
         {/* Card 1: Faturamento Diário */}
-        <div 
+        <motion.div 
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.98 },
+            visible: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: -15, scale: 0.98, transition: { duration: 0.2 } }
+          }}
+          whileHover={{ y: -4, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ type: "spring", stiffness: 120, damping: 16 }}
           onClick={() => setSelectedMetric('diario')}
-          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-colors duration-300 ${
             selectedMetric === 'diario' 
               ? 'bg-[#0f2122]/40 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.15)] ring-1 ring-green-500/20' 
               : 'bg-[#0c1223] border-gray-800/80 hover:border-green-800/50 hover:bg-[#0c1223]/80'
@@ -302,12 +336,20 @@ export const DashboardView: React.FC = () => {
               <ArrowUpRight className="w-3 h-3" /> +14.2% vs ontem
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 2: Faturamento Mensal */}
-        <div 
+        <motion.div 
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.98 },
+            visible: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: -15, scale: 0.98, transition: { duration: 0.2 } }
+          }}
+          whileHover={{ y: -4, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ type: "spring", stiffness: 120, damping: 16 }}
           onClick={() => setSelectedMetric('mensal')}
-          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-colors duration-300 ${
             selectedMetric === 'mensal' 
               ? 'bg-[#0b1e2c]/40 border-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.15)] ring-1 ring-cyan-500/20' 
               : 'bg-[#0c1223] border-gray-800/80 hover:border-cyan-800/50 hover:bg-[#0c1223]/80'
@@ -329,12 +371,20 @@ export const DashboardView: React.FC = () => {
               <Sparkles className="w-3 h-3 text-cyan-400" /> Meta de R$ 30k
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 3: Despesas do Mês */}
-        <div 
+        <motion.div 
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.98 },
+            visible: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: -15, scale: 0.98, transition: { duration: 0.2 } }
+          }}
+          whileHover={{ y: -4, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ type: "spring", stiffness: 120, damping: 16 }}
           onClick={() => setSelectedMetric('despesas')}
-          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-colors duration-300 ${
             selectedMetric === 'despesas' 
               ? 'bg-[#29111c]/40 border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/20' 
               : 'bg-[#0c1223] border-gray-800/80 hover:border-rose-900/50 hover:bg-[#0c1223]/80'
@@ -356,12 +406,20 @@ export const DashboardView: React.FC = () => {
               <Percent className="w-3 h-3" /> do faturado: {monthlyEarnings() > 0 ? ((monthlyExpenses() / monthlyEarnings()) * 100).toFixed(1) : 0}%
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 4: Lucro Líquido Estimado */}
-        <div 
+        <motion.div 
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.98 },
+            visible: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: -15, scale: 0.98, transition: { duration: 0.2 } }
+          }}
+          whileHover={{ y: -4, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ type: "spring", stiffness: 120, damping: 16 }}
           onClick={() => setSelectedMetric('lucro')}
-          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-colors duration-300 ${
             selectedMetric === 'lucro' 
               ? 'bg-[#08201a]/40 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20' 
               : 'bg-[#0c1223] border-gray-800/80 hover:border-emerald-800/50 hover:bg-[#0c1223]/80'
@@ -383,12 +441,20 @@ export const DashboardView: React.FC = () => {
               Margem: {monthlyEarnings() > 0 ? (((monthlyEarnings() - monthlyExpenses()) / monthlyEarnings()) * 100).toFixed(1) : 0}%
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 5: Ordens no Pátio */}
-        <div 
+        <motion.div 
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.98 },
+            visible: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: -15, scale: 0.98, transition: { duration: 0.2 } }
+          }}
+          whileHover={{ y: -4, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ type: "spring", stiffness: 120, damping: 16 }}
           onClick={() => setSelectedMetric('ordens')}
-          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-colors duration-300 ${
             selectedMetric === 'ordens' 
               ? 'bg-[#271d15]/40 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/20' 
               : 'bg-[#0c1223] border-gray-800/80 hover:border-amber-850/50'
@@ -410,12 +476,20 @@ export const DashboardView: React.FC = () => {
               <Clock className="w-3 h-3 text-amber-500" /> {servicesInProgress} em execução
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Card 6: Alerta Reposição Estoque */}
-        <div 
+        <motion.div 
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.98 },
+            visible: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: -15, scale: 0.98, transition: { duration: 0.2 } }
+          }}
+          whileHover={{ y: -4, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ type: "spring", stiffness: 120, damping: 16 }}
           onClick={() => setSelectedMetric('estoque')}
-          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-all duration-300 ${
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-colors duration-300 ${
             selectedMetric === 'estoque' 
               ? 'bg-[#291113]/40 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.15)] ring-1 ring-red-500/20' 
               : 'bg-[#0c1223] border-gray-800/80 hover:border-red-800/50 hover:bg-[#0c1223]/80'
@@ -439,9 +513,9 @@ export const DashboardView: React.FC = () => {
               Estoque crítico detectado
             </div>
           </div>
-        </div>
+        </motion.div>
 
-      </div>
+      </motion.div>
 
       {/* DETAILED INTERACTIVE DRAWER CONTEXTUAL */}
       <AnimatePresence mode="wait">
@@ -669,7 +743,14 @@ export const DashboardView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
         {/* Left Chart: Fluxo de Caixa */}
-        <div className="col-span-12 lg:col-span-8 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col justify-between">
+        <motion.div 
+          initial={{ opacity: 0, y: 15, scale: 0.99 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -15, scale: 0.99 }}
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          transition={{ duration: 0.4 }}
+          className="col-span-12 lg:col-span-8 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col justify-between"
+        >
           <div className="flex justify-between items-center mb-6">
             <div>
               <h3 className="font-display font-bold text-base text-white">Fluxo de Caixa Mensal</h3>
@@ -710,10 +791,17 @@ export const DashboardView: React.FC = () => {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </motion.div>
 
         {/* Right Chart: Mais vendidos */}
-        <div className="col-span-12 lg:col-span-4 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col justify-between">
+        <motion.div 
+          initial={{ opacity: 0, y: 15, scale: 0.99 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -15, scale: 0.99 }}
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="col-span-12 lg:col-span-4 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col justify-between"
+        >
           <div className="mb-6">
             <h3 className="font-display font-bold text-base text-white">Peças Mais Demandadas</h3>
             <span className="text-[10px] text-gray-500 font-mono block">Quantidades comercializadas por categoria de reparação.</span>
@@ -732,7 +820,7 @@ export const DashboardView: React.FC = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </motion.div>
 
       </div>
 
@@ -740,7 +828,14 @@ export const DashboardView: React.FC = () => {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         
         {/* List 1: Alerta Estoque Mínimo */}
-        <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 text-left">
+        <motion.div 
+          initial={{ opacity: 0, y: 15, scale: 0.99 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -15, scale: 0.99 }}
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          transition={{ duration: 0.4 }}
+          className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 text-left"
+        >
           <div className="flex justify-between items-center border-b border-gray-850 pb-4 mb-4">
             <div>
               <h3 className="font-display font-bold text-base text-white">Alerta de Reposição Crítica</h3>
@@ -752,8 +847,14 @@ export const DashboardView: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-2.5 max-h-56 overflow-y-auto pr-1">
-            {produtos.filter(p => p.quantity <= p.minStock).map((prod) => (
-              <div key={prod.id} className="flex justify-between items-center p-3 rounded-xl border border-gray-900 bg-gray-950/30">
+            {produtos.filter(p => p.quantity <= p.minStock).map((prod, idx) => (
+              <motion.div 
+                key={prod.id} 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.25, delay: Math.min(5, idx) * 0.05 }}
+                className="flex justify-between items-center p-3 rounded-xl border border-gray-900 bg-gray-950/30"
+              >
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-semibold text-white">{prod.name}</span>
                   <div className="flex items-center gap-2 text-[10px] text-gray-400 font-mono">
@@ -771,7 +872,7 @@ export const DashboardView: React.FC = () => {
                     R$ {prod.sellPrice}
                   </span>
                 </div>
-              </div>
+              </motion.div>
             ))}
             {lowStockCount === 0 && (
               <div className="text-center py-8 text-xs text-gray-500">
@@ -779,10 +880,17 @@ export const DashboardView: React.FC = () => {
               </div>
             )}
           </div>
-        </div>
+        </motion.div>
 
         {/* List 2: OS Recentes */}
-        <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 text-left">
+        <motion.div 
+          initial={{ opacity: 0, y: 15, scale: 0.99 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -15, scale: 0.99 }}
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 text-left"
+        >
           <div className="flex justify-between items-center border-b border-gray-850 pb-4 mb-4">
             <div>
               <h3 className="font-display font-bold text-base text-white">Ordens de Serviço Ativas</h3>
@@ -794,18 +902,24 @@ export const DashboardView: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-2.5 max-h-56 overflow-y-auto pr-1">
-            {ordensServico.map((os) => {
+            {ordensServico.map((os, idx) => {
               const statusColor = (st: string) => {
                 switch(st) {
                   case 'Aberta': return 'border-blue-900/40 bg-blue-950/20 text-blue-400';
                   case 'Em análise': return 'border-yellow-900/40 bg-yellow-950/20 text-yellow-400';
                   case 'Aguardando peça': return 'border-orange-950/40 bg-orange-950/20 text-orange-400';
                   case 'Em execução': return 'border-red-900/40 bg-red-950/20 text-red-500 font-bold';
-                  default: return 'border-green-900/40 bg-green-950/20 text-green-400';
+                  default: return 'border-green-905/40 bg-green-950/20 text-green-400';
                 }
               };
               return (
-                <div key={os.id} className="flex justify-between items-center p-3 rounded-xl border border-gray-900 bg-gray-950/30">
+                <motion.div 
+                  key={os.id} 
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25, delay: Math.min(5, idx) * 0.05 }}
+                  className="flex justify-between items-center p-3 rounded-xl border border-gray-900 bg-gray-950/30"
+                >
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-white">{os.id}</span>
@@ -824,13 +938,73 @@ export const DashboardView: React.FC = () => {
                     <span className="text-xs font-bold text-white block">R$ {os.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     <span className="text-[9px] text-gray-550 block font-mono">{new Date(os.createdAt).toLocaleDateString()}</span>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>
-        </div>
+        </motion.div>
 
       </div>
+
+      {/* List 3: Histórico de Auditoria Local */}
+      <motion.div 
+        initial={{ opacity: 0, y: 20, scale: 0.99 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -20, scale: 0.99 }}
+        whileHover={{ y: -2, transition: { duration: 0.15 } }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+        className="mt-6 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 text-left col-span-12"
+      >
+        <div className="flex justify-between items-center border-b border-gray-850 pb-4 mb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-orange-950/20 text-orange-500 border border-orange-900/30">
+              <Activity className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="font-display font-bold text-base text-white">Histórico de Auditoria de Ações Críticas</h3>
+              <p className="text-[10px] text-gray-400 font-mono">Registro local em tempo real (últimas 10 ações registradas).</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-mono bg-orange-950/40 text-orange-400 border border-orange-900/40 px-2.5 py-1 rounded">
+            Segurança Ativa OS/Estoque
+          </span>
+        </div>
+
+        <div className="flex flex-col gap-2 max-h-96 overflow-y-auto pr-1">
+          {localAuditLogs && localAuditLogs.length > 0 ? (
+            localAuditLogs.slice(0, 10).map((log, idx) => (
+              <motion.div 
+                key={log.id} 
+                id={`audit-log-item-${log.id}`} 
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.2, delay: Math.min(5, idx) * 0.04 }}
+                className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 rounded-xl border border-gray-900 bg-gray-950/20 hover:bg-gray-950/40 transition-all font-mono gap-2 text-xs"
+              >
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-white font-extrabold px-2 py-0.5 rounded bg-orange-950/30 text-[10px] text-orange-400 border border-orange-900/20">
+                      {log.action}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      por: <strong className="text-slate-350 font-sans font-medium">{log.userName}</strong> ({log.userEmail})
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-300 font-sans mt-0.5 font-medium">{log.details}</span>
+                </div>
+                
+                <div className="text-right text-[10px] text-gray-500 self-end sm:self-center">
+                  <span>{new Date(log.timestamp).toLocaleString('pt-BR')}</span>
+                </div>
+              </motion.div>
+            ))
+          ) : (
+            <div className="text-center py-8 text-xs text-gray-500 italic">
+              Nenhuma ação crítica registrada na auditoria local de segurança ainda.
+            </div>
+          )}
+        </div>
+      </motion.div>
 
     </div>
   );

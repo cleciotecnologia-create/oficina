@@ -16,7 +16,10 @@ import {
   Printer, 
   X,
   MessageSquare,
-  Sparkles
+  Sparkles,
+  Bell,
+  CalendarRange,
+  Trash2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
@@ -26,6 +29,7 @@ export const OSView: React.FC = () => {
     ordensServico, 
     addOS, 
     editOS, 
+    deleteOS,
     clientes, 
     veiculos, 
     produtos, 
@@ -45,6 +49,11 @@ export const OSView: React.FC = () => {
   const [diagnosisText, setDiagnosisText] = useState('');
   const [assignedStaff, setAssignedStaff] = useState('Marcio Rezende');
   const [kmStr, setKmStr] = useState('');
+
+  // Reminder configurations
+  const [reminderEnabled, setReminderEnabled] = useState(true);
+  const [vencimentoDays, setVencimentoDays] = useState(30);
+  const [reminderDays, setReminderDays] = useState(3);
 
   // Checklist states
   const [checklist, setChecklist] = useState([
@@ -207,7 +216,10 @@ export const OSView: React.FC = () => {
       services: [...services],
       parts: [...parts],
       checklist: [...checklist],
-      total: osCalculatedTotal()
+      total: osCalculatedTotal(),
+      reminderEnabled,
+      vencimentoDays: Number(vencimentoDays),
+      reminderDays: Number(reminderDays)
     };
 
     await addOS(payload);
@@ -220,6 +232,9 @@ export const OSView: React.FC = () => {
     setKmStr('');
     setServices([]);
     setParts([]);
+    setReminderEnabled(true);
+    setVencimentoDays(30);
+    setReminderDays(3);
     setChecklist([
       { label: "Nível de Óleo do Motor", status: "ok" as const },
       { label: "Nível do Fluido de Freio", status: "ok" as const },
@@ -364,6 +379,23 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                   <span>Serviços: <strong className="text-gray-300">{os.services.length}</strong></span>
                 </div>
 
+                {/* WhatsApp Reminder configuration details */}
+                {os.reminderEnabled && (
+                  <div className="mt-2.5 p-2.5 bg-slate-950/40 border border-gray-850 rounded-xl flex items-center justify-between text-[10.5px] font-mono">
+                    <span className="text-gray-400 flex items-center gap-1">
+                      <Bell className="w-3.5 h-3.5 text-purple-400" />
+                      Lembrete: WhatsApp ({os.reminderDays}d antes)
+                    </span>
+                    <span className="text-purple-400 font-bold">
+                      Disparo: {(() => {
+                        const date = new Date(os.createdAt);
+                        date.setDate(date.getDate() + (os.vencimentoDays || 30) - (os.reminderDays || 3));
+                        return date.toLocaleDateString('pt-BR');
+                      })()}
+                    </span>
+                  </div>
+                )}
+
                 {/* Footer buttons of each card */}
                 <div className="mt-4 pt-3 border-t border-gray-850 flex items-center justify-between gap-3 font-mono text-[10px]">
                   
@@ -396,6 +428,20 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                       <option value="Em execução">Mudar: Em execução</option>
                       <option value="Finalizada">Mudar: Finalizada</option>
                     </select>
+
+                    <button
+                      type="button"
+                      id={`btn-delete-os-${os.id}`}
+                      onClick={async () => {
+                        if (confirm(`Tem certeza que deseja excluir permanentemente a Ordem de Serviço #${os.id}?`)) {
+                          await deleteOS(os.id);
+                        }
+                      }}
+                      className="p-1.5 rounded bg-slate-900 border border-red-950 hover:bg-red-950/20 text-red-500 hover:text-red-400 flex items-center justify-center transition-all cursor-pointer"
+                      title="Excluir OS"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                 </div>
@@ -741,6 +787,146 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                 onChange={(e) => setDiagnosisText(e.target.value)}
                 className="w-full bg-[#080c16] border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
               />
+            </div>
+
+            {/* 8. CONFIGURAÇÕES DE LEMBRETE DE WHATSAPP */}
+            <div className="md:col-span-2 bg-[#09101f] border border-gray-800/80 rounded-2xl p-5 flex flex-col gap-4 font-sans text-left">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-850 pb-3">
+                <div className="flex items-center gap-2">
+                  <Bell className={`w-5 h-5 ${reminderEnabled ? 'text-red-500 animate-bounce' : 'text-gray-500'}`} />
+                  <div>
+                    <h4 className="text-sm font-semibold text-white uppercase font-display tracking-tight">8. Configurações de Lembrete</h4>
+                    <p className="text-[11px] text-gray-400">Defina quantos dias antes do vencimento o cliente deve ser alertado via WhatsApp.</p>
+                  </div>
+                </div>
+                
+                <label className="relative inline-flex items-center cursor-pointer select-none">
+                  <input 
+                    type="checkbox" 
+                    checked={reminderEnabled} 
+                    onChange={(e) => setReminderEnabled(e.target.checked)}
+                    className="sr-only peer" 
+                  />
+                  <div className="w-11 h-6 bg-slate-950 rounded-full peer peer-focus:ring-2 peer-focus:ring-red-550 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-gray-400 peer-checked:after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                  <span className="ml-2.5 text-xs font-bold text-gray-300">{reminderEnabled ? "ATIVADO" : "DESATIVADO"}</span>
+                </label>
+              </div>
+
+              {reminderEnabled && (
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                  {/* Prazos */}
+                  <div className="md:col-span-6 flex flex-col gap-1.5 text-xs text-gray-300">
+                    <label className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">PRAZO DE VALIDADE DA ORDEM/GARANTIA</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[15, 30, 90].map((d) => (
+                        <button 
+                          key={d}
+                          type="button"
+                          onClick={() => setVencimentoDays(d)}
+                          className={`py-2 px-3 border rounded-xl font-mono font-bold transition-all cursor-pointer ${
+                            vencimentoDays === d 
+                              ? 'bg-red-600/15 border-red-550 text-white' 
+                              : 'bg-slate-950/40 border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {d} dias
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="text-[10px] text-gray-400 font-mono">Ou dias personalizados:</span>
+                      <input 
+                        type="number" 
+                        min="1"
+                        value={vencimentoDays}
+                        onChange={(e) => setVencimentoDays(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-16 bg-[#080c16] border border-gray-800 rounded-lg py-1 px-2 text-[11px] font-mono text-white text-center"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Antecedência */}
+                  <div className="md:col-span-6 flex flex-col gap-1.5 text-xs text-gray-300">
+                    <label className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">ENVIAR DISPARO NO WHATSAPP QUANTO TEMPO ANTES?</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[1, 3, 5].map((d) => (
+                        <button 
+                          key={d}
+                          type="button"
+                          onClick={() => setReminderDays(d)}
+                          className={`py-2 px-3 border rounded-xl font-mono font-bold transition-all cursor-pointer ${
+                            reminderDays === d 
+                              ? 'bg-purple-950/20 border-purple-500 text-white' 
+                              : 'bg-slate-950/40 border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {d} {d === 1 ? 'dia' : 'dias'} antes
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-1 flex items-center gap-1.5">
+                      <span className="text-[10px] text-gray-400 font-mono">Diferente antes:</span>
+                      <input 
+                        type="number" 
+                        min="1"
+                        max={vencimentoDays - 1}
+                        value={reminderDays}
+                        onChange={(e) => setReminderDays(Math.min(vencimentoDays - 1, Math.max(1, parseInt(e.target.value) || 1)))}
+                        className="w-16 bg-[#080c16] border border-gray-805 rounded-lg py-1 px-2 text-[11px] font-mono text-white text-center"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Realtime scheduler calendar line */}
+                  <div className="md:col-span-12 bg-slate-950/80 border border-gray-800/60 p-4 rounded-xl flex flex-col gap-2.5">
+                    <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest font-extrabold flex items-center gap-1">
+                      <CalendarRange className="w-3.5 h-3.5" />
+                      CRONOGRAMA DE DISPAROS DE MONITORAMENTO ATUALIZADO
+                    </span>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-4 text-xs">
+                      <div className="bg-[#0c1223] rounded-lg p-2.5 border border-gray-900 flex flex-col gap-0.5">
+                        <span className="text-gray-500 block text-[9px] font-mono">Abertura OS (Hoje)</span>
+                        <span className="font-mono text-white font-bold">{new Date().toLocaleDateString('pt-BR')}</span>
+                      </div>
+                      
+                      <div className="bg-red-950/15 rounded-lg p-2.5 border border-red-900/30 flex flex-col gap-0.5">
+                        <span className="text-red-400/80 block text-[9px] font-mono font-bold">🔔 Dia de Alerta WhatsApp</span>
+                        <span className="font-mono text-white font-bold flex items-center gap-1 text-red-400">
+                          {(() => {
+                            const date = new Date();
+                            date.setDate(date.getDate() + vencimentoDays - reminderDays);
+                            return date.toLocaleDateString('pt-BR');
+                          })()} 
+                          <span className="text-[10px] text-gray-400 font-normal">({reminderDays}d antes)</span>
+                        </span>
+                      </div>
+                      
+                      <div className="bg-[#0b101d] rounded-lg p-2.5 border border-gray-850 flex flex-col gap-0.5">
+                        <span className="text-gray-500 block text-[9px] font-mono font-bold">📅 Vencimento de Validade</span>
+                        <span className="font-mono text-white font-bold text-gray-300">
+                          {(() => {
+                            const date = new Date();
+                            date.setDate(date.getDate() + vencimentoDays);
+                            return date.toLocaleDateString('pt-BR');
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="mt-1 flex flex-col gap-1 border-t border-gray-900/60 pt-2.5">
+                      <span className="text-[9px] font-mono text-purple-400 font-bold uppercase tracking-wider block">PREVIEW DO LEMBRETE AUTOMÁTICO</span>
+                      <div className="p-2.5 bg-black/30 border border-gray-900 rounded-lg text-[11px] text-gray-300 leading-normal font-mono select-none">
+                        "Prezado(a) *{selectedClient?.name || "Cliente Teste"}*, informamos que o orçamento ou os termos da garantia da sua *OS #{new Date().getFullYear() + "-XXXX"}* ({selectedVehicle ? `${selectedVehicle.brand} ${selectedVehicle.model}` : "Veículo"}) expira em *{(() => {
+                          const date = new Date();
+                          date.setDate(date.getDate() + vencimentoDays);
+                          return date.toLocaleDateString('pt-BR');
+                        })()}* (vence em {reminderDays} {reminderDays === 1 ? 'dia' : 'dias'}). Favor entrar em contato para validação!"
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>

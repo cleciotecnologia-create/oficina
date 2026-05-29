@@ -19,7 +19,9 @@ import {
   Droplet,
   Copy,
   Check,
-  MapPin
+  MapPin,
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Cliente, Veiculo, OrdemServico } from '../types';
@@ -121,13 +123,160 @@ export const CRMView: React.FC = () => {
     veiculos, 
     addCliente, 
     editCliente, 
+    deleteCliente,
     addVeiculo, 
+    editVeiculo,
+    deleteVeiculo,
     ordensServico 
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'clientes' | 'veiculos' | 'fidelidade' | 'campanhas'>('clientes');
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
   const [copiedAnalysisId, setCopiedAnalysisId] = useState<string | null>(null);
+
+  // Edit & Delete states
+  const [editingClient, setEditingClient] = useState<Cliente | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<Cliente | null>(null);
+  const [editingVehicle, setEditingVehicle] = useState<Veiculo | null>(null);
+  const [vehicleToDelete, setVehicleToDelete] = useState<Veiculo | null>(null);
+
+  // Edit Client Form Fields
+  const [editCliName, setEditCliName] = useState('');
+  const [editCliPhone, setEditCliPhone] = useState('');
+  const [editCliEmail, setEditCliEmail] = useState('');
+  const [editCliCpfCnpj, setEditCliCpfCnpj] = useState('');
+  const [editCliCep, setEditCliCep] = useState('');
+  const [editCliAddress, setEditCliAddress] = useState('');
+  const [editCliOilAlert, setEditCliOilAlert] = useState(true);
+  const [editCliReviewAlert, setEditCliReviewAlert] = useState(true);
+  const [isFetchingEditCliCep, setIsFetchingEditCliCep] = useState(false);
+  const [editCliCepError, setEditCliCepError] = useState<string | null>(null);
+
+  // Edit Vehicle Form Fields
+  const [editVehClient, setEditVehClient] = useState('');
+  const [editVehBrand, setEditVehBrand] = useState('');
+  const [editVehModel, setEditVehModel] = useState('');
+  const [editVehYear, setEditVehYear] = useState('');
+  const [editVehEngine, setEditVehEngine] = useState('');
+  const [editVehPlate, setEditVehPlate] = useState('');
+  const [editVehChassi, setEditVehChassi] = useState('');
+  const [editVehKm, setEditVehKm] = useState('');
+
+  const startEditClient = (cli: Cliente) => {
+    setEditingClient(cli);
+    setEditCliName(cli.name);
+    setEditCliPhone(cli.phone);
+    setEditCliEmail(cli.email || '');
+    setEditCliCpfCnpj(cli.cpfCnpj || '');
+    setEditCliCep(cli.cep || '');
+    setEditCliAddress(cli.address || '');
+    setEditCliOilAlert(cli.oilChangeAlert !== false);
+    setEditCliReviewAlert(cli.reviewAlert !== false);
+  };
+
+  const startEditVehicle = (veh: Veiculo) => {
+    setEditingVehicle(veh);
+    setEditVehClient(veh.clienteId);
+    setEditVehBrand(veh.brand);
+    setEditVehModel(veh.model);
+    setEditVehYear(veh.year);
+    setEditVehEngine(veh.engine || '');
+    setEditVehPlate(veh.plate);
+    setEditVehChassi(veh.chassi || '');
+    setEditVehKm(String(veh.km || 0));
+  };
+
+  const handleFetchEditClientCep = async (cepCode: string) => {
+    const clean = cepCode.replace(/\D/g, "");
+    if (clean.length !== 8) return;
+    
+    setIsFetchingEditCliCep(true);
+    setEditCliCepError(null);
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+      const data = await res.json();
+      if (data.erro) {
+        setEditCliCepError("CEP inválido/não encontrado.");
+      } else {
+        const logradouro = data.logradouro || "";
+        const bairro = data.bairro || "";
+        const localidade = data.localidade || "";
+        const uf = data.uf || "";
+        
+        let fullAddress = "";
+        if (logradouro) fullAddress += logradouro;
+        if (bairro) fullAddress += `, ${bairro}`;
+        if (localidade) fullAddress += ` - ${localidade}`;
+        if (uf) fullAddress += `/${uf}`;
+        
+        setEditCliAddress(fullAddress);
+      }
+    } catch (err) {
+      setEditCliCepError("Erro na conexão com ViaCEP.");
+    } finally {
+      setIsFetchingEditCliCep(false);
+    }
+  };
+
+  const handleEditClientSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClient) return;
+    if (!editCliName || !editCliPhone) {
+      alert("Por favor, preencha o Nome e WhatsApp correspondente do cliente.");
+      return;
+    }
+
+    await editCliente(editingClient.id, {
+      name: editCliName,
+      phone: editCliPhone,
+      email: editCliEmail,
+      cpfCnpj: editCliCpfCnpj,
+      cep: editCliCep || undefined,
+      address: editCliAddress || undefined,
+      oilChangeAlert: editCliOilAlert,
+      reviewAlert: editCliReviewAlert
+    });
+
+    setEditingClient(null);
+    alert("Cliente atualizado com sucesso!");
+  };
+
+  const handleEditVehicleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingVehicle) return;
+    if (!editVehClient || !editVehPlate || !editVehBrand || !editVehModel) {
+      alert("Campos básicos obrigatórios ausentes para o cadastro veicular.");
+      return;
+    }
+
+    await editVeiculo(editingVehicle.id, {
+      clienteId: editVehClient,
+      brand: editVehBrand,
+      model: editVehModel,
+      year: editVehYear,
+      engine: editVehEngine,
+      plate: editVehPlate.toUpperCase().trim(),
+      chassi: editVehChassi,
+      km: parseInt(editVehKm) || 0
+    });
+
+    setEditingVehicle(null);
+    alert("Veículo atualizado com sucesso!");
+  };
+
+  const handleConfirmDeleteClient = async () => {
+    if (!clientToDelete) return;
+    await deleteCliente(clientToDelete.id);
+    setClientToDelete(null);
+    alert("Cliente removido com sucesso!");
+  };
+
+  const handleConfirmDeleteVehicle = async () => {
+    if (!vehicleToDelete) return;
+    await deleteVeiculo(vehicleToDelete.id);
+    setVehicleToDelete(null);
+    alert("Veículo removido com sucesso!");
+  };
   
   // Queries
   const [clientQuery, setClientQuery] = useState('');
@@ -397,19 +546,44 @@ export const CRMView: React.FC = () => {
                         </div>
                         <div className="text-[10px] text-gray-500">{cli.email}</div>
                         
-                        {/* Notifications alarm checkboxes indicators */}
-                        <div className="flex items-center gap-2 mt-1">
-                          <div className="flex gap-2 text-[8px] font-bold">
-                            <span className={`px-1 rounded ${cli.oilChangeAlert ? 'bg-green-950/40 text-green-500 border border-green-900/20' : 'bg-slate-900 text-slate-500'}`}>
-                              💬 LUBRI-ALERTA
-                            </span>
-                            <span className={`px-1 rounded ${cli.reviewAlert ? 'bg-green-950/40 text-green-500 border border-green-900/20' : 'bg-slate-900 text-slate-500'}`}>
-                              🔔 REVISÃO-ALERTA
+                        {/* Notifications alarm checkboxes indicators & Action Buttons */}
+                        <div className="flex flex-col gap-2 mt-2 w-full">
+                          <div className="flex justify-between items-center gap-4 flex-wrap">
+                            <div className="flex gap-1 text-[8px] font-bold">
+                              <span className={`px-1 rounded ${cli.oilChangeAlert ? 'bg-green-950/40 text-green-500 border border-green-900/20' : 'bg-slate-900 text-slate-500'}`}>
+                                💬 LUBRI-ALERTA
+                              </span>
+                              <span className={`px-1 rounded ${cli.reviewAlert ? 'bg-green-950/40 text-green-500 border border-green-900/20' : 'bg-slate-900 text-slate-500'}`}>
+                                🔔 REVISÃO-ALERTA
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-red-400 hover:text-red-300 select-none font-bold shrink-0">
+                              {isExpanded ? '▲ Recolher' : '▼ Analisar Óleo'}
                             </span>
                           </div>
-                          <span className="text-[10px] text-red-400 hover:text-red-300 select-none hidden sm:inline ml-1 font-semibold">
-                            {isExpanded ? '▲ Recolher' : '▼ Analisar Óleo'}
-                          </span>
+
+                          <div className="flex items-center gap-2 pt-2 border-t border-gray-900/60 justify-start sm:justify-end">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditClient(cli);
+                              }}
+                              className="text-[10px] font-mono font-bold text-slate-300 hover:text-white flex items-center gap-1 bg-[#121c33] hover:bg-[#1a2b4d] px-2.5 py-1 rounded border border-gray-800 transition-all cursor-pointer"
+                            >
+                              <Edit2 className="w-3.5 h-3.5 text-cyan-400" /> EDITAR
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setClientToDelete(cli);
+                              }}
+                              className="text-[10px] font-mono font-bold text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-950/30 hover:bg-red-950/50 px-2.5 py-1 rounded border border-red-900/30 hover:border-red-900/50 transition-all cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-500" /> EXCLUIR
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -736,9 +910,28 @@ export const CRMView: React.FC = () => {
 
                     </div>
 
-                    <div className="border-t border-gray-900 pt-2 flex justify-between items-center text-[10px] font-mono">
-                      <span className="text-red-400">Dono: {owner?.name || "Desconhecido"}</span>
-                      <span className="text-gray-600 bg-black/40 px-1.5 py-0.5 rounded text-[8px]">{activeOS.length} OS registradas</span>
+                    <div className="border-t border-gray-900 pt-2 flex flex-col gap-2.5">
+                      <div className="flex justify-between items-center text-[10px] font-mono">
+                        <span className="text-red-400">Dono: {owner?.name || "Desconhecido"}</span>
+                        <span className="text-gray-600 bg-black/40 px-1.5 py-0.5 rounded text-[8px]">{activeOS.length} OS registradas</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 justify-end pt-1 bg-black/10 rounded">
+                        <button
+                          type="button"
+                          onClick={() => startEditVehicle(veh)}
+                          className="text-[10px] font-mono font-bold text-slate-350 hover:text-white flex items-center gap-1 bg-slate-900 hover:bg-[#1a2b4d] px-2.5 py-1 rounded border border-gray-800/80 transition-all cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 text-cyan-400" /> EDITAR
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVehicleToDelete(veh)}
+                          className="text-[10px] font-mono font-bold text-red-400 hover:text-red-300 flex items-center gap-1 bg-red-950/20 hover:bg-red-950/50 px-2.5 py-1 rounded border border-red-900/30 hover:border-red-900/50 transition-all cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-red-500" /> EXCLUIR
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -957,6 +1150,352 @@ export const CRMView: React.FC = () => {
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 📝 EDITAR CLIENTE MODAL */}
+      {editingClient && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 max-w-lg w-full text-left flex flex-col gap-5 animate-fadeIn">
+            <div className="flex justify-between items-center border-b border-gray-850 pb-3">
+              <h3 className="font-display font-extrabold text-white text-base flex items-center gap-2">
+                <Users className="w-5 h-5 text-red-500" /> EDITAR REGISTRO DE CLIENTE
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setEditingClient(null)}
+                className="text-gray-400 hover:text-white transition-colors text-sm font-sans cursor-pointer focus:outline-none"
+              >
+                ✕ Fechar
+              </button>
+            </div>
+
+            <form onSubmit={handleEditClientSubmit} className="flex flex-col gap-4 text-xs font-mono">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400">NOME INTEGRAL *</label>
+                <input 
+                  type="text" 
+                  placeholder="Nome do cliente"
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                  value={editCliName}
+                  onChange={(e) => setEditCliName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400">WHATSAPP / CELULAR *</label>
+                  <input 
+                    type="text" 
+                    placeholder="(11) 99122-3344"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                    value={editCliPhone}
+                    onChange={(e) => setEditCliPhone(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400">CPF OU CNPJ</label>
+                  <input 
+                    type="text" 
+                    placeholder="321.456.987-11"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                    value={editCliCpfCnpj}
+                    onChange={(e) => setEditCliCpfCnpj(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400">EMAIL CORRESPONDÊNCIA</label>
+                <input 
+                  type="email" 
+                  placeholder="cliente@gmail.com"
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                  value={editCliEmail}
+                  onChange={(e) => setEditCliEmail(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400 flex items-center gap-1">
+                  CEP DO CLIENTE {isFetchingEditCliCep && <span className="text-red-500 text-[8px] animate-pulse font-mono">(Buscando...)</span>}
+                </label>
+                <div className="relative">
+                  <input 
+                    type="text" 
+                    placeholder="Ex: 01001-000"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white w-full"
+                    value={editCliCep}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditCliCep(val);
+                      if (val.replace(/\D/g, "").length === 8) {
+                        handleFetchEditClientCep(val);
+                      }
+                    }}
+                  />
+                  {editCliCepError && (
+                    <span className="text-[9px] text-red-500 block absolute left-1 -bottom-4 font-sans">{editCliCepError}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400">ENDEREÇO / LOGRADOURO</label>
+                <input 
+                  type="text" 
+                  placeholder="Rua, número - Bairro - Cidade/UF"
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                  value={editCliAddress}
+                  onChange={(e) => setEditCliAddress(e.target.value)}
+                />
+              </div>
+
+              {/* Toggle alert options */}
+              <div className="bg-black/30 p-3 rounded-lg border border-gray-900 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-350">Alerta Troca de Óleo por WhatsApp</span>
+                  <input 
+                    type="checkbox" 
+                    checked={editCliOilAlert}
+                    onChange={(e) => setEditCliOilAlert(e.target.checked)}
+                    className="w-4 h-4 checked:bg-red-500 rounded border-gray-800 bg-[#080c16] cursor-pointer"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-slate-350">SMS / WhatsApp Revisões Periódicas</span>
+                  <input 
+                    type="checkbox" 
+                    checked={editCliReviewAlert}
+                    onChange={(e) => setEditCliReviewAlert(e.target.checked)}
+                    className="w-4 h-4 checked:bg-red-500 rounded border-gray-800 bg-[#080c16] cursor-pointer"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-2">
+                <button 
+                  type="button"
+                  onClick={() => setEditingClient(null)}
+                  className="w-1/2 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border border-gray-800 cursor-pointer"
+                >
+                  CANCELAR
+                </button>
+                <button 
+                  type="submit"
+                  className="w-1/2 py-2.5 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl text-white font-bold text-xs shadow-md shadow-red-950/45 cursor-pointer"
+                >
+                  SALVAR ALTERAÇÕES
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 🚗 EDITAR VEÍCULO MODAL */}
+      {editingVehicle && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 max-w-lg w-full text-left flex flex-col gap-5 animate-fadeIn">
+            <div className="flex justify-between items-center border-b border-gray-850 pb-3">
+              <h3 className="font-display font-extrabold text-white text-base flex items-center gap-2">
+                <Car className="w-5 h-5 text-red-500" /> EDITAR VEÍCULO DA OFICINA
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setEditingVehicle(null)}
+                className="text-gray-400 hover:text-white transition-colors text-sm font-sans cursor-pointer focus:outline-none"
+              >
+                ✕ Fechar
+              </button>
+            </div>
+
+            <form onSubmit={handleEditVehicleSubmit} className="flex flex-col gap-4 text-xs font-mono">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400">DONO / CLIENTE DETENTOR *</label>
+                <select 
+                  value={editVehClient}
+                  onChange={(e) => setEditVehClient(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                  required
+                >
+                  <option value="">-- Vincular Cliente --</option>
+                  {clientes.map(c => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400">PLACA *</label>
+                  <input 
+                    type="text" 
+                    placeholder="GOLF-2018"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white uppercase"
+                    value={editVehPlate}
+                    onChange={(e) => setEditVehPlate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400">MARCA *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Volkswagen"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                    value={editVehBrand}
+                    onChange={(e) => setEditVehBrand(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400">MODELO DO CARRO *</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: Polo TSI Comfortline"
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                  value={editVehModel}
+                  onChange={(e) => setEditVehModel(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400">MOTORIZAÇÃO</label>
+                  <input 
+                    type="text" 
+                    placeholder="1.4 TSI Flex"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                    value={editVehEngine}
+                    onChange={(e) => setEditVehEngine(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400">ANO FABRICAÇÃO</label>
+                  <input 
+                    type="text" 
+                    placeholder="2018"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                    value={editVehYear}
+                    onChange={(e) => setEditVehYear(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400">KM ATUAL</label>
+                  <input 
+                    type="number" 
+                    placeholder="68500"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                    value={editVehKm}
+                    onChange={(e) => setEditVehKm(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400">NÚMERO CHASSI</label>
+                  <input 
+                    type="text" 
+                    placeholder="9BWAB..."
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                    value={editVehChassi}
+                    onChange={(e) => setEditVehChassi(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-2">
+                <button 
+                  type="button"
+                  onClick={() => setEditingVehicle(null)}
+                  className="w-1/2 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border border-gray-800 cursor-pointer"
+                >
+                  CANCELAR
+                </button>
+                <button 
+                  type="submit"
+                  className="w-1/2 py-2.5 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl text-white font-bold text-xs shadow-md shadow-red-950/45 cursor-pointer"
+                >
+                  SALVAR ALTERAÇÕES
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ EXCLUIR CLIENTE CONFIRMAÇÃO MODAL */}
+      {clientToDelete && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0c1223] rounded-2xl border border-red-900/30 p-6 max-w-sm w-full text-left flex flex-col gap-4 animate-scaleUp">
+            <div className="flex items-center gap-2.5 text-red-500">
+              <AlertCircle className="w-6 h-6 animate-pulse" />
+              <h3 className="font-display font-extrabold text-white text-sm uppercase">Excluir Cliente</h3>
+            </div>
+            
+            <p className="text-gray-400 text-xs font-mono leading-relaxed">
+              Tem certeza que deseja remover permanentemente o cliente <strong className="text-white">{clientToDelete.name}</strong>?
+              Isso atualizará o índice offline e removerá seu cadastro físico da base de dados.
+            </p>
+
+            <div className="flex gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => setClientToDelete(null)}
+                className="w-1/2 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-mono border border-gray-800 cursor-pointer font-bold"
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteClient}
+                className="w-1/2 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-mono cursor-pointer font-bold"
+              >
+                SIM, REMOVER
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ⚠️ EXCLUIR VEÍCULO CONFIRMAÇÃO MODAL */}
+      {vehicleToDelete && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0c1223] rounded-2xl border border-red-900/30 p-6 max-w-sm w-full text-left flex flex-col gap-4 animate-scaleUp">
+            <div className="flex items-center gap-2.5 text-red-500">
+              <AlertCircle className="w-6 h-6 animate-pulse" />
+              <h3 className="font-display font-extrabold text-white text-sm uppercase">Excluir Veículo</h3>
+            </div>
+            
+            <p className="text-gray-400 text-xs font-mono leading-relaxed">
+              Tem certeza que deseja remover permanentemente o veículo <strong className="text-white">{vehicleToDelete.brand} {vehicleToDelete.model} ({vehicleToDelete.plate})</strong> da frota?
+            </p>
+
+            <div className="flex gap-3 mt-2">
+              <button
+                type="button"
+                onClick={() => setVehicleToDelete(null)}
+                className="w-1/2 py-2 bg-slate-900 text-slate-300 rounded-lg text-xs font-mono border border-gray-800 cursor-pointer font-bold"
+              >
+                CANCELAR
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteVehicle}
+                className="w-1/2 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-mono cursor-pointer font-bold"
+              >
+                SIM, REMOVER
+              </button>
+            </div>
           </div>
         </div>
       )}

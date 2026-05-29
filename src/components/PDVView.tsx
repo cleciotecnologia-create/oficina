@@ -40,6 +40,7 @@ export const PDVView: React.FC = () => {
     abrirCaixa, 
     fecharCaixa, 
     addVenda, 
+    vendas,
     user,
     company,
     ordensServico,
@@ -129,6 +130,54 @@ export const PDVView: React.FC = () => {
 
   // Register opening state
   const [openingAmountStr, setOpeningAmountStr] = useState('150.00');
+  
+  // Custom interactive cashier closing states
+  const [showClosureModal, setShowClosureModal] = useState(false);
+  const [physicalCashInput, setPhysicalCashInput] = useState('');
+  const [closureNotes, setClosureNotes] = useState('');
+  const [closureReport, setClosureReport] = useState<any | null>(null);
+  const [showClosureReceipt, setShowClosureReceipt] = useState(false);
+
+  // Derive session transactions and values
+  const sessionSales = useMemo(() => {
+    if (!caixaStatus) return [];
+    const openDate = caixaStatus.openedAt ? new Date(caixaStatus.openedAt) : new Date();
+    return (vendas || []).filter(v => {
+      const saleDate = new Date(v.date);
+      return saleDate >= openDate;
+    });
+  }, [vendas, caixaStatus]);
+
+  // Aggregate by payment method
+  const closureFinancials = useMemo(() => {
+    let cashSalesTotal = 0;
+    let pixSalesTotal = 0;
+    let cardSalesTotal = 0;
+
+    sessionSales.forEach(v => {
+      if (v.paymentMethod === 'Dinheiro') {
+        cashSalesTotal += v.total;
+      } else if (v.paymentMethod === 'PIX') {
+        pixSalesTotal += v.total;
+      } else if (v.paymentMethod === 'Cartão') {
+        cardSalesTotal += v.total;
+      }
+    });
+
+    const totalVendido = cashSalesTotal + pixSalesTotal + cardSalesTotal;
+    const initialAmount = caixaStatus?.initialAmount || 0;
+    const expectedCashInRegister = initialAmount + cashSalesTotal;
+
+    return {
+      sessionSalesCount: sessionSales.length,
+      cashSalesTotal,
+      pixSalesTotal,
+      cardSalesTotal,
+      totalVendido,
+      initialAmount,
+      expectedCashInRegister
+    };
+  }, [sessionSales, caixaStatus]);
   
   // Checkout & invoice state
   const [saleFinished, setSaleFinished] = useState(false);
@@ -445,16 +494,20 @@ export const PDVView: React.FC = () => {
       <div className="col-span-12 xl:col-span-7 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4">
         
         {/* Header containing Name and Quick Barcode Scanner */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-gray-800 pb-4">
-          <div>
-            <h2 className="font-display font-extrabold text-xl text-white flex items-center gap-2">
-              <ShoppingBag className="w-5 h-5 text-red-500" /> PDV INTEGRADO (LOJA & OFICINA)
-            </h2>
-            <span className="text-[10px] text-gray-500 font-mono block uppercase">Frente de Caixa Rápido e Unificado: Peças, Consumíveis e Serviços Técnicos da Oficina</span>
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 border-b border-gray-800 pb-4">
+          <div className="min-w-0 flex-grow">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <ShoppingBag className="w-5 h-5 text-red-500 shrink-0" />
+              <h2 className="font-display font-extrabold text-lg sm:text-xl text-white flex items-center gap-1.5 flex-wrap">
+                <span className="whitespace-nowrap">PDV INTEGRADO</span>
+                <span className="text-gray-400 font-medium text-xs sm:text-sm whitespace-nowrap">(LOJA & OFICINA)</span>
+              </h2>
+            </div>
+            <span className="text-[10px] text-gray-500 font-mono block uppercase mt-1">Frente de Caixa Rápido e Unificado: Peças, Consumíveis e Serviços Técnicos da Oficina</span>
           </div>
 
           {/* Barcode Quick Submission Filter */}
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto items-stretch sm:items-center">
+          <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto items-stretch lg:items-center">
             <form onSubmit={handleBarcodeSubmit} className="flex gap-2 flex-1 sm:flex-none">
               <div className="relative flex-1 sm:flex-none">
                 <Barcode className="absolute left-3 top-2.5 w-4 h-4 text-gray-500 animate-pulse" />
@@ -477,9 +530,9 @@ export const PDVView: React.FC = () => {
             <button 
               type="button"
               onClick={() => { playScannerBeep(); setShowBarcodeModal(true); }}
-              className="flex items-center justify-center gap-1.5 py-2 px-3 bg-red-600 text-white hover:bg-red-700 text-xs font-bold font-mono rounded-lg transition-all cursor-pointer shadow-md shadow-red-950/20 select-none uppercase tracking-wide"
+              className="flex items-center justify-center gap-1.5 py-2.5 px-4 bg-red-600 text-white hover:bg-red-700 text-xs font-bold font-mono rounded-lg transition-all cursor-pointer shadow-md shadow-red-950/20 select-none uppercase tracking-wide whitespace-nowrap shrink-0"
             >
-              <Camera className="w-3.5 h-3.5 font-bold" />
+              <Camera className="w-3.5 h-3.5" />
               <span>Câmera / Scanner</span>
             </button>
           </div>
@@ -990,8 +1043,13 @@ export const PDVView: React.FC = () => {
           </div>
           <button 
             type="button"
-            onClick={fecharCaixa}
-            className="px-3 py-2 rounded-lg border border-red-900 bg-red-950/20 text-red-400 hover:bg-red-600 hover:text-white transition-all font-bold font-mono text-[10px] cursor-pointer"
+            onClick={() => {
+              playScannerBeep();
+              setPhysicalCashInput(closureFinancials.expectedCashInRegister.toFixed(2));
+              setClosureNotes('');
+              setShowClosureModal(true);
+            }}
+            className="px-3 py-2 rounded-lg border border-red-900 bg-red-950/20 text-red-400 hover:bg-red-650 hover:text-white transition-all font-bold font-mono text-[10px] cursor-pointer"
           >
             🔒 FECHAR CAIXA DO DIA
           </button>
@@ -1285,6 +1343,306 @@ export const PDVView: React.FC = () => {
                 className="py-2 px-5 bg-red-650 bg-red-600 hover:bg-red-700 text-white font-mono text-[10.5px] font-extrabold rounded-xl transition-colors cursor-pointer border-0 select-none uppercase font-bold"
               >
                 Concluir Captura
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 🔒 MODELO INTERATIVO DE FECHAMENTO DE CAIXA */}
+      {showClosureModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm text-left">
+          <div className="bg-[#0b101c] border border-gray-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            
+            <div className="flex justify-between items-start">
+              <div>
+                <span className="bg-red-950/40 border border-red-900 border-dashed text-red-500 font-mono text-[9px] uppercase tracking-widest font-extrabold px-2.5 py-1 rounded w-max">
+                  📊 FECHAMENTO FINANCEIRO CONSOLIDADO
+                </span>
+                <h3 className="text-lg font-display font-extrabold text-white mt-2 flex items-center gap-2">
+                  🔒 Fechar Caixa Unificado (Fim do Expediente)
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  Confirme os valores arrecadados no dia de hoje para encerrar a sessão operacional de forma segura.
+                </p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowClosureModal(false)}
+                className="text-gray-400 hover:text-white bg-slate-900/40 hover:bg-slate-800 border border-gray-800 rounded-xl p-2 cursor-pointer transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Main content grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              {/* Left Box: Expected values and category aggregates */}
+              <div className="bg-slate-950 border border-gray-850 p-4 rounded-2xl flex flex-col gap-3">
+                <span className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">
+                  📉 VALORES ESPERADOS (SISTEMA)
+                </span>
+
+                <div className="flex justify-between items-center text-xs text-gray-350">
+                  <span>1. Fundo de Troco Inicial (+)</span>
+                  <span className="font-mono font-bold text-white">R$ {closureFinancials.initialAmount.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs text-gray-350">
+                  <span className="flex items-center gap-1">🟢 Vendas Dinheiro (+)</span>
+                  <span className="font-mono font-bold text-emerald-400">R$ {closureFinancials.cashSalesTotal.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs text-gray-350">
+                  <span className="flex items-center gap-1">⚡ Vendas Pix</span>
+                  <span className="font-mono font-bold text-white">R$ {closureFinancials.pixSalesTotal.toFixed(2)}</span>
+                </div>
+
+                <div className="flex justify-between items-center text-xs text-gray-350">
+                  <span className="flex items-center gap-1">💳 Vendas Cartão</span>
+                  <span className="font-mono font-bold text-white">R$ {closureFinancials.cardSalesTotal.toFixed(2)}</span>
+                </div>
+
+                <div className="border-t border-gray-850 my-1"></div>
+
+                <div className="flex justify-between items-center text-xs font-mono font-bold text-gray-400">
+                  <span>Total Faturado Hoje (Líquido)</span>
+                  <span className="text-white">R$ {closureFinancials.totalVendido.toFixed(2)} ({closureFinancials.sessionSalesCount} vendas)</span>
+                </div>
+
+                <div className="bg-red-950/25 border border-red-900/40 p-3 rounded-xl mt-1 flex flex-col gap-0.5">
+                  <span className="text-[9px] font-mono text-red-400 font-bold uppercase tracking-widest block">DINHEIRO ESPERADO EM GAVETA</span>
+                  <span className="text-lg font-mono font-bold text-white">R$ {closureFinancials.expectedCashInRegister.toFixed(2)}</span>
+                  <span className="text-[10px] text-gray-400 leading-tight">Fundo de abertura + Vendas físicas registradas em espécie no balcão.</span>
+                </div>
+              </div>
+
+              {/* Right Box: Operations Input and Discrepancies */}
+              <div className="bg-[#0c1223] border border-gray-800 p-4 rounded-2xl flex flex-col gap-3">
+                <span className="text-[10px] font-mono text-purple-400 font-bold uppercase tracking-wider">
+                  💰 CONTAGEM FÍSICA E CONCILIAÇÃO
+                </span>
+
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <label className="text-[10px] font-mono text-gray-400 font-bold uppercase">VALOR VERIFICADO NO CAIXA (DINHEIRO FÍSICO) *</label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-2 text-sm font-bold text-gray-500">R$</span>
+                    <input 
+                      type="number"
+                      step="0.01"
+                      value={physicalCashInput}
+                      onChange={(e) => setPhysicalCashInput(e.target.value)}
+                      placeholder="Adicione valor verificado"
+                      className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 pl-10 text-sm font-mono text-white text-base font-bold focus:outline-none focus:border-red-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Audit state presentation */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[9px] font-mono text-gray-400 font-bold uppercase">SITUAÇÃO DE CONCILIAÇÃO FINANCEIRA</span>
+                  {(() => {
+                    const physicalFloat = parseFloat(physicalCashInput) || 0;
+                    const diffFloat = physicalFloat - closureFinancials.expectedCashInRegister;
+
+                    if (Math.abs(diffFloat) < 0.01) {
+                      return (
+                        <div className="bg-emerald-950/40 border border-emerald-900/60 p-2.5 rounded-lg text-[11px] text-emerald-400 font-sans flex items-center gap-2">
+                          <span className="text-sm">✓</span>
+                          <span><strong>Perfeito!</strong> O caixa bateu com as vendas previstas do sistema. Sem quebra.</span>
+                        </div>
+                      );
+                    } else if (diffFloat > 0) {
+                      return (
+                        <div className="bg-cyan-950/40 border border-cyan-900/60 p-2.5 rounded-lg text-[11px] text-cyan-400 font-sans flex items-center gap-2">
+                          <span className="text-sm">ℹ️</span>
+                          <span><strong>Sobra de Caixa:</strong> Sobrando <strong className="font-mono text-white">R$ {diffFloat.toFixed(2)}</strong> na contagem da gaveta.</span>
+                        </div>
+                      );
+                    } else {
+                      return (
+                        <div className="bg-red-950/40 border border-red-900/60 p-2.5 rounded-lg text-[11px] text-red-400 font-sans flex items-center gap-2">
+                          <span className="text-sm">⚠️</span>
+                          <span><strong>Diferença de Quebra:</strong> Faltando <strong className="font-mono text-white">R$ {Math.abs(diffFloat).toFixed(2)}</strong> na contagem física.</span>
+                        </div>
+                      );
+                    }
+                  })()}
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-mono text-gray-400 uppercase font-bold">OBSERVAÇÕES DO OPERADOR</label>
+                  <textarea 
+                    value={closureNotes}
+                    onChange={(e) => setClosureNotes(e.target.value)}
+                    placeholder="Adicione justificativas sobre sangrias, ausência de troco físico ou ocorrências diárias..."
+                    rows={2}
+                    className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-red-500 font-sans resize-none"
+                  />
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* Guidance tip and bottom buttons */}
+            <div className="bg-[#050912] border border-red-950/30 p-3 rounded-2xl text-[11px] text-gray-400 leading-relaxed font-sans flex gap-2">
+              <span className="text-base">📝</span>
+              <p>
+                Ao finalizar, os dados desta sessão de caixa serão fechados e o acesso ao PDV exigirá nova abertura de saldo. Será gerado o <strong>Relatório de Expediente Diário</strong> que poderá ser copiado ou impresso em vias comuns de checkout de pastilha.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-gray-850 pt-2.5">
+              <button 
+                type="button"
+                onClick={() => setShowClosureModal(false)}
+                className="py-2.5 px-4 bg-slate-950 hover:bg-slate-900 text-gray-400 hover:text-white font-mono text-[10px] uppercase font-bold border border-gray-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Voltar ao PDV
+              </button>
+              
+              <button 
+                type="button"
+                onClick={async () => {
+                  playScannerBeep();
+                  const physFloat = parseFloat(physicalCashInput) || 0;
+                  const diffFloat = physFloat - closureFinancials.expectedCashInRegister;
+                  
+                  const finalReport = {
+                    openedAt: caixaStatus.openedAt,
+                    closedAt: new Date().toISOString(),
+                    initialAmount: closureFinancials.initialAmount,
+                    cashSalesTotal: closureFinancials.cashSalesTotal,
+                    pixSalesTotal: closureFinancials.pixSalesTotal,
+                    cardSalesTotal: closureFinancials.cardSalesTotal,
+                    totalVendido: closureFinancials.totalVendido,
+                    expectedCash: closureFinancials.expectedCashInRegister,
+                    physicalCash: physFloat,
+                    difference: diffFloat,
+                    notes: closureNotes || "Nenhuma observação informada.",
+                    operator: user?.name || "Clécio Santos"
+                  };
+
+                  await fecharCaixa(finalReport);
+                  setClosureReport(finalReport);
+                  setShowClosureModal(false);
+                  setShowClosureReceipt(true);
+                }}
+                className="py-2.5 px-5 bg-red-650 bg-red-600 hover:bg-red-700 text-white font-mono text-[10.5px] font-extrabold rounded-xl transition-all shadow-md shadow-red-950/20 cursor-pointer uppercase select-none font-bold"
+              >
+                🔒 CONFIRMAR FECHAMENTO
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 🧾 RECEBÍVEL FECHAMENTO CAIXA DE IMPRESSÃO */}
+      {showClosureReceipt && closureReport && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm text-black">
+          <div className="bg-white max-w-sm w-full rounded-2xl p-6 shadow-2xl relative text-left">
+            
+            <div className="text-center font-mono text-xs border-b-2 border-black pb-3">
+              <span className="font-extrabold text-sm block tracking-widest">{company.name.toUpperCase()}</span>
+              <span className="text-[10px] block mt-0.5">{company.address || "Av. das Nações Unidas, 1040 - São Paulo, SP"}</span>
+              <span className="text-[10px] block font-bold">RELATÓRIO DE EXPEDIENTE DO CAIXA</span>
+              <span className="text-[10px] text-white bg-black px-2.5 py-0.5 rounded font-bold uppercase inline-block mt-2">SESSÃO ENCERRADA</span>
+            </div>
+
+            <div className="my-4 font-mono text-[11px] flex flex-col gap-1">
+              <div className="flex justify-between font-bold">
+                <span>COMUNICADO FECHAMENTO</span>
+                <span>ID #{caixaStatus?.id?.substring(0, 6).toUpperCase() || "C-SYS"}</span>
+              </div>
+              <span>Operador: {closureReport.operator}</span>
+              <span>Abertura: {new Date(closureReport.openedAt).toLocaleString()}</span>
+              <span>Encerramento: {new Date(closureReport.closedAt).toLocaleString()}</span>
+              <span className="border-b border-dashed border-black my-1"></span>
+
+              <div className="flex justify-between font-bold">
+                <span>Saldo Inicial (+)</span>
+                <span>R$ {closureReport.initialAmount.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-neutral-800">
+                <span>Faturamento em Espécie (+)</span>
+                <span>R$ {closureReport.cashSalesTotal.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-neutral-850">
+                <span>Faturamento em Pix (+)</span>
+                <span>R$ {closureReport.pixSalesTotal.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-neutral-850">
+                <span>Faturamento em Cartão (+)</span>
+                <span>R$ {closureReport.cardSalesTotal.toFixed(2)}</span>
+              </div>
+
+              <span className="border-b border-dashed border-black my-1"></span>
+
+              <div className="flex justify-between font-bold text-[12px] bg-neutral-200 p-1">
+                <span>EXPECTATIVA GAVETA</span>
+                <span>R$ {closureReport.expectedCash.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between font-bold text-[12px] bg-neutral-100 p-1 mt-0.5">
+                <span>CONTAGEM FÍSICA</span>
+                <span>R$ {closureReport.physicalCash.toFixed(2)}</span>
+              </div>
+
+              <div className={`flex justify-between font-bold p-1 mt-0.5 rounded text-[11px] ${
+                closureReport.difference === 0 ? 'bg-emerald-100 text-emerald-800' :
+                closureReport.difference > 0 ? 'bg-blue-100 text-blue-800' : 'bg-red-100 text-red-800'
+              }`}>
+                <span>SOBRA / QUEBRA DE CAIXA</span>
+                <span>
+                  {closureReport.difference > 0 ? '+' : ''}
+                  R$ {closureReport.difference.toFixed(2)}
+                </span>
+              </div>
+
+              <span className="border-b border-dashed border-black my-1"></span>
+
+              <div className="bg-neutral-50 p-2 rounded text-[10px] leading-tight">
+                <span className="font-bold block uppercase text-[8px] text-neutral-400">NOTAS DA AUDITORIA DO DIA:</span>
+                <p className="mt-1 text-black font-medium">{closureReport.notes}</p>
+              </div>
+
+              <div className="border-t-2 border-black border-dashed mt-4 pt-1.5 text-center text-[10px] text-neutral-500">
+                <span>CONCILIADO EM SANEAMENTO DE INVENTÁRIO</span>
+                <span className="block font-bold">ERP Sistema Oficina PDV</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2">
+              <button 
+                type="button"
+                onClick={() => {
+                  try {
+                    window.print();
+                  } catch(e) {
+                    alert("Aviso de Impressão!");
+                  }
+                }}
+                className="w-full py-2.5 bg-neutral-950 text-white font-mono font-bold text-xs rounded-xl flex items-center justify-center gap-1 hover:bg-neutral-800 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" /> IMPRIMIR EXPEDIENTE
+              </button>
+              
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowClosureReceipt(false);
+                  setClosureReport(null);
+                }}
+                className="w-full py-2 bg-neutral-100 text-neutral-800 hover:bg-neutral-200 font-mono text-center font-bold text-xs rounded-xl cursor-pointer"
+              >
+                ENTENDIDO, VOLTAR AO REQUERIMENTO
               </button>
             </div>
 
