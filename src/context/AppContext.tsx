@@ -118,6 +118,7 @@ interface AppContextType {
   // Local Audit Logs
   localAuditLogs: LocalAuditLog[];
   addLocalAuditLog: (action: string, details: string) => void;
+  resetToProduction: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -458,7 +459,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           const list: Cliente[] = [];
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Cliente));
-          if (list.length > 0) setClientes(list);
+          setClientes(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "clientes")
       );
@@ -469,7 +470,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           const list: Veiculo[] = [];
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Veiculo));
-          if (list.length > 0) setVeiculos(list);
+          setVeiculos(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "veiculos")
       );
@@ -480,7 +481,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           const list: Produto[] = [];
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Produto));
-          if (list.length > 0) setProdutos(list);
+          setProdutos(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "produtos")
       );
@@ -491,7 +492,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           const list: Servico[] = [];
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Servico));
-          if (list.length > 0) setServicos(list);
+          setServicos(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "servicos")
       );
@@ -502,7 +503,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           const list: OrdemServico[] = [];
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as OrdemServico));
-          if (list.length > 0) setOrdensServico(list);
+          setOrdensServico(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "ordens_servico")
       );
@@ -513,7 +514,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           const list: Financeiro[] = [];
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Financeiro));
-          if (list.length > 0) setFinanceiro(list);
+          setFinanceiro(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "financeiro")
       );
@@ -526,6 +527,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Caixa));
           if (list.length > 0) {
             setCaixaStatus(list[0]);
+          } else {
+            setCaixaStatus(null);
           }
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "caixa")
@@ -537,7 +540,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           const list: Venda[] = [];
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Venda));
-          if (list.length > 0) setVendas(list);
+          setVendas(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "vendas")
       );
@@ -548,7 +551,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           const list: Fornecedor[] = [];
           snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Fornecedor));
-          if (list.length > 0) setFornecedores(list);
+          setFornecedores(list);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, "fornecedores")
       );
@@ -1235,6 +1238,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const resetToProduction = async () => {
+    // 1. Clear database elements in Firestore if online and logged in
+    if (navigator.onLine && auth.currentUser && company?.id) {
+      const collectionsToClear = [
+        'clientes',
+        'veiculos',
+        'produtos',
+        'servicos',
+        'ordens_servico',
+        'financeiro',
+        'caixa',
+        'vendas',
+        'fornecedores'
+      ];
+
+      const { deleteDoc, getDocs, collection, query, where, writeBatch } = await import('firebase/firestore');
+
+      for (const colName of collectionsToClear) {
+        try {
+          const q = query(collection(db, colName), where('empresaId', '==', company.id));
+          const snap = await getDocs(q);
+          const batch = writeBatch(db);
+          snap.forEach((docSnap) => {
+            batch.delete(docSnap.ref);
+          });
+          await batch.commit();
+          console.log(`Cleared Firestore collection: ${colName}`);
+        } catch (err) {
+          console.error(`Error clearing Firestore collection ${colName}:`, err);
+        }
+      }
+    }
+
+    // 2. Clear state variables for client, vehicle, product lists to start perfectly from scratch
+    setClientes([]);
+    setVeiculos([]);
+    setProdutos([]);
+    setServicos([]);
+    setOrdensServico([]);
+    setFinanceiro([]);
+    setFornecedores([]);
+    setVendas([]);
+    setCaixaStatus({
+      id: "cx_" + new Date().toISOString().substring(0, 10),
+      empresaId: company?.id || INITIAL_COMPANY.id,
+      status: "Fechado",
+      initialAmount: 0,
+      currentAmount: 0,
+      openedAt: ""
+    });
+
+    // 3. Clear localized offline backups in localStorage
+    localStorage.removeItem("autotech_pending_actions");
+    setPendingActionsCount(0);
+
+    // Register Audit Log
+    addLocalAuditLog("ZERAR_DADOS_PRODUÇÃO", "Banco de dados limpo. Sistema inicializado do zero para operações de produção reais.");
+  };
+
   // Load local audit logs on startup
   useEffect(() => {
     try {
@@ -1338,7 +1400,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Local Audit Logs
       localAuditLogs,
-      addLocalAuditLog
+      addLocalAuditLog,
+      resetToProduction
     }}>
       {children}
     </AppContext.Provider>

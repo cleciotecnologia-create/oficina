@@ -29,6 +29,13 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Produto, Fornecedor } from '../types';
+import { 
+  ResponsiveContainer, 
+  PieChart, 
+  Pie, 
+  Cell, 
+  Tooltip 
+} from 'recharts';
 
 export interface ParsedXmlItem {
   code: string;
@@ -268,7 +275,8 @@ export const EstoqueView: React.FC = () => {
     fornecedores, 
     addFornecedor,
     editFornecedor,
-    deleteFornecedor
+    deleteFornecedor,
+    ordensServico
   } = useApp();
   
   const [activeTab, setActiveTab ] = useState<'geral' | 'cadastro' | 'fornecedores' | 'movimentacoes' | 'csv' | 'xml'>('geral');
@@ -289,6 +297,7 @@ export const EstoqueView: React.FC = () => {
   const [customCategories, setCustomCategories] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
+  const [onlyCriticalFilter, setOnlyCriticalFilter] = useState(false);
 
   // New product form states
   const [newProdName, setNewProdName] = useState('');
@@ -454,7 +463,8 @@ export const EstoqueView: React.FC = () => {
                         (p.compatibility && p.compatibility.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchCategory = categoryFilter === 'Todas' || p.category === categoryFilter;
-    return matchSearch && matchCategory;
+    const matchCritical = !onlyCriticalFilter || (p.quantity <= p.minStock);
+    return matchSearch && matchCategory && matchCritical;
   });
 
   // Calculate margin & markup helpers
@@ -700,7 +710,17 @@ export const EstoqueView: React.FC = () => {
     const parsed = parseNfeXmlContent(xmlText);
     if (parsed) {
       setParsedXml(parsed);
-      setXmlFeedback(`✅ XML de Exemplo (${parsed.emitName}) carregado com sucesso!`);
+      const duplicateItems = parsed.items.filter(item => 
+        produtos.some(p => 
+          p.internalSku.toLowerCase() === item.code.toLowerCase() || 
+          (p.barcode && p.barcode === item.barcode)
+        )
+      );
+      if (duplicateItems.length > 0) {
+        setXmlFeedback(`⚠️ XML de Exemplo Carregado. Alerta: Detectamos duplicidade de SKU em ${duplicateItems.length} item(ns).`);
+      } else {
+        setXmlFeedback(`✅ XML de Exemplo (${parsed.emitName}) carregado com sucesso!`);
+      }
       // Select all items by default
       const defaultSelected: Record<string, boolean> = {};
       parsed.items.forEach(item => {
@@ -729,7 +749,17 @@ export const EstoqueView: React.FC = () => {
       const parsed = parseNfeXmlContent(text);
       if (parsed) {
         setParsedXml(parsed);
-        setXmlFeedback(`✅ NF-e Nº ${parsed.invoiceNumber} (${parsed.emitName}) analisada com sucesso!`);
+        const duplicateItems = parsed.items.filter(item => 
+          produtos.some(p => 
+            p.internalSku.toLowerCase() === item.code.toLowerCase() || 
+            (p.barcode && p.barcode === item.barcode)
+          )
+        );
+        if (duplicateItems.length > 0) {
+          setXmlFeedback(`⚠️ NF-e Nº ${parsed.invoiceNumber} carregada. Alerta: Detectamos duplicidade de SKU para ${duplicateItems.length} item(ns) cadastrados no catálogo.`);
+        } else {
+          setXmlFeedback(`✅ NF-e Nº ${parsed.invoiceNumber} (${parsed.emitName}) analisada com sucesso!`);
+        }
         // Select all items by default
         const defaultSelected: Record<string, boolean> = {};
         parsed.items.forEach(item => {
@@ -1166,8 +1196,207 @@ export const EstoqueView: React.FC = () => {
           )}
 
           {/* PRODUCTS STOCK TABLE */}
-          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 overflow-x-auto">
-            <table className="w-full text-left font-mono text-xs">
+          <div className="bg-[#0c1223] rounded-2xl border border-gray-800">
+            {/* Critical Stock Alert Banner */}
+            {(() => {
+              const criticalCount = (produtos || []).filter(p => p.quantity <= p.minStock).length;
+              return (
+                <div className="p-4 border-b border-gray-850 bg-[#0d1527] rounded-t-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-red-950/40 text-red-500 border border-red-900/30 rounded-xl animate-pulse flex items-center justify-center shrink-0">
+                      <AlertTriangle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-white text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2">
+                        Alerta de Estoque Crítico
+                        {criticalCount > 0 && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-650 bg-red-600 text-white font-black animate-pulse font-mono">
+                            {criticalCount} ITENS
+                          </span>
+                        )}
+                      </h4>
+                      <p className="text-[11px] text-gray-400 font-sans mt-0.5 leading-normal">
+                        {criticalCount === 0 
+                          ? "Excelente! Nenhuma peça está abaixo do estoque de segurança mínimo estabelecido." 
+                          : `Total de ${criticalCount} produto${criticalCount > 1 ? 's' : ''} com o estoque físico abaixo ou igual ao nível de segurança registrado.`
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  {criticalCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setOnlyCriticalFilter(!onlyCriticalFilter)}
+                      className={`text-xs font-mono font-bold px-4 py-2 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer shadow-md shrink-0 ${
+                        onlyCriticalFilter 
+                          ? "bg-red-650 bg-red-600 hover:bg-red-700 text-white border-red-500 shadow-red-950/40" 
+                          : "bg-red-950/20 hover:bg-red-950/40 text-red-400 border-red-900/40"
+                      }`}
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      {onlyCriticalFilter ? "Mostrar Todos os Itens" : "Listar Apenas Críticos"}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Donut Chart - Stock Category Density & Occupancy */}
+            {(() => {
+              const categoryDistribution: Record<string, number> = (produtos || []).reduce((acc: Record<string, number>, p) => {
+                const qty = p.quantity || 0;
+                const cat = p.category || 'Outros';
+                acc[cat] = (acc[cat] || 0) + qty;
+                return acc;
+              }, {});
+
+              const totalStockItems = Object.values(categoryDistribution).reduce((sum: number, val: number) => sum + val, 0);
+
+              const chartData = (Object.entries(categoryDistribution) as [string, number][])
+                .map(([name, value]) => ({
+                  name,
+                  value,
+                  percentage: totalStockItems > 0 ? (value / totalStockItems) * 100 : 0
+                }))
+                .filter(item => item.value > 0)
+                .sort((a, b) => b.value - a.value);
+
+              if (totalStockItems === 0) {
+                return null;
+              }
+
+              return (
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 border-b border-gray-850 bg-[#080d19]/10 items-center">
+                  {/* Left Column - Donut Chart Representation */}
+                  <div className="lg:col-span-5 flex flex-col items-center justify-center relative bg-gradient-to-b from-[#0e1628]/35 to-transparent p-4 rounded-2xl border border-gray-850/45 h-[240px]">
+                    <div className="w-full h-full max-w-[200px] relative">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={chartData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={55}
+                            outerRadius={75}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {chartData.map((entry, index) => {
+                              const colors: Record<string, string> = {
+                                'Freios': '#06b6d4',
+                                'Filtros': '#ef4444',
+                                'Lubrificantes': '#f59e0b',
+                                'Suspensão': '#a855f7',
+                                'Ignição': '#ec4899',
+                                'Carroceria': '#3b82f6',
+                                'Elétrica': '#10b981',
+                              };
+                              return (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={colors[entry.name] || '#6b7280'} 
+                                />
+                              );
+                            })}
+                          </Pie>
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                  <div className="bg-[#0b101d] border border-gray-800 p-2 text-xs font-mono shadow-xl rounded-lg">
+                                    <span className="text-gray-400 font-bold tracking-wider uppercase block text-[8px] mb-1">{data.name}</span>
+                                    <div className="flex flex-col gap-0.5 text-white">
+                                      <span>📦 Total: <strong>{data.value} un</strong></span>
+                                      <span className="text-cyan-400">📊 Ocupação: <strong>{data.percentage.toFixed(1)}%</strong></span>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      {/* Central Hole Label */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wide">Volume Geral</span>
+                        <span className="text-xl font-extrabold text-white font-mono mt-0.5">{totalStockItems}</span>
+                        <span className="text-[9px] text-gray-400 font-mono">unidades</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column - Sector Breakdown Progress Analysis */}
+                  <div className="lg:col-span-7 flex flex-col gap-3">
+                    <div className="flex flex-col text-left">
+                      <span className="text-[#94a3b8] text-[10px] sm:text-xs font-mono uppercase font-black tracking-wider">
+                        📊 DISTRIBUIÇÃO FÍSICA E DENSIDADE DE CATEGORIAS
+                      </span>
+                      <p className="text-[11px] text-gray-500 font-sans mt-0.5 leading-normal">
+                        Relação volumétrica de peças atualmente alocadas no estoque. Clique em qualquer categoria abaixo para filtrar a listagem de produtos ativa.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1.5">
+                      {chartData.map((item, idx) => {
+                        const colors: Record<string, string> = {
+                          'Freios': '#06b6d4',
+                          'Filtros': '#ef4444',
+                          'Lubrificantes': '#f59e0b',
+                          'Suspensão': '#a855f7',
+                          'Ignição': '#ec4899',
+                          'Carroceria': '#3b82f6',
+                          'Elétrica': '#10b981',
+                        };
+                        const color = colors[item.name] || '#6b7280';
+                        const isSelectedInFilter = categoryFilter === item.name;
+
+                        return (
+                          <div 
+                            key={idx} 
+                            onClick={() => setCategoryFilter(isSelectedInFilter ? 'Todas' : item.name)}
+                            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex flex-col gap-1.5 ${
+                              isSelectedInFilter 
+                                ? "bg-[#0b1328] border-red-500/40 shadow-sm shadow-red-950/15 text-left" 
+                                : "bg-black/15 border-gray-850 hover:border-gray-800 text-left"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between text-xs font-mono leading-none">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                                <span className="font-extrabold text-white text-[11px]">{item.name}</span>
+                              </div>
+                              <span className="text-gray-405 text-gray-400 font-bold">{item.percentage.toFixed(1)}%</span>
+                            </div>
+
+                            {/* Micro Progress Bar */}
+                            <div className="w-full bg-gray-950/60 rounded-full h-1.5 overflow-hidden">
+                              <div 
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{ 
+                                  width: `${item.percentage}%`,
+                                  backgroundColor: color 
+                                }}
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono leading-none">
+                              <span>Estoque Físico</span>
+                              <span className="text-gray-300 font-bold">{item.value} unidades</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-mono text-xs">
               <thead className="bg-[#080d19] border-b border-gray-800 text-gray-400 uppercase text-[10px]">
                 <tr>
                   <th className="p-4">Produto / SKU</th>
@@ -1274,21 +1503,26 @@ export const EstoqueView: React.FC = () => {
                           <button 
                             type="button"
                             onClick={() => handleStartEditProduct(p)}
-                            className="p-1 text-[11px] bg-slate-900 border border-gray-800 text-slate-300 rounded hover:border-red-500 hover:text-red-500 transition-colors flex items-center gap-1 px-2 py-1"
+                            className="p-1 text-[11px] bg-slate-900 border border-gray-800 text-slate-300 rounded hover:border-red-500 hover:text-red-500 transition-colors flex items-center gap-1 px-2 py-1 mt-auto"
                           >
                             <Edit className="w-3 h-3" /> Ficha
                           </button>
-                          <button 
-                            type="button"
-                            onClick={() => {
-                              setProductToDelete(p);
-                              setIsDeleteModalOpen(true);
-                            }}
-                            className="p-1.5 rounded-lg text-red-400 hover:text-red-350 bg-red-950/20 hover:bg-red-950/45 border border-red-900/35 hover:border-red-800/50 cursor-pointer transition-all flex items-center justify-center shadow-sm"
-                            title="Remover peça definitivamente"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-[8px] font-mono font-black tracking-wider px-1.5 py-0.2 rounded bg-gradient-to-r from-red-650 to-red-900 text-white border border-red-500/20 shadow-sm animate-pulse uppercase">
+                              Estoque: {p.quantity}
+                            </span>
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                setProductToDelete(p);
+                                setIsDeleteModalOpen(true);
+                              }}
+                              className="p-1.5 rounded-lg text-red-400 hover:text-red-350 bg-red-950/20 hover:bg-red-950/45 border border-red-900/35 hover:border-red-800/50 cursor-pointer transition-all flex items-center justify-center shadow-sm"
+                              title="Remover peça definitivamente"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </td>
 
@@ -1302,6 +1536,7 @@ export const EstoqueView: React.FC = () => {
                 Nenhum produto cadastrado com os critérios vigentes nas prateleiras.
               </div>
             )}
+            </div>
           </div>
         </>
       )}
@@ -1939,6 +2174,37 @@ export const EstoqueView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Duplicate SKU alert banner */}
+              {(() => {
+                const duplicateItems = parsedXml.items.filter(item => 
+                  produtos.some(p => 
+                    p.internalSku.toLowerCase() === item.code.toLowerCase() || 
+                    (p.barcode && p.barcode === item.barcode)
+                  )
+                );
+                if (duplicateItems.length === 0) return null;
+
+                return (
+                  <div className="bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl flex items-start gap-3 animate-fadeIn">
+                    <div className="p-2 bg-amber-955/40 text-amber-500 bg-amber-950/40 border border-amber-900/30 rounded-lg shrink-0 flex items-center justify-center animate-pulse">
+                      <AlertTriangle className="w-5 h-5 text-amber-500" />
+                    </div>
+                    <div className="text-left font-sans">
+                      <h4 className="text-amber-400 text-xs font-bold font-mono uppercase tracking-wider">
+                        ⚠️ Alerta de Duplicidade no Catálogo ({duplicateItems.length} {duplicateItems.length === 1 ? 'item detectado' : 'itens detectados'})
+                      </h4>
+                      <p className="text-[11.5px] text-gray-400 mt-1 leading-relaxed">
+                        Detectamos que a nota fiscal contém {duplicateItems.length} produto(s) cujo SKU ou Código de barras já existem em seu catálogo interno:{" "}
+                        <strong className="text-white font-mono text-[10.5px]">
+                          {duplicateItems.map(item => item.code).join(", ")}
+                        </strong>.
+                        Caso prossiga com o processamento da entrada, o estoque desses itens será atualizado somando o saldo existente no ERP, garantindo a perfeita integridade dos lotes sem gerar cadastros desnecessários.
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Items Table */}
               <div className="flex flex-col gap-3">
                 <div className="flex justify-between items-center pb-2 border-b border-gray-850">
@@ -2234,12 +2500,12 @@ export const EstoqueView: React.FC = () => {
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ type: "spring", damping: 25, stiffness: 350 }}
-              className="bg-[#0b101d] border border-red-950/40 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative flex flex-col gap-5 overflow-hidden"
+              className="bg-[#0b101d] border border-red-950/40 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative flex flex-col gap-4 overflow-hidden"
             >
               {/* Sleek Warning Glow Background Gradient */}
               <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-red-600 via-orange-500 to-red-600" />
               
-              <div className="flex gap-4 items-start border-b border-gray-850 pb-5">
+              <div className="flex gap-4 items-start border-b border-gray-850 pb-4">
                 <div className="p-3 bg-red-950/30 text-red-500 border border-red-900/40 rounded-2xl">
                   <AlertTriangle className="w-6 h-6 animate-pulse" />
                 </div>
@@ -2275,6 +2541,59 @@ export const EstoqueView: React.FC = () => {
                   <span className="text-orange-400 font-bold">{productToDelete.quantity} unidades</span>
                 </div>
               </div>
+
+              {/* DEPENDENT OPEN SERVICE ORDERS LIST */}
+              {(() => {
+                const dependentOS = (ordensServico || []).filter(os => 
+                  os.status !== 'Finalizada' && 
+                  os.status !== 'Entregue' && 
+                  os.parts?.some(part => part.id === productToDelete.id)
+                );
+
+                if (dependentOS.length === 0) return null;
+
+                return (
+                  <div className="flex flex-col gap-2 border border-red-950/45 rounded-2xl p-3 bg-red-950/5">
+                    <div className="flex items-start gap-2 text-xs text-red-400">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div className="flex flex-col gap-0.5 text-left">
+                        <strong className="font-bold">⚠️ ATENÇÃO: Ordens de Serviço Dependentes Ativas ({dependentOS.length})</strong>
+                        <p className="text-[11px] text-gray-400 leading-normal">
+                          Esta peça está alocada nas seguintes Ordens de Serviço abertas ou em andamento. Removê-la causará perda de rastreabilidade:
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="max-h-36 overflow-y-auto flex flex-col gap-1.5 border border-gray-900 rounded-xl p-2 bg-[#050912]/80">
+                      {dependentOS.map(os => {
+                        const partDetail = os.parts.find(part => part.id === productToDelete.id);
+                        return (
+                          <div key={os.id} className="p-2.5 bg-[#080d1a] border border-gray-850 rounded-lg flex flex-col gap-1 text-[11px] font-sans">
+                            <div className="flex justify-between items-center">
+                              <span className="font-mono font-bold text-white text-xs">O.S. #{os.id}</span>
+                              <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-orange-950/40 text-orange-400 border border-orange-900/30">
+                                {os.status}
+                              </span>
+                            </div>
+                            <div className="text-gray-400 leading-tight">
+                              👤 Cliente: <strong className="text-gray-300">{os.clienteName || "Sem Nome"}</strong>
+                            </div>
+                            <div className="text-gray-450 text-gray-500 leading-none">
+                              🚗 Veículo: {os.veiculoInfo || "N/A"} (Placa: {os.plate || "N/A"})
+                            </div>
+                            {partDetail && (
+                              <div className="text-orange-400 font-mono text-[10px] mt-0.5 flex justify-between border-t border-gray-850/30 pt-1">
+                                <span>Quantidade alocada nesta O.S.:</span>
+                                <span className="font-bold">{partDetail.quantity} un</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Side-by-Side Impact Analysis Bento Blocks */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

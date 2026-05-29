@@ -25,7 +25,9 @@ import {
   HelpCircle,
   X,
   Camera,
-  Sparkles
+  Sparkles,
+  Edit,
+  AlertTriangle
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Produto, Servico, Cliente, SaleItem } from '../types';
@@ -44,7 +46,11 @@ export const PDVView: React.FC = () => {
     user,
     company,
     ordensServico,
-    editOS
+    editOS,
+    editProduto,
+    deleteProduto,
+    editServico,
+    deleteServico
   } = useApp();
 
   // Catalogue states
@@ -60,6 +66,43 @@ export const PDVView: React.FC = () => {
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
   const [scanToast, setScanToast] = useState<{ show: boolean; message: string; code: string }>({ show: false, message: '', code: '' });
   const [simulationCategory, setSimulationCategory] = useState<string>('Todas');
+
+  // States for editing/deleting items in PDV view catalog
+  const [editingProductInPdv, setEditingProductInPdv] = useState<Produto | null>(null);
+  const [editingServiceInPdv, setEditingServiceInPdv] = useState<Servico | null>(null);
+  const [deletingProductInPdv, setDeletingProductInPdv] = useState<Produto | null>(null);
+  const [deletingServiceInPdv, setDeletingServiceInPdv] = useState<Servico | null>(null);
+
+  // Buffer state forms for editing
+  const [editProdName, setEditProdName] = useState('');
+  const [editProdSku, setEditProdSku] = useState('');
+  const [editProdBrand, setEditProdBrand] = useState('');
+  const [editProdQty, setEditProdQty] = useState(0);
+  const [editProdPrice, setEditProdPrice] = useState(0);
+
+  const [editSrvName, setEditSrvName] = useState('');
+  const [editSrvDesc, setEditSrvDesc] = useState('');
+  const [editSrvPrice, setEditSrvPrice] = useState(0);
+  const [editSrvDuration, setEditSrvDuration] = useState('');
+
+  useEffect(() => {
+    if (editingProductInPdv) {
+      setEditProdName(editingProductInPdv.name || '');
+      setEditProdSku(editingProductInPdv.internalSku || '');
+      setEditProdBrand(editingProductInPdv.brand || '');
+      setEditProdQty(editingProductInPdv.quantity || 0);
+      setEditProdPrice(editingProductInPdv.sellPrice || 0);
+    }
+  }, [editingProductInPdv]);
+
+  useEffect(() => {
+    if (editingServiceInPdv) {
+      setEditSrvName(editingServiceInPdv.name || '');
+      setEditSrvDesc(editingServiceInPdv.description || '');
+      setEditSrvPrice(editingServiceInPdv.price || 0);
+      setEditSrvDuration(editingServiceInPdv.duration || '');
+    }
+  }, [editingServiceInPdv]);
 
   const playScannerBeep = () => {
     try {
@@ -602,11 +645,40 @@ export const PDVView: React.FC = () => {
                     Estoque: {p.quantity} un {p.quantity <= p.minStock ? '(Crítico!)' : ''}
                   </span>
                 </div>
-                <div className="text-right flex flex-col gap-1.5 items-end shrink-0">
+                <div className="text-right flex flex-col gap-1 items-end shrink-0">
                   <span className="text-xs text-gray-500 font-mono line-through text-[10px]">R$ {(p.sellPrice * 1.1).toFixed(2)}</span>
                   <span className="text-sm font-bold text-white font-mono">R$ {p.sellPrice.toFixed(2)}</span>
-                  <div className="w-6 h-6 rounded-lg bg-red-950/20 border border-red-900/40 flex items-center justify-center text-red-500 group-hover:bg-red-600 group-hover:text-white transition-all text-xs font-bold">
-                    <Plus className="w-3.5 h-3.5" />
+                  
+                  {/* Action row with buttons */}
+                  <div className="flex gap-1.5 items-center mt-1">
+                    <button
+                      type="button"
+                      title="Editar preço e dados desta peça"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingProductInPdv(p);
+                      }}
+                      className="w-6 h-6 rounded-lg bg-[#0e1628] border border-gray-800 flex items-center justify-center text-gray-400 hover:text-cyan-400 hover:border-cyan-800 transition-all text-xs"
+                    >
+                      <Edit className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Excluir peça definitivamente"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingProductInPdv(p);
+                      }}
+                      className="w-6 h-6 rounded-lg bg-[#0e1628] border border-gray-850 flex items-center justify-center text-gray-400 hover:text-red-400 hover:border-red-900 transition-all text-xs"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                    <div 
+                      title="Adicionar ao carrinho"
+                      className="w-6 h-6 rounded-lg bg-red-950/20 border border-red-900/40 flex items-center justify-center text-red-500 group-hover:bg-red-600 group-hover:text-white transition-all text-xs font-bold"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -641,8 +713,37 @@ export const PDVView: React.FC = () => {
                 </div>
                 <div className="text-right flex flex-col gap-1 items-end shrink-0">
                   <span className="text-sm font-extrabold text-purple-400 font-mono">R$ {s.price.toFixed(2)}</span>
-                  <div className="w-6 h-6 rounded-lg bg-red-950/20 border border-red-900/40 flex items-center justify-center text-red-500 group-hover:bg-red-600 group-hover:text-white transition-all text-xs font-bold">
-                    <Plus className="w-3.5 h-3.5" />
+                  
+                  {/* Action row with buttons */}
+                  <div className="flex gap-1.5 items-center mt-1">
+                    <button
+                      type="button"
+                      title="Editar dados e preço do serviço"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingServiceInPdv(s);
+                      }}
+                      className="w-6 h-6 rounded-lg bg-[#0e1628] border border-gray-800 flex items-center justify-center text-gray-400 hover:text-cyan-400 hover:border-cyan-800 transition-all text-xs"
+                    >
+                      <Edit className="w-3 h-3" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Excluir serviço definitivamente"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeletingServiceInPdv(s);
+                      }}
+                      className="w-6 h-6 rounded-lg bg-[#0e1628] border border-gray-850 flex items-center justify-center text-gray-400 hover:text-red-400 hover:border-red-900 transition-all text-xs"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                    <div 
+                      title="Adicionar serviço ao carrinho"
+                      className="w-6 h-6 rounded-lg bg-red-950/20 border border-red-900/40 flex items-center justify-center text-red-500 group-hover:bg-red-600 group-hover:text-white transition-all text-xs font-bold"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1646,6 +1747,311 @@ export const PDVView: React.FC = () => {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* 📦 INLINE PRODUCT EDIT MODAL */}
+      {editingProductInPdv && (
+        <div className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm text-left">
+          <div className="bg-[#0b101d] border border-gray-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => setEditingProductInPdv(null)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-cyan-950/40 text-cyan-500 border border-cyan-900/40 rounded-xl">
+                <Edit className="w-5 h-5" />
+              </span>
+              <div>
+                <span className="bg-cyan-950/50 border border-cyan-800 text-cyan-400 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded font-mono">
+                  Editor de Peça
+                </span>
+                <h3 className="text-md font-display font-extrabold text-white">Editar Peça & Fluido</h3>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 font-sans text-xs text-left">
+              <div className="flex flex-col gap-1">
+                <label className="text-gray-400 font-medium">Nome do Produto</label>
+                <input
+                  type="text"
+                  value={editProdName}
+                  onChange={(e) => setEditProdName(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500 placeholder-gray-700"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-gray-400 font-medium">SKU Interno</label>
+                  <input
+                    type="text"
+                    value={editProdSku}
+                    onChange={(e) => setEditProdSku(e.target.value)}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500 font-mono"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-gray-400 font-medium">Marca</label>
+                  <input
+                    type="text"
+                    value={editProdBrand}
+                    onChange={(e) => setEditProdBrand(e.target.value)}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-gray-400 font-medium">Quantidade Estoque</label>
+                  <input
+                    type="number"
+                    value={editProdQty}
+                    onChange={(e) => setEditProdQty(Number(e.target.value))}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500 font-mono"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-gray-400 font-medium">Preço de Venda (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editProdPrice}
+                    onChange={(e) => setEditProdPrice(Number(e.target.value))}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500 font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-gray-850 pt-3">
+              <button
+                type="button"
+                onClick={() => setEditingProductInPdv(null)}
+                className="py-2 px-3.5 bg-slate-950 hover:bg-slate-900 text-gray-400 text-[10px] sm:text-xs font-mono uppercase font-bold border border-gray-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!editProdName.trim()) return;
+                  await editProduto(editingProductInPdv.id, {
+                    name: editProdName,
+                    internalSku: editProdSku,
+                    brand: editProdBrand,
+                    quantity: editProdQty,
+                    sellPrice: editProdPrice
+                  });
+                  setEditingProductInPdv(null);
+                }}
+                className="py-2 px-4 bg-cyan-600 hover:bg-cyan-700 text-white font-mono text-[10px] sm:text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer uppercase"
+              >
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📦 INLINE PRODUCT DELETE CONFIRMATION MODAL */}
+      {deletingProductInPdv && (
+        <div className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm text-left">
+          <div className="bg-[#0b101d] border border-red-950/40 rounded-3xl max-w-md w-full p-6 shadow-2xl relative flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => setDeletingProductInPdv(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-red-950/40 text-red-500 border border-red-900/40 rounded-xl">
+                <AlertTriangle className="w-5 h-5" />
+              </span>
+              <div>
+                <span className="bg-red-950/50 border border-red-800 text-red-400 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded font-mono">
+                  Excluir Peça
+                </span>
+                <h3 className="text-md font-display font-extrabold text-white">Remover Peça Definitivamente</h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 leading-relaxed font-sans text-left">
+              Tem certeza que deseja excluir a peça <strong className="text-white">"{deletingProductInPdv.name}"</strong>? Esta ação é irreversível e removerá o item do saldo do estoque geral de forma perpétua.
+            </p>
+
+            <div className="flex justify-end gap-2 border-t border-gray-850 pt-3">
+              <button
+                type="button"
+                onClick={() => setDeletingProductInPdv(null)}
+                className="py-2 px-3.5 bg-slate-950 hover:bg-slate-900 text-gray-400 text-[10px] sm:text-xs font-mono uppercase font-bold border border-gray-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await deleteProduto(deletingProductInPdv.id);
+                  setDeletingProductInPdv(null);
+                }}
+                className="py-2 px-4 bg-red-650 hover:bg-red-700 text-white font-mono text-[10px] sm:text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer uppercase"
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛠️ INLINE SERVICE EDIT MODAL */}
+      {editingServiceInPdv && (
+        <div className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm text-left">
+          <div className="bg-[#0b101d] border border-gray-800 rounded-3xl max-w-md w-full p-6 shadow-2xl relative flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => setEditingServiceInPdv(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-cyan-950/40 text-cyan-500 border border-cyan-900/40 rounded-xl">
+                <Edit className="w-5 h-5" />
+              </span>
+              <div>
+                <span className="bg-cyan-950/50 border border-cyan-800 text-cyan-400 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded font-mono">
+                  Editor de Serviço
+                </span>
+                <h3 className="text-md font-display font-extrabold text-white">Editar Serviço Técnico</h3>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 font-sans text-xs text-left">
+              <div className="flex flex-col gap-1">
+                <label className="text-gray-400 font-medium">Nome do Serviço</label>
+                <input
+                  type="text"
+                  value={editSrvName}
+                  onChange={(e) => setEditSrvName(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-gray-400 font-medium">Descrição Detalhada</label>
+                <textarea
+                  value={editSrvDesc}
+                  onChange={(e) => setEditSrvDesc(e.target.value)}
+                  rows={2}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500 resize-none text-xs leading-normal"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-gray-400 font-medium">Tempo de Execução</label>
+                  <input
+                    type="text"
+                    value={editSrvDuration}
+                    onChange={(e) => setEditSrvDuration(e.target.value)}
+                    placeholder="Ex: 1h 30min"
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-gray-400 font-medium">Preço de Mão de Obra (R$)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editSrvPrice}
+                    onChange={(e) => setEditSrvPrice(Number(e.target.value))}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-white focus:outline-none focus:border-cyan-500 font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-gray-850 pt-3">
+              <button
+                type="button"
+                onClick={() => setEditingServiceInPdv(null)}
+                className="py-2 px-3.5 bg-slate-950 hover:bg-slate-900 text-gray-400 text-[10px] sm:text-xs font-mono uppercase font-bold border border-gray-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!editSrvName.trim()) return;
+                  await editServico(editingServiceInPdv.id, {
+                    name: editSrvName,
+                    description: editSrvDesc,
+                    duration: editSrvDuration,
+                    price: editSrvPrice
+                  });
+                  setEditingServiceInPdv(null);
+                }}
+                className="py-2 px-4 bg-cyan-600 hover:bg-cyan-700 text-white font-mono text-[10px] sm:text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer uppercase"
+              >
+                Salvar Alterações
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛠️ INLINE SERVICE DELETE CONFIRMATION MODAL */}
+      {deletingServiceInPdv && (
+        <div className="fixed inset-0 z-[60] bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm text-left">
+          <div className="bg-[#0b101d] border border-red-950/40 rounded-3xl max-w-md w-full p-6 shadow-2xl relative flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => setDeletingServiceInPdv(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-red-950/40 text-red-500 border border-red-900/40 rounded-xl">
+                <AlertTriangle className="w-5 h-5" />
+              </span>
+              <div>
+                <span className="bg-red-950/50 border border-red-800 text-red-400 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded font-mono">
+                  Excluir Serviço
+                </span>
+                <h3 className="text-md font-display font-extrabold text-white">Remover Serviço Definitivamente</h3>
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 leading-relaxed font-sans text-left">
+              Tem certeza que deseja excluir o serviço <strong className="text-white">"{deletingServiceInPdv.name}"</strong>? Esta ação é irreversível e removerá o serviço de forma perpétua do catálogo operacional.
+            </p>
+
+            <div className="flex justify-end gap-2 border-t border-gray-850 pt-3">
+              <button
+                type="button"
+                onClick={() => setDeletingServiceInPdv(null)}
+                className="py-2 px-3.5 bg-slate-950 hover:bg-slate-900 text-gray-400 text-[10px] sm:text-xs font-mono uppercase font-bold border border-gray-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await deleteServico(deletingServiceInPdv.id);
+                  setDeletingServiceInPdv(null);
+                }}
+                className="py-2 px-4 bg-red-650 hover:bg-red-700 text-white font-mono text-[10px] sm:text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer uppercase"
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
           </div>
         </div>
       )}

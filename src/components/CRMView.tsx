@@ -139,6 +139,7 @@ export const CRMView: React.FC = () => {
   const [clientToDelete, setClientToDelete] = useState<Cliente | null>(null);
   const [editingVehicle, setEditingVehicle] = useState<Veiculo | null>(null);
   const [vehicleToDelete, setVehicleToDelete] = useState<Veiculo | null>(null);
+  const [vehicleModalTab, setVehicleModalTab] = useState<'cadastro' | 'historico'>('cadastro');
 
   // Edit Client Form Fields
   const [editCliName, setEditCliName] = useState('');
@@ -184,6 +185,7 @@ export const CRMView: React.FC = () => {
     setEditVehPlate(veh.plate);
     setEditVehChassi(veh.chassi || '');
     setEditVehKm(String(veh.km || 0));
+    setVehicleModalTab('cadastro');
   };
 
   const handleFetchEditClientCep = async (cepCode: string) => {
@@ -1300,10 +1302,10 @@ export const CRMView: React.FC = () => {
       {/* 🚗 EDITAR VEÍCULO MODAL */}
       {editingVehicle && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 max-w-lg w-full text-left flex flex-col gap-5 animate-fadeIn">
+          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 max-w-xl w-full text-left flex flex-col gap-4 animate-fadeIn">
             <div className="flex justify-between items-center border-b border-gray-850 pb-3">
               <h3 className="font-display font-extrabold text-white text-base flex items-center gap-2">
-                <Car className="w-5 h-5 text-red-500" /> EDITAR VEÍCULO DA OFICINA
+                <Car className="w-5 h-5 text-red-500" /> VEÍCULO OPERACIONAL
               </h3>
               <button 
                 type="button"
@@ -1314,121 +1316,272 @@ export const CRMView: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleEditVehicleSubmit} className="flex flex-col gap-4 text-xs font-mono">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400">DONO / CLIENTE DETENTOR *</label>
-                <select 
-                  value={editVehClient}
-                  onChange={(e) => setEditVehClient(e.target.value)}
-                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                  required
-                >
-                  <option value="">-- Vincular Cliente --</option>
-                  {clientes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
+            {/* Modal Internal Tabs */}
+            <div className="flex bg-[#080d19] p-1 rounded-xl border border-gray-850 [&>button]:px-4 [&>button]:py-2 [&>button]:text-xs [&>button]:font-mono [&>button]:rounded-lg gap-1">
+              <button
+                type="button"
+                onClick={() => setVehicleModalTab('cadastro')}
+                className={vehicleModalTab === 'cadastro' ? 'bg-red-650 bg-red-600 text-white font-bold' : 'text-gray-450 text-gray-400 hover:text-white transition-colors'}
+              >
+                📝 Cadastro & Modificação
+              </button>
+              <button
+                type="button"
+                onClick={() => setVehicleModalTab('historico')}
+                className={vehicleModalTab === 'historico' ? 'bg-red-650 bg-red-600 text-white font-bold' : 'text-gray-455 text-gray-400 hover:text-white transition-colors'}
+              >
+                ⏳ Histórico de O.S. ({ (ordensServico || []).filter(os => os.plate?.toUpperCase().trim() === editingVehicle.plate?.toUpperCase().trim()).length })
+              </button>
+            </div>
 
-              <div className="grid grid-cols-2 gap-3">
+            {vehicleModalTab === 'cadastro' ? (
+              <form onSubmit={handleEditVehicleSubmit} className="flex flex-col gap-4 text-xs font-mono">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">PLACA *</label>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">DONO / CLIENTE DETENTOR *</label>
+                  <select 
+                    value={editVehClient}
+                    onChange={(e) => setEditVehClient(e.target.value)}
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors"
+                    required
+                  >
+                    <option value="">-- Vincular Cliente --</option>
+                    {clientes.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">PLACA *</label>
+                    <input 
+                      type="text" 
+                      placeholder="GOLF-2018"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white uppercase focus:outline-none focus:border-red-500 transition-colors"
+                      value={editVehPlate}
+                      onChange={(e) => setEditVehPlate(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">MARCA *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Volkswagen"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors"
+                      value={editVehBrand}
+                      onChange={(e) => setEditVehBrand(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">MODELO DO CARRO *</label>
                   <input 
                     type="text" 
-                    placeholder="GOLF-2018"
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white uppercase"
-                    value={editVehPlate}
-                    onChange={(e) => setEditVehPlate(e.target.value)}
+                    placeholder="Ex: Polo TSI Comfortline"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors"
+                    value={editVehModel}
+                    onChange={(e) => setEditVehModel(e.target.value)}
                     required
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">MARCA *</label>
-                  <input 
-                    type="text" 
-                    placeholder="Volkswagen"
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={editVehBrand}
-                    onChange={(e) => setEditVehBrand(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400">MODELO DO CARRO *</label>
-                <input 
-                  type="text" 
-                  placeholder="Ex: Polo TSI Comfortline"
-                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                  value={editVehModel}
-                  onChange={(e) => setEditVehModel(e.target.value)}
-                  required
-                />
-              </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">MOTORIZAÇÃO</label>
+                    <input 
+                      type="text" 
+                      placeholder="1.4 TSI Flex"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors"
+                      value={editVehEngine}
+                      onChange={(e) => setEditVehEngine(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">ANO FABRICAÇÃO</label>
+                    <input 
+                      type="text" 
+                      placeholder="2018"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors"
+                      value={editVehYear}
+                      onChange={(e) => setEditVehYear(e.target.value)}
+                    />
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">MOTORIZAÇÃO</label>
-                  <input 
-                    type="text" 
-                    placeholder="1.4 TSI Flex"
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={editVehEngine}
-                    onChange={(e) => setEditVehEngine(e.target.value)}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">KM ATUAL</label>
+                    <input 
+                      type="number" 
+                      placeholder="68500"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors"
+                      value={editVehKm}
+                      onChange={(e) => setEditVehKm(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wide">NÚMERO CHASSI</label>
+                    <input 
+                      type="text" 
+                      placeholder="9BWAB..."
+                      className="bg-[#080c16] border border-gray-805 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors"
+                      value={editVehChassi}
+                      onChange={(e) => setEditVehChassi(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">ANO FABRICAÇÃO</label>
-                  <input 
-                    type="text" 
-                    placeholder="2018"
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={editVehYear}
-                    onChange={(e) => setEditVehYear(e.target.value)}
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">KM ATUAL</label>
-                  <input 
-                    type="number" 
-                    placeholder="68500"
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={editVehKm}
-                    onChange={(e) => setEditVehKm(e.target.value)}
-                  />
+                <div className="flex gap-3 mt-2 border-t border-gray-850 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setEditingVehicle(null)}
+                    className="w-1/2 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border border-gray-800 cursor-pointer text-center"
+                  >
+                    CANCELAR
+                  </button>
+                  <button 
+                    type="submit"
+                    className="w-1/2 py-2.5 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl text-white font-bold text-xs shadow-md shadow-red-950/45 cursor-pointer text-center"
+                  >
+                    SALVAR ALTERAÇÕES
+                  </button>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">NÚMERO CHASSI</label>
-                  <input 
-                    type="text" 
-                    placeholder="9BWAB..."
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={editVehChassi}
-                    onChange={(e) => setEditVehChassi(e.target.value)}
-                  />
-                </div>
-              </div>
+              </form>
+            ) : (
+              <div className="flex flex-col gap-3 font-sans">
+                {(() => {
+                  const selectPlate = editingVehicle.plate.toUpperCase().trim();
+                  const linkedOSList = (ordensServico || []).filter(os => 
+                    os.plate?.toUpperCase().trim() === selectPlate
+                  );
 
-              <div className="flex gap-3 mt-2">
-                <button 
-                  type="button"
-                  onClick={() => setEditingVehicle(null)}
-                  className="w-1/2 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border border-gray-800 cursor-pointer"
-                >
-                  CANCELAR
-                </button>
-                <button 
-                  type="submit"
-                  className="w-1/2 py-2.5 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl text-white font-bold text-xs shadow-md shadow-red-950/45 cursor-pointer"
-                >
-                  SALVAR ALTERAÇÕES
-                </button>
+                  const sortedLinkedOS = [...linkedOSList].sort((a, b) => 
+                    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                  );
+
+                  const totalBilling = linkedOSList.reduce((sum, os) => sum + (os.total || 0), 0);
+
+                  if (sortedLinkedOS.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center py-10 px-4 border border-dashed border-gray-800 rounded-xl bg-gray-950/20 text-center text-gray-400 gap-2.5">
+                        <FileText className="w-8 h-8 text-gray-700" />
+                        <span className="font-semibold text-xs text-white">Nenhum registro encontrado</span>
+                        <p className="text-[11px] text-gray-500 max-w-[280px] leading-relaxed">
+                          Nenhuma Ordem de Serviço foi identificada ou atrelada à placa <strong className="text-gray-300 font-mono">{editingVehicle.plate}</strong> ainda.
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="flex flex-col gap-4">
+                      {/* Financial & Volume Analytics Bento row */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-3 rounded-xl bg-gray-950/40 border border-gray-900 flex flex-col gap-0.5 text-left">
+                          <span className="text-[9px] text-gray-500 font-bold block uppercase tracking-wider">Total de Visitas</span>
+                          <span className="text-base font-extrabold text-white font-mono">{linkedOSList.length} O.S.</span>
+                        </div>
+                        <div className="p-3 rounded-xl bg-gray-950/40 border border-gray-900 flex flex-col gap-0.5 text-left">
+                          <span className="text-[9px] text-gray-500 font-bold block uppercase tracking-wider">Investimento Acumulado</span>
+                          <span className="text-base font-extrabold text-emerald-450 text-emerald-400 font-mono">
+                            {totalBilling.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* OS scrollable sequence container */}
+                      <div className="flex flex-col gap-3 max-h-[290px] overflow-y-auto pr-1">
+                        {sortedLinkedOS.map(os => {
+                          const dateObj = new Date(os.createdAt);
+                          const formattedDate = isNaN(dateObj.getTime()) ? os.createdAt : dateObj.toLocaleDateString('pt-BR');
+                          
+                          return (
+                            <div key={os.id} className="p-3 rounded-xl bg-[#080d19]/60 border border-gray-850 hover:border-gray-800 transition-all flex flex-col gap-2">
+                              {/* Title / status row */}
+                              <div className="flex justify-between items-center bg-black/20 p-2 rounded-lg border border-gray-900/40 text-[11px]">
+                                <span className="font-mono font-black text-white">O.S. #{os.id}</span>
+                                <span className={`px-2 py-0.5 rounded text-[9px] font-mono font-extrabold uppercase ${
+                                  os.status === 'Aberta' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-900/35' :
+                                  os.status === 'Em análise' ? 'bg-yellow-950/40 text-yellow-500 border border-yellow-900/30' :
+                                  os.status === 'Aguardando peça' ? 'bg-orange-950/40 text-orange-400 border border-orange-900/30 animate-pulse' :
+                                  os.status === 'Em execução' ? 'bg-sky-950/40 text-sky-400 border border-sky-900/30' :
+                                  os.status === 'Finalizada' || os.status === 'Entregue' ? 'bg-purple-950/40 text-purple-400 border border-purple-900/30' :
+                                  'bg-slate-900 text-slate-400 border border-slate-800'
+                                }`}>
+                                  {os.status}
+                                </span>
+                              </div>
+
+                              {/* Details details */}
+                              <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-500 leading-normal font-sans text-left">
+                                <div>
+                                  📅 Abertura: <strong className="text-gray-300">{formattedDate}</strong>
+                                </div>
+                                <div className="text-right">
+                                  🚗 KM Indicada: <strong className="text-gray-300">{os.km ? `${os.km.toLocaleString()} KM` : "N/A"}</strong>
+                                </div>
+                                
+                                {os.problem && (
+                                  <div className="col-span-2 border-t border-gray-900/40 pt-1.5 mt-0.5">
+                                    <span className="text-gray-450 font-semibold block mb-0.5">Sintoma Informado pelo Cliente:</span>
+                                    <p className="text-gray-300 text-[10px] leading-tight font-sans bg-[#050912] p-2 rounded border border-gray-900">{os.problem}</p>
+                                  </div>
+                                )}
+                                
+                                {os.diagnosis && (
+                                  <div className="col-span-2">
+                                    <span className="text-gray-450 font-semibold block mb-0.5">Diagnóstico Técnico da Oficina:</span>
+                                    <p className="text-gray-350 text-[10px] leading-tight font-sans bg-[#050912]/50 p-2 rounded border border-gray-900/60 ">{os.diagnosis}</p>
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Services or parts list inside each OS */}
+                              {(os.services?.length > 0 || os.parts?.length > 0) && (
+                                <div className="flex flex-col gap-1 border-t border-gray-900/30 pt-1.5 font-sans text-[10px] text-gray-500">
+                                  {os.services?.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 items-center">
+                                      <span className="font-semibold text-gray-400 shrink-0">🛠️ Serviços:</span>
+                                      <span className="text-gray-350">{os.services.map(s => s.description).join(', ')}</span>
+                                    </div>
+                                  )}
+                                  {os.parts?.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 items-center">
+                                      <span className="font-semibold text-gray-400 shrink-0">📦 Peças:</span>
+                                      <span className="text-gray-350">{os.parts.map(p => p.name).join(', ')}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Footer of the card item */}
+                              <div className="flex justify-between items-center border-t border-gray-900/40 pt-1.5 text-[10px] font-mono leading-none">
+                                <span className="text-gray-500">Resp: <strong className="text-gray-300">{os.mechanicName || "Mecânico Geral"}</strong></span>
+                                <span className="text-emerald-400 font-bold">Total: R$ {(os.total || 0).toFixed(2)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Close Button Only */}
+                <div className="flex gap-3 mt-2 border-t border-gray-850 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setEditingVehicle(null)}
+                    className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-xs rounded-xl border border-gray-800 cursor-pointer text-center uppercase font-mono"
+                  >
+                    FECHAR HISTÓRICO
+                  </button>
+                </div>
               </div>
-            </form>
+            )}
           </div>
         </div>
       )}

@@ -26,7 +26,9 @@ import {
   Server,
   Activity,
   RefreshCw,
-  Upload
+  Upload,
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Company } from '../types';
@@ -44,7 +46,8 @@ export const ConfigView: React.FC = () => {
     vendas,
     autoBackups,
     triggerDailyBackup,
-    deleteAutoBackup
+    deleteAutoBackup,
+    resetToProduction
   } = useApp();
 
   // Primary Company fields state
@@ -151,6 +154,39 @@ export const ConfigView: React.FC = () => {
     fileName: string;
     timestamp: string;
   } | null>(null);
+
+  // Reset to Production wizard states
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetConfirmationInput, setResetConfirmationInput] = useState('');
+  const [isResetExecuting, setIsResetExecuting] = useState(false);
+  const [resetFeedback, setResetFeedback] = useState<{ status: 'success' | 'error'; message: string } | null>(null);
+
+  const handleExecuteResetToProduction = async () => {
+    if (resetConfirmationInput !== 'CONFIRMAR') {
+      setResetFeedback({ status: 'error', message: 'Por favor, digite CONFIRMAR em letras maiúsculas para confirmar.' });
+      return;
+    }
+
+    setIsResetExecuting(true);
+    setResetFeedback(null);
+    try {
+      await resetToProduction();
+      setResetFeedback({
+        status: 'success',
+        message: '🎉 Banco de dados limpo e reinicializado com sucesso! Todos os dados de teste foram apagados. O sistema está pronto do zero para registrar dados reais.'
+      });
+      setShowResetConfirm(false);
+      setResetConfirmationInput('');
+    } catch (err: any) {
+      console.error(err);
+      setResetFeedback({
+        status: 'error',
+        message: `Houve um problema ao zerar o estoque e tabelas: ${err.message || err}`
+      });
+    } finally {
+      setIsResetExecuting(false);
+    }
+  };
 
   // Trigger browser copy
   const handleCopyText = (text: string, label: string) => {
@@ -1021,6 +1057,146 @@ export const ConfigView: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Inicialização para Produção / Zerar Dados */}
+          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6 font-sans">
+            <div className="border-b border-gray-850 pb-4 flex items-center gap-2.5">
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              <div>
+                <h3 className="font-display font-bold text-white text-base">🚀 Preparação Básica para Produção</h3>
+                <span className="text-[10px] text-gray-500 font-mono block">Instruções, sugestões práticas e purgação de dados fictícios para sua oficina.</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Antes de iniciar as operações e faturamentos com seus <strong>clientes reais</strong>, é importantíssimo que seu banco de dados esteja limpo de quaisquer dados ou testes fictícios enviados durante o período de demonstração.
+              </p>
+
+              {/* Suggestions Container */}
+              <div className="bg-[#050912]/80 border border-gray-850 rounded-xl p-4 flex flex-col gap-3 font-sans">
+                <span className="font-mono text-[10px] font-bold text-amber-500 uppercase tracking-widest block flex items-center gap-1.5">
+                  <Lightbulb className="w-4 h-4 text-amber-400" /> RECOMENDAÇÕES PARA INÍCIO SEGURO:
+                </span>
+
+                <div className="flex flex-col gap-2 text-xs text-gray-405 text-gray-400">
+                  <div className="flex gap-2 items-start">
+                    <span className="text-amber-500 shrink-0 font-bold">1.</span>
+                    <p>
+                      <strong className="text-white">Identidade Visual Completa:</strong> Use o painel ao lado para gerar sua logomarca ou subir sua própria logo. Isso garante que as impressões térmicas de O.S. enviadas via Whatsapp fiquem ultra profissionais.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2 items-start mt-1.5">
+                    <span className="text-amber-500 shrink-0 font-bold">2.</span>
+                    <p>
+                      <strong className="text-white">Lançamento por XML:</strong> Ao abastecer o estoque com peças reais, utilize o <span className="text-cyan-400 font-bold">Importador de XML de Nota Fiscal (NF-e)</span> na aba de Estoque. Ele cadastrará automaticamente os produtos e fornecedores de forma segura.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2 items-start mt-1.5">
+                    <span className="text-amber-500 shrink-0 font-bold">3.</span>
+                    <p>
+                      <strong className="text-white">Fundo de Caixa Inicial:</strong> Logo no primeiro dia de produção, abra o caixa na aba <strong>PDV/Vendas</strong> informando o valor real de troco físico disponível para suas movimentações.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2 items-start mt-1.5">
+                    <span className="text-amber-500 shrink-0 font-bold">4.</span>
+                    <p>
+                      <strong className="text-white">Cadastro de Serviços Base:</strong> Cadastre as Mãos de Obra padrão (como Alinhamento, Troca de Óleo, Diagnóstico Injeção) com seus tempos e preços de referência para agilizar a criação de ordens de serviço.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Feedback messages */}
+              {resetFeedback && (
+                <div className={`p-3.5 border rounded-xl text-xs font-mono flex items-start gap-2.5 ${
+                  resetFeedback.status === 'success' 
+                    ? "bg-green-950/40 border-green-800 text-green-300" 
+                    : "bg-red-950/40 border-red-800 text-red-400"
+                }`}>
+                  <div className="mt-0.5 font-bold shrink-0">
+                    {resetFeedback.status === 'success' ? "✓" : "⚠"}
+                  </div>
+                  <div className="leading-relaxed">
+                    {resetFeedback.message}
+                  </div>
+                </div>
+              )}
+
+              {/* Confirm UI Controls */}
+              {!showResetConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResetConfirm(true);
+                    setResetFeedback(null);
+                  }}
+                  className="py-3 px-4 bg-red-950/20 hover:bg-red-900/30 border border-red-500/20 hover:border-red-500/50 rounded-xl text-xs font-mono font-bold text-red-400 transition-all flex items-center justify-center gap-2 cursor-pointer w-full text-center"
+                >
+                  <Trash2 className="w-4 h-4 text-red-500" />
+                  LIMPAR DADOS DE TESTE (INICIAR SISTEMA DO ZERO)
+                </button>
+              ) : (
+                <div className="bg-[#0e0708] border border-red-900/40 rounded-xl p-4 flex flex-col gap-3">
+                  <div className="flex items-center gap-2.5 text-red-400">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <span className="font-mono text-xs font-bold uppercase tracking-wider">Atenção Extrema! Ação Irreversível</span>
+                  </div>
+                  
+                  <p className="text-[11px] text-gray-400 leading-normal font-sans">
+                    Você está prestes a apagar todas as tabelas (clientes, veículos, O.S., fluxo financeiro, vendas, produtos e fornecedores) associadas à sua conta. Para prosseguir, digite <strong className="text-white text-xs font-mono">CONFIRMAR</strong> no campo abaixo:
+                  </p>
+
+                  <div className="flex flex-col gap-1.5 mt-1">
+                    <input
+                      type="text"
+                      value={resetConfirmationInput}
+                      onChange={(e) => setResetConfirmationInput(e.target.value)}
+                      placeholder="Digite CONFIRMAR em letras maiúsculas"
+                      className="bg-black/40 border border-red-900/40 focus:border-red-500 rounded-lg py-2 px-3 text-white text-xs font-mono outline-none text-center"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5 mt-1 text-xs font-mono">
+                    <button
+                      type="button"
+                      disabled={isResetExecuting}
+                      onClick={() => {
+                        setShowResetConfirm(false);
+                        setResetConfirmationInput('');
+                      }}
+                      className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-gray-400 hover:text-white rounded-lg transition-colors cursor-pointer text-center font-bold"
+                    >
+                      CANCELAR
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isResetExecuting || resetConfirmationInput !== 'CONFIRMAR'}
+                      onClick={handleExecuteResetToProduction}
+                      className={`py-2.5 px-3 rounded-lg text-center font-bold transition-all flex justify-center items-center gap-1.5 cursor-pointer ${
+                        resetConfirmationInput === 'CONFIRMAR' && !isResetExecuting
+                          ? "bg-red-650 bg-red-600 hover:bg-red-700 text-white"
+                          : "bg-slate-900 border border-slate-950 text-gray-600 cursor-not-allowed"
+                      }`}
+                    >
+                      {isResetExecuting ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          LIMPANDO...
+                        </>
+                      ) : (
+                        "SIM, APAGAR TUDO"
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
