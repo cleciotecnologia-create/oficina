@@ -87,6 +87,7 @@ interface AppContextType {
   addServico: (s: Omit<Servico, 'id' | 'empresaId'>) => Promise<void>;
   editServico: (id: string, s: Partial<Servico>) => Promise<void>;
   deleteServico: (id: string) => Promise<void>;
+  importStandardServices: () => Promise<void>;
   addOS: (os: Omit<OrdemServico, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
   editOS: (id: string, os: Partial<OrdemServico>) => Promise<void>;
   deleteOS: (id: string) => Promise<void>;
@@ -825,6 +826,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const importStandardServices = async () => {
+    const importedList: Servico[] = [];
+    for (const mockS of MOCK_SERVICES) {
+      const id = "srv_" + Math.random().toString(36).substr(2, 9);
+      const newServico: Servico = {
+        name: mockS.name,
+        description: mockS.description,
+        price: mockS.price,
+        duration: mockS.duration,
+        category: mockS.category,
+        id,
+        empresaId: company.id
+      };
+      
+      importedList.push(newServico);
+      
+      if (firebaseUser) {
+        await executeWrite("servicos", id, newServico, 'set');
+      }
+    }
+    
+    setServicos(prev => [...importedList, ...prev]);
+  };
+
   const editServico = async (id: string, updatedFields: Partial<Servico>) => {
     setServicos(prev => prev.map(s => s.id === id ? { ...s, ...updatedFields } : s));
 
@@ -1372,6 +1397,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addServico,
       editServico,
       deleteServico,
+      importStandardServices,
       addOS,
       editOS,
       addVenda,

@@ -27,10 +27,22 @@ import {
   Camera,
   Sparkles,
   Edit,
-  AlertTriangle
+  AlertTriangle,
+  Copy,
+  Settings
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Produto, Servico, Cliente, SaleItem } from '../types';
+import QRCode from 'qrcode';
+import { generatePixPayload } from '../lib/pix';
+
+interface Coupon {
+  code: string;
+  type: 'percentage' | 'fixed';
+  value: number;
+  description: string;
+  minPurchase?: number;
+}
 
 export const PDVView: React.FC = () => {
   const { 
@@ -50,7 +62,8 @@ export const PDVView: React.FC = () => {
     editProduto,
     deleteProduto,
     editServico,
-    deleteServico
+    deleteServico,
+    updateCompany
   } = useApp();
 
   // Catalogue states
@@ -59,8 +72,48 @@ export const PDVView: React.FC = () => {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [basket, setBasket] = useState<SaleItem[]>([]);
   const [discountPercent, setDiscountPercent] = useState(0);
+  const [coupons, setCoupons] = useState<Coupon[]>([
+    { code: 'AUTOTECH15', type: 'percentage', value: 15, description: '15% de Desconto Geral de Boas-Vindas' },
+    { code: 'QUERO100', type: 'fixed', value: 100, description: 'R$ 100,00 off para compras a partir de R$ 500,00', minPurchase: 500 },
+    { code: 'PARCEIRO10', type: 'percentage', value: 10, description: '10% de Abatimento Especial de Parceria' },
+    { code: 'REVISAO50', type: 'fixed', value: 50, description: 'R$ 50,00 de desconto fixo em serviços pré-agendados', minPurchase: 150 }
+  ]);
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  // New coupon creation states
+  const [showAddCouponModal, setShowAddCouponModal] = useState(false);
+  const [newCouponCode, setNewCouponCode] = useState('');
+  const [newCouponType, setNewCouponType] = useState<'percentage' | 'fixed'>('percentage');
+  const [newCouponValue, setNewCouponValue] = useState('');
+  const [newCouponDesc, setNewCouponDesc] = useState('');
+  const [newCouponMin, setNewCouponMin] = useState('0');
+
   const [paymentMethod, setPaymentMethod] = useState<'PIX' | 'Cartão' | 'Dinheiro'>('PIX');
   const [commissionPct, setCommissionPct] = useState(5); // Default 5% seller fee
+
+  // Dynamic PIX Payload and QR Code Generation
+  const [pixStringCode, setPixStringCode] = useState<string>('');
+  const [pixQrBase64, setPixQrBase64] = useState<string>('');
+  const [copiedPixMessage, setCopiedPixMessage] = useState<boolean>(false);
+
+  const [receiptPixQrBase64, setReceiptPixQrBase64] = useState<string>('');
+  
+  // Local PIX configuration edit states inside PDV
+  const [pdvEditPix, setPdvEditPix] = useState(false);
+  const [tempPdvPixKey, setTempPdvPixKey] = useState('');
+  const [tempPdvPixBeneficiary, setTempPdvPixBeneficiary] = useState('');
+  const [tempPdvPixCity, setTempPdvPixCity] = useState('');
+
+  useEffect(() => {
+    if (company) {
+      setTempPdvPixKey(company.pixKey || 'cleciotecnologia@gmail.com');
+      setTempPdvPixBeneficiary(company.pixBeneficiary || company.name || 'AutoPrecision Premium');
+      setTempPdvPixCity(company.pixCity || 'SAO PAULO');
+    }
+  }, [company]);
+  const [lastFinishedPixStringCode, setLastFinishedPixStringCode] = useState<string>('');
   
   // Barcode and Simulated optical scanner states
   const [showBarcodeModal, setShowBarcodeModal] = useState(false);
@@ -394,9 +447,171 @@ export const PDVView: React.FC = () => {
 
   // Financial aggregates
   const subtotal = basket.reduce((sum, item) => sum + item.subtotal, 0);
-  const discountAmount = (subtotal * discountPercent) / 100;
+
+  // Calculate discount based on applied coupon + manual percent
+  const couponDiscountAmount = useMemo(() => {
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.minPurchase && subtotal < appliedCoupon.minPurchase) {
+      return 0; // Requires minimum purchase
+    }
+    if (appliedCoupon.type === 'percentage') {
+      return (subtotal * appliedCoupon.value) / 100;
+    } else {
+      return Math.min(subtotal, appliedCoupon.value);
+    }
+  }, [appliedCoupon, subtotal]);
+
+  // If subtotal drops below minimum after active coupon was applied, auto-cancel or report
+  useEffect(() => {
+    if (appliedCoupon && appliedCoupon.minPurchase && subtotal < appliedCoupon.minPurchase) {
+      setAppliedCoupon(null);
+      setCouponError(`Cupom ${appliedCoupon.code} removido pois valor mínimo exigido é R$ ${appliedCoupon.minPurchase.toFixed(2)}`);
+    }
+  }, [subtotal, appliedCoupon]);
+
+  const manualDiscountAmount = (subtotal * discountPercent) / 100;
+  const discountAmount = manualDiscountAmount + couponDiscountAmount;
   const grandTotal = Math.max(0, subtotal - discountAmount);
   const commissionCost = (grandTotal * commissionPct) / 100;
+
+  useEffect(() => {
+    if (paymentMethod === 'PIX' && grandTotal > 0) {
+      const pKey = company?.pixKey || 'cleciotecnologia@gmail.com';
+      const pBeneficiary = company?.pixBeneficiary || company?.name || 'AutoPrecision Premium';
+      const pCity = company?.pixCity || 'SAO PAULO';
+
+      try {
+        const payload = generatePixPayload({
+          chave: pKey,
+          beneficiario: pBeneficiary,
+          cidade: pCity,
+          valor: grandTotal,
+          descricao: `Venda PDV AutoTech`
+        });
+
+        setPixStringCode(payload);
+
+        QRCode.toDataURL(payload, { margin: 1 })
+          .then(url => {
+            setPixQrBase64(url);
+          })
+          .catch(err => {
+            console.error("Erro ao desenhar QR Code:", err);
+          });
+      } catch (err) {
+        console.error("Erro ao construir payload PIX:", err);
+      }
+    } else {
+      setPixStringCode('');
+      setPixQrBase64('');
+    }
+  }, [paymentMethod, grandTotal, company]);
+
+  useEffect(() => {
+    if (lastFinishedSale && lastFinishedSale.paymentMethod === 'PIX') {
+      const pKey = company?.pixKey || 'cleciotecnologia@gmail.com';
+      const pBeneficiary = company?.pixBeneficiary || company?.name || 'AutoPrecision Premium';
+      const pCity = company?.pixCity || 'SAO PAULO';
+
+      try {
+        const payload = generatePixPayload({
+          chave: pKey,
+          beneficiario: pBeneficiary,
+          cidade: pCity,
+          valor: lastFinishedSale.total,
+          descricao: `Venda ${lastFinishedSale.id}`
+        });
+
+        setLastFinishedPixStringCode(payload);
+
+        QRCode.toDataURL(payload, { margin: 1, width: 140 })
+          .then(url => {
+            setReceiptPixQrBase64(url);
+          })
+          .catch(err => console.error("Erro no QR Code do recibo:", err));
+      } catch (e) {
+        console.error("Erro no payload do recibo:", e);
+      }
+    } else {
+      setReceiptPixQrBase64('');
+      setLastFinishedPixStringCode('');
+    }
+  }, [lastFinishedSale, company]);
+
+  const handleApplyCoupon = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setCouponError(null);
+    const codeClean = couponInput.trim().toUpperCase();
+    if (!codeClean) return;
+
+    const matched = coupons.find(c => c.code.toUpperCase() === codeClean);
+    if (!matched) {
+      setCouponError('Cupom inválido ou inexistente!');
+      setAppliedCoupon(null);
+      return;
+    }
+
+    if (matched.minPurchase && subtotal < matched.minPurchase) {
+      setCouponError(`Este cupom exige compra mínima de R$ ${matched.minPurchase.toFixed(2)}`);
+      setAppliedCoupon(null);
+      return;
+    }
+
+    setAppliedCoupon(matched);
+    setCouponError(null);
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError(null);
+  };
+
+  const handleCreateCoupon = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCouponCode.trim()) {
+      alert('Por favor, informe um código para o cupom!');
+      return;
+    }
+    const cleanCode = newCouponCode.trim().toUpperCase();
+    if (coupons.some(c => c.code.toUpperCase() === cleanCode)) {
+      alert('Já existe um cupom com este código cadastrado!');
+      return;
+    }
+
+    const val = parseFloat(newCouponValue);
+    if (isNaN(val) || val <= 0) {
+      alert('Insira um valor de desconto válido maior que zero!');
+      return;
+    }
+    if (newCouponType === 'percentage' && val > 100) {
+      alert('Sendo em porcentagem, o valor do desconto não pode passar de 100%!');
+      return;
+    }
+
+    const newCpObj: Coupon = {
+      code: cleanCode,
+      type: newCouponType,
+      value: val,
+      description: newCouponDesc.trim() || `${newCouponType === 'percentage' ? val + '%' : 'R$ ' + val} de desconto`,
+      minPurchase: parseFloat(newCouponMin) || 0
+    };
+
+    setCoupons(prev => [newCpObj, ...prev]);
+    
+    // Auto apply new coupon!
+    setAppliedCoupon(newCpObj);
+    setCouponInput(cleanCode);
+    setCouponError(null);
+
+    // Reset fields
+    setNewCouponCode('');
+    setNewCouponType('percentage');
+    setNewCouponValue('');
+    setNewCouponDesc('');
+    setNewCouponMin('0');
+    setShowAddCouponModal(false);
+  };
 
   // Inline Client Quick Registration
   const handleQuickCreateClient = async (e: React.FormEvent) => {
@@ -1100,15 +1315,326 @@ export const PDVView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Coupons module */}
+              <div className="bg-[#050912]/50 p-3 rounded-xl border border-gray-800 flex flex-col gap-2.5">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-1.5 text-gray-400 font-mono text-[9px] font-bold uppercase tracking-wider">
+                    <Tag className="w-3.5 h-3.5 text-red-500" />
+                    <span>SISTEMA DE CUPONS DE DESCONTO</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddCouponModal(prev => !prev);
+                    }}
+                    className="text-[9px] text-red-400 hover:text-red-300 font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-red-950/15 hover:bg-red-950/30 py-0.5 px-2 rounded border border-red-950/40"
+                  >
+                    {showAddCouponModal ? "✕ Fechar Cadastro" : "＋ Cadastrar Cupom"}
+                  </button>
+                </div>
+
+                {/* Quick Coupon Registration Drawer */}
+                {showAddCouponModal && (
+                  <form onSubmit={handleCreateCoupon} className="bg-[#080c16] p-3 rounded-lg border border-red-900/30 flex flex-col gap-2.5 font-sans animate-fade-in text-xs text-left">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[8.5px] text-gray-400 font-mono uppercase">CÓDIGO DO CUPOM *</label>
+                        <input 
+                          type="text"
+                          placeholder="Ex: CUPOM10"
+                          value={newCouponCode}
+                          onChange={(e) => setNewCouponCode(e.target.value.toUpperCase())}
+                          className="bg-black/50 border border-gray-850 rounded px-2 py-1 text-white font-mono text-center uppercase focus:border-red-500 outline-none text-[11px]"
+                          required
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[8.5px] text-gray-400 font-mono uppercase">TIPO DE DESCONTO</label>
+                        <select
+                          value={newCouponType}
+                          onChange={(e) => setNewCouponType(e.target.value as 'percentage' | 'fixed')}
+                          className="bg-[#0c1223] border border-gray-850 rounded px-2 py-1 text-white text-[11px] font-mono outline-none"
+                        >
+                          <option value="percentage">Porcentagem (%)</option>
+                          <option value="fixed">Fixo (R$)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[8.5px] text-gray-400 font-mono uppercase">VALOR DESCONTO *</label>
+                        <input 
+                          type="number"
+                          placeholder="Ex: 15 ou 50"
+                          value={newCouponValue}
+                          onChange={(e) => setNewCouponValue(e.target.value)}
+                          className="bg-black/50 border border-gray-850 rounded px-2 py-1 text-white font-mono text-center text-[11px] outline-none"
+                          required
+                          min="1"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[8.5px] text-gray-400 font-mono uppercase">COMPRA MÍNIMA (R$)</label>
+                        <input 
+                          type="number"
+                          placeholder="Mínimo"
+                          value={newCouponMin}
+                          onChange={(e) => setNewCouponMin(e.target.value)}
+                          className="bg-black/50 border border-gray-850 rounded px-2 py-1 text-white font-mono text-center text-[11px] outline-none"
+                          min="0"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[8.5px] text-gray-400 font-mono uppercase">DESCRIÇÃO CURTA</label>
+                      <input 
+                        type="text"
+                        placeholder="Ex: 15% off em compras acima de R$ 300"
+                        value={newCouponDesc}
+                        onChange={(e) => setNewCouponDesc(e.target.value)}
+                        className="bg-[#0c1223] border border-gray-850 rounded px-2.5 py-1 text-white text-[11px] outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-1.5 bg-red-600 hover:bg-red-750 text-white font-mono text-[9px] uppercase font-bold rounded cursor-pointer transition-all hover:scale-[1.01]"
+                    >
+                      💾 SALVAR E ATIVAR CUPOM
+                    </button>
+                  </form>
+                )}
+
+                {/* Search & Apply explicit coupon box */}
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input 
+                      type="text" 
+                      placeholder="INSIRA CÓDIGO DO CUPOM..."
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      className="w-full bg-[#080c16] border border-gray-800 rounded-lg py-1.5 px-3 uppercase text-xs text-white font-mono text-left focus:border-red-500 outline-none"
+                    />
+                  </div>
+                  {appliedCoupon ? (
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="px-3 bg-red-950/40 border border-red-900/50 hover:bg-red-950/60 cursor-pointer text-red-400 font-mono font-bold text-xs rounded-lg uppercase transition-all"
+                    >
+                      REMOVER
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleApplyCoupon()}
+                      className="px-4 bg-red-650 hover:bg-red-700 bg-red-600 text-white font-mono font-bold text-xs rounded-lg uppercase cursor-pointer transition-all"
+                    >
+                      APLICAR
+                    </button>
+                  )}
+                </div>
+
+                {couponError && (
+                  <span className="text-[10px] text-red-400 font-mono leading-tight text-left block">{couponError}</span>
+                )}
+
+                {appliedCoupon && (
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-green-950/20 border border-green-900/30 text-xs font-mono text-green-400 text-left">
+                    <div className="truncate pr-2">
+                      <span className="font-bold block">🎫 CUPOM ATIVO: {appliedCoupon.code}</span>
+                      <span className="block text-[9px] text-green-500 leading-normal truncate">{appliedCoupon.description}</span>
+                    </div>
+                    <span className="font-bold whitespace-nowrap bg-green-905 bg-green-900/30 px-2 py-0.5 rounded">
+                      -{appliedCoupon.type === 'percentage' ? `${appliedCoupon.value}%` : `R$ ${appliedCoupon.value.toFixed(2)}`}
+                    </span>
+                  </div>
+                )}
+
+                {/* Available Coupons list Pills */}
+                <div className="flex flex-col gap-1 mt-1">
+                  <span className="text-[8.5px] font-mono text-gray-500 uppercase tracking-wide text-left block">💡 CUPONS DISPONÍVEIS (CLIQUE PARA APLICAR):</span>
+                  <div className="flex flex-col gap-1 max-h-24 overflow-y-auto pr-1">
+                    {coupons.map((c) => {
+                      const isDisabled = c.minPurchase ? subtotal < c.minPurchase : false;
+                      const isCurrent = appliedCoupon?.code === c.code;
+                      return (
+                        <button
+                          key={c.code}
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => {
+                            setAppliedCoupon(c);
+                            setCouponInput(c.code);
+                            setCouponError(null);
+                          }}
+                          className={`w-full p-1.5 rounded-lg border text-left flex items-start justify-between transition-all cursor-pointer ${
+                            isCurrent
+                              ? "bg-red-950/15 border-red-500 text-red-400"
+                              : isDisabled
+                              ? "opacity-35 bg-transparent border-gray-900 text-gray-600 cursor-not-allowed"
+                              : "bg-[#080c16]/50 border-gray-850 text-gray-300 hover:border-gray-750 hover:text-white"
+                          }`}
+                        >
+                          <div className="truncate pr-2">
+                            <span className="text-[10px] font-mono font-bold block">{c.code}</span>
+                            <span className="text-[9px] text-gray-500 font-sans block truncate">{c.description}</span>
+                          </div>
+                          <span className="text-[9.5px] font-mono font-bold shrink-0 self-center bg-gray-950/85 px-1.5 py-0.5 rounded text-gray-400">
+                            {c.type === 'percentage' ? `-${c.value}%` : `-R$ ${c.value}`}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Dynamic PIX QR Code & Copia e Cola Preview */}
+              {paymentMethod === 'PIX' && grandTotal > 0 && (
+                <div className="bg-red-950/10 p-3.5 rounded-xl border border-red-900/45 flex flex-col items-center gap-3 animate-fade-in text-center font-sans">
+                  <div className="flex items-center gap-1.5 text-red-500 font-mono text-[9px] font-bold uppercase tracking-wider self-start">
+                    <QrCode className="w-4 h-4 animate-pulse" />
+                    <span>PAGAMENTO IMEDIATO VIA PIX COM VALOR EXATO</span>
+                  </div>
+                  
+                  {pixQrBase64 ? (
+                    <div className="p-2 bg-white rounded-lg inline-block shadow-xl relative group">
+                      <img 
+                        src={pixQrBase64} 
+                        alt="QR Code PIX Dinâmico" 
+                        className="w-36 h-36 object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-36 h-36 border border-gray-800 rounded-lg flex items-center justify-center text-gray-600 text-[10px] font-mono">
+                      Gerando QR Code...
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-0.5 w-full text-left">
+                    <span className="text-[9.5px] font-mono font-bold text-gray-300 uppercase">CHAVE DE COBRANÇA: {company?.pixKey || 'cleciotecnologia@gmail.com'}</span>
+                    <span className="text-[9.5px] font-mono text-gray-400">BENEFICIÁRIO: {company?.pixBeneficiary || company?.name || 'AutoPrecision Premium'}</span>
+                    <span className="text-[9.5px] font-mono text-gray-400">VALOR EXATO DA INVOICE: R$ {grandTotal.toFixed(2)}</span>
+                    <span className="text-[8.5px] text-gray-500 font-sans mt-1">Aponte a câmera do aplicativo bancário para a tela ou copie o Pix abaixo:</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setPdvEditPix(!pdvEditPix)}
+                    className="text-[9px] font-mono font-bold text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 cursor-pointer bg-red-950/25 px-2.5 py-1 rounded border border-red-900/40"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-red-500" /> {pdvEditPix ? "[Fechar Configuração]" : "⚙️ Cadastrar/Mudar Chave PIX"}
+                  </button>
+
+                  {pdvEditPix && (
+                    <div className="bg-[#080d1a] border border-gray-850 rounded-lg p-3 w-full flex flex-col gap-2 text-left font-mono text-[9.5px] animate-fade-in">
+                      <span className="text-gray-400 font-bold uppercase text-[8.5px] block border-b border-gray-800 pb-1">ALTERAR DADOS PIX NO SAT/PDV</span>
+                      
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-gray-400">Chave PIX:</span>
+                        <input 
+                          type="text" 
+                          value={tempPdvPixKey} 
+                          onChange={e => setTempPdvPixKey(e.target.value)}
+                          placeholder="Chave PIX"
+                          className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[9.5px] focus:outline-none focus:border-red-500 font-mono"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-gray-400">Beneficiário:</span>
+                        <input 
+                          type="text" 
+                          value={tempPdvPixBeneficiary} 
+                          onChange={e => setTempPdvPixBeneficiary(e.target.value)}
+                          placeholder="Nome Titular"
+                          className="bg-black/60 border border-gray-850 rounded px-2 py-1 text-white text-[9.5px] focus:outline-none focus:border-red-500"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-gray-400">Cidade:</span>
+                        <input 
+                          type="text" 
+                          value={tempPdvPixCity} 
+                          onChange={e => setTempPdvPixCity(e.target.value.toUpperCase())}
+                          placeholder="Cidade"
+                          className="bg-black/60 border border-gray-850 rounded px-2 py-1 text-white text-[9.5px] focus:outline-none focus:border-red-500 uppercase"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await updateCompany({
+                              pixKey: tempPdvPixKey,
+                              pixBeneficiary: tempPdvPixBeneficiary,
+                              pixCity: tempPdvPixCity
+                            });
+                            setPdvEditPix(false);
+                          } catch (err) {
+                            console.error("Erro inline PDV:", err);
+                          }
+                        }}
+                        className="w-full mt-1.5 py-1 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[9.5px]"
+                      >
+                        Salvar Chave e Recarregar QR Code
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex gap-1.5 w-full">
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={pixStringCode} 
+                      className="bg-black/50 border border-gray-850 rounded px-2.5 py-1.5 font-mono text-[8.5px] text-gray-450 select-all truncate flex-1 outline-none text-left text-gray-400"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          navigator.clipboard.writeText(pixStringCode);
+                          setCopiedPixMessage(true);
+                          setTimeout(() => setCopiedPixMessage(false), 2000);
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }}
+                      className="px-2.5 py-1.5 bg-red-600 hover:bg-red-750 font-mono font-bold text-[9px] uppercase rounded text-white flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                    >
+                      <Copy className="w-3 h-3 text-white" /> {copiedPixMessage ? 'COPIADO!' : 'COPIAR'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Pricing breakdown details with beautiful high contrast */}
               <div className="bg-gray-950/50 p-4 rounded-xl border border-gray-900 text-xs font-mono flex flex-col gap-2">
                 <div className="flex justify-between text-gray-400">
                   <span>Subtotal bruto</span>
                   <span className="text-white">R$ {subtotal.toFixed(2)}</span>
                 </div>
-                {discountAmount > 0 && (
+                {manualDiscountAmount > 0 && (
                   <div className="flex justify-between text-amber-500 font-bold">
-                    <span>Desconto ({discountPercent}%)</span>
+                    <span>Desconto Balcão ({discountPercent}%)</span>
+                    <span>- R$ {manualDiscountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {couponDiscountAmount > 0 && appliedCoupon && (
+                  <div className="flex justify-between text-emerald-450 text-emerald-400 font-bold">
+                    <span>Desconto Cupom ({appliedCoupon.code})</span>
+                    <span>- R$ {couponDiscountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {discountAmount > 0 && (
+                  <div className="flex justify-between text-yellow-500 font-bold border-t border-gray-900/40 pt-1.5">
+                    <span>TOTAL DESCONTOS</span>
                     <span>- R$ {discountAmount.toFixed(2)}</span>
                   </div>
                 )}
@@ -1246,6 +1772,52 @@ export const PDVView: React.FC = () => {
                 <span>Modalidade de Pago:</span>
                 <span className="font-bold text-black uppercase">{lastFinishedSale.paymentMethod}</span>
               </div>
+
+              {lastFinishedSale.paymentMethod === 'PIX' && (
+                <div className="mt-3 bg-neutral-100 p-2.5 rounded-xl border border-neutral-300 flex flex-col items-center gap-2 font-mono text-center">
+                  <span className="text-[8.5px] font-bold text-neutral-800 flex items-center gap-1">
+                    <QrCode className="w-3.5 h-3.5 text-black" /> COBRANÇA PIX INTEGRADA
+                  </span>
+                  {receiptPixQrBase64 ? (
+                    <div className="p-1.5 bg-white border border-neutral-200 rounded shadow-sm">
+                      <img 
+                        src={receiptPixQrBase64} 
+                        alt="PIX QR" 
+                        className="w-28 h-28 object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  ) : (
+                    <span className="text-[8px] text-neutral-500">Gerando QR...</span>
+                  )}
+                  <span className="text-[8px] leading-tight text-neutral-600 font-sans">
+                    Aponte seu app do banco para pagar • Valor: <strong>R$ {lastFinishedSale.total.toFixed(2)}</strong>
+                  </span>
+                  
+                  <div className="flex gap-1 w-full mt-1">
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={lastFinishedPixStringCode} 
+                      className="bg-white border border-neutral-300 rounded px-1.5 py-1 text-[8px] text-neutral-550 select-all truncate flex-1 outline-none text-left text-neutral-600"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          navigator.clipboard.writeText(lastFinishedPixStringCode);
+                          alert("PIX copiado!");
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }}
+                      className="px-2 py-1 bg-black text-white font-mono text-[8.5px] font-bold uppercase rounded cursor-pointer shrink-0"
+                    >
+                      COPIAR
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="text-center text-[10px] font-mono border-t border-black pt-3 flex flex-col gap-0.5 text-neutral-505 text-gray-600">

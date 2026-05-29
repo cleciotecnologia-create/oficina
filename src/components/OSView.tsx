@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Wrench, 
   Plus, 
@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
+import { AUTO_SUGGESTIONS } from '../lib/autoSuggestions';
 
 export const OSView: React.FC = () => {
   const { 
@@ -30,6 +31,7 @@ export const OSView: React.FC = () => {
     addOS, 
     editOS, 
     deleteOS,
+    addVeiculo,
     clientes, 
     veiculos, 
     produtos, 
@@ -41,6 +43,17 @@ export const OSView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'lista' | 'nova'>('lista');
   const [searchPlate, setSearchPlate] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todas');
+
+  // Quick vehicle registration inside new OS creation
+  const [showQuickVehicle, setShowQuickVehicle] = useState(false);
+  const [quickBrand, setQuickBrand] = useState('');
+  const [quickModel, setQuickModel] = useState('');
+  const [quickYear, setQuickYear] = useState('2022');
+  const [quickEngine, setQuickEngine] = useState('1.6 Flex');
+  const [quickPlate, setQuickPlate] = useState('');
+  const [quickKm, setQuickKm] = useState('');
+  const [quickModelsList, setQuickModelsList] = useState<string[]>([]);
+  const [quickVehSuccess, setQuickVehSuccess] = useState<string | null>(null);
 
   // New OS form states
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
@@ -129,6 +142,60 @@ export const OSView: React.FC = () => {
         }));
         setServices(prev => [...prev, ...mappedSrvs]);
       }
+    }
+  };
+
+  // Auto-select newly created vehicle in OS flow when veiculos array updates
+  useEffect(() => {
+    if (showQuickVehicle && !selectedVehicle && veiculos.length > 0 && selectedClient) {
+      const clientVehicles = veiculos.filter(v => v.clienteId === selectedClient.id);
+      if (clientVehicles.length > 0) {
+        const lastCreated = clientVehicles[clientVehicles.length - 1];
+        setSelectedVehicle(lastCreated);
+      }
+    }
+  }, [veiculos]);
+
+  const handleQuickVehicleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClient) {
+      alert("Por favor, selecione primeiro um cliente integrado.");
+      return;
+    }
+    if (!quickPlate || !quickBrand || !quickModel) {
+      alert("Preencha Placa, Marca e Modelo do carro.");
+      return;
+    }
+
+    try {
+      const newVehObj = {
+        clienteId: selectedClient.id,
+        brand: quickBrand,
+        model: quickModel,
+        year: quickYear || '2022',
+        engine: quickEngine || '1.6 Flex',
+        plate: quickPlate.toUpperCase().trim(),
+        chassi: 'CADASTRO RÁPIDO OS',
+        km: parseInt(quickKm) || 0
+      };
+
+      await addVeiculo(newVehObj);
+
+      setQuickVehSuccess(`🎉 Veículo ${quickBrand} ${quickModel} (${quickPlate.toUpperCase()}) cadastrado e vinculado com sucesso!`);
+      
+      setQuickBrand('');
+      setQuickModel('');
+      setQuickPlate('');
+      setQuickKm('');
+      setQuickModelsList([]);
+      
+      setTimeout(() => {
+        setQuickVehSuccess(null);
+        setShowQuickVehicle(false);
+      }, 2500);
+      
+    } catch (err: any) {
+      alert("Houve um problema ao cadastrar o veículo: " + (err.message || err));
     }
   };
 
@@ -487,25 +554,196 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
 
             {/* Vehicle spec linkage */}
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-mono text-gray-400 uppercase">2. VINCULE O VEÍCULO DE ENTRADA</label>
-              <select 
-                value={selectedVehicle?.id || ''}
-                disabled={!selectedClient}
-                onChange={(e) => {
-                  const found = veiculos.find(v => v.id === e.target.value);
-                  setSelectedVehicle(found || null);
-                }}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white disabled:opacity-40"
-                required
-              >
-                <option value="">-- Selecione Automóvel --</option>
-                {veiculos
-                  .filter(v => !selectedClient || v.clienteId === selectedClient.id)
-                  .map(v => (
-                    <option key={v.id} value={v.id}>{v.brand} {v.model} ({v.plate})</option>
-                  ))
-                }
-              </select>
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-mono text-gray-400 uppercase">2. VINCULE O VEÍCULO DE ENTRADA</label>
+                {selectedClient && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowQuickVehicle(prev => !prev);
+                      setQuickVehSuccess(null);
+                    }}
+                    className="text-[10px] text-red-400 hover:text-red-300 font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer bg-red-950/10 hover:bg-red-950/20 py-1 px-2.5 rounded-lg border border-red-950/50"
+                  >
+                    {showQuickVehicle ? "✕ Cancelar Registro" : "+ Cadastrar Veículo Rápido"}
+                  </button>
+                )}
+              </div>
+
+              {showQuickVehicle ? (
+                <div className="bg-[#050912]/90 border border-red-950/60 rounded-xl p-4 flex flex-col gap-3 text-left">
+                  <div className="flex items-center gap-2 text-red-400 font-mono text-[10px] font-bold uppercase tracking-widest border-b border-red-950/40 pb-1.5">
+                    <span>🚗 Novo Cadastro Integrado</span>
+                  </div>
+
+                  {quickVehSuccess && (
+                    <div className="p-2.5 bg-green-950/30 border border-green-800 rounded-lg text-xs text-green-300 font-mono animate-fadeIn">
+                      {quickVehSuccess}
+                    </div>
+                  )}
+
+                  {!quickVehSuccess && (
+                    <div className="flex flex-col gap-3">
+                      <div className="grid grid-cols-2 gap-3.5">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 font-mono">PLACA *</label>
+                          <input
+                            type="text"
+                            placeholder="GOLF-2018"
+                            value={quickPlate}
+                            onChange={(e) => setQuickPlate(e.target.value.toUpperCase())}
+                            maxLength={9}
+                            className="bg-black/40 border border-gray-800 rounded-lg py-1.5 px-2.5 text-xs text-white uppercase outline-none focus:border-red-500 font-mono text-center"
+                            required
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 font-mono">KM ATUAL</label>
+                          <input
+                            type="number"
+                            placeholder="Ex: 50000"
+                            value={quickKm}
+                            onChange={(e) => setQuickKm(e.target.value)}
+                            className="bg-black/40 border border-gray-800 rounded-lg py-1.5 px-2.5 text-xs text-white outline-none focus:border-red-550 font-mono text-center"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Brand suggestions panel */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex justify-between items-center">
+                          <label className="text-[9px] text-gray-400 font-mono">MARCA *</label>
+                          {quickBrand && (
+                            <span className="text-[9px] text-red-400 font-mono font-bold uppercase">{quickBrand} selecionada</span>
+                          )}
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Volkswagen"
+                          value={quickBrand}
+                          onChange={(e) => {
+                            setQuickBrand(e.target.value);
+                            const foundSug = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === e.target.value.toLowerCase());
+                            if (foundSug) {
+                              setQuickModelsList(foundSug.models);
+                            }
+                          }}
+                          className="bg-black/40 border border-gray-800 rounded-lg py-1.5 px-2.5 text-xs text-white outline-none focus:border-red-500"
+                          required
+                        />
+
+                        {/* Brand quick pills */}
+                        <div className="flex flex-wrap gap-1 mt-1 pb-1 max-h-24 overflow-y-auto pr-1">
+                          {AUTO_SUGGESTIONS.map((sug) => (
+                            <button
+                              key={sug.name}
+                              type="button"
+                              onClick={() => {
+                                setQuickBrand(sug.name);
+                                setQuickModelsList(sug.models);
+                                setQuickModel(''); // reset model when brand changes
+                              }}
+                              className={`px-2 py-1 rounded-lg text-[9.5px] font-medium font-sans transition-all flex items-center gap-1 cursor-pointer border ${
+                                quickBrand === sug.name
+                                  ? "bg-red-950/40 border-red-500/80 text-red-400 font-bold"
+                                  : "bg-slate-900/60 border-gray-850 text-gray-400 hover:text-white hover:border-gray-750"
+                              }`}
+                            >
+                              <span>{sug.emoji}</span> {sug.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Model suggestions panel */}
+                      <div className="flex flex-col gap-1 mt-1">
+                        <label className="text-[9px] text-gray-400 font-mono">MODELO *</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Polo TSI"
+                          value={quickModel}
+                          onChange={(e) => setQuickModel(e.target.value)}
+                          className="bg-black/40 border border-gray-800 rounded-lg py-1.5 px-2.5 text-xs text-white outline-none focus:border-red-500"
+                          required
+                        />
+
+                        {/* Model suggestions pills */}
+                        {quickModelsList.length > 0 && (
+                          <div className="flex flex-col gap-1 mt-1.5">
+                            <span className="text-[9px] text-gray-500 font-mono uppercase tracking-wider">💡 Modelos Sugeridos para {quickBrand}:</span>
+                            <div className="flex flex-wrap gap-1 max-h-18 overflow-y-auto pr-1">
+                              {quickModelsList.map((md) => (
+                                <button
+                                  key={md}
+                                  type="button"
+                                  onClick={() => setQuickModel(md)}
+                                  className={`px-2 py-0.5 rounded-md text-[9px] font-sans transition-all cursor-pointer border ${
+                                    quickModel === md
+                                      ? "bg-cyan-950/40 border-cyan-500/80 text-cyan-400 font-bold"
+                                      : "bg-slate-950 border-gray-900 text-gray-500 hover:text-gray-300 hover:border-gray-800"
+                                  }`}
+                                >
+                                  {md}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3.5 mt-1">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 font-mono">ANO FABR.</label>
+                          <input
+                            type="text"
+                            placeholder="2022"
+                            value={quickYear}
+                            onChange={(e) => setQuickYear(e.target.value)}
+                            className="bg-black/40 border border-gray-800 rounded-lg py-1.5 px-2.5 text-xs text-white outline-none focus:border-red-550 font-mono text-center"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 font-mono">MOTORIZAÇÃO</label>
+                          <input
+                            type="text"
+                            placeholder="2.0 Turbo"
+                            value={quickEngine}
+                            onChange={(e) => setQuickEngine(e.target.value)}
+                            className="bg-black/40 border border-gray-800 rounded-lg py-1.5 px-2.5 text-xs text-white outline-none focus:border-red-550 font-mono text-center"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleQuickVehicleSave}
+                        className="py-2.5 px-4 bg-red-600 hover:bg-red-700 hover:scale-[1.01] transition-all text-white font-mono text-xs font-bold rounded-lg mt-2 flex justify-center items-center gap-2 cursor-pointer border border-transparent shadow-lg shadow-red-950/30"
+                      >
+                        ✅ SALVAR E ATRELAR AUTOMÓVEL
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <select 
+                  value={selectedVehicle?.id || ''}
+                  disabled={!selectedClient}
+                  onChange={(e) => {
+                    const found = veiculos.find(v => v.id === e.target.value);
+                    setSelectedVehicle(found || null);
+                  }}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white disabled:opacity-40 focus:outline-none focus:border-gray-700"
+                  required
+                >
+                  <option value="">-- Selecione Automóvel --</option>
+                  {veiculos
+                    .filter(v => !selectedClient || v.clienteId === selectedClient.id)
+                    .map(v => (
+                      <option key={v.id} value={v.id}>{v.brand} {v.model} ({v.plate})</option>
+                    ))
+                  }
+                </select>
+              )}
             </div>
 
             {/* Kilometer entry */}

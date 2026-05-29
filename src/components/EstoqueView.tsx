@@ -328,6 +328,15 @@ export const EstoqueView: React.FC = () => {
   const [editingProdMin, setEditingProdMin] = useState('');
   const [editingProdFornecedorId, setEditingProdFornecedorId] = useState('');
 
+  // Check if SKU already exists in product database
+  const duplicateNewProd = newProdSku.trim() 
+    ? (produtos || []).find(p => p.internalSku?.trim().toUpperCase() === newProdSku.trim().toUpperCase()) 
+    : null;
+
+  const duplicateEditingProd = (editingProdSku.trim() && editingProdId) 
+    ? (produtos || []).find(p => p.id !== editingProdId && p.internalSku?.trim().toUpperCase() === editingProdSku.trim().toUpperCase()) 
+    : null;
+
   // Fast stock adjustment quick edit
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [editingStockQty, setEditingStockQty] = useState('');

@@ -1,11 +1,21 @@
 import { Cliente, Veiculo, Produto, Servico, OrdemServico, Financeiro, Fornecedor } from '../types';
 
 export const MOCK_SERVICES: Servico[] = [
-  { id: "srv_cat_1", name: "Revisão Geral Preventiva", description: "Inspeção de 40 itens incluindo sistema de arrefecimento, suspensão, freios e scanner elétrico.", price: 250.00, duration: "2h", category: "Mecânica", empresaId: "comp_demo_1" },
-  { id: "srv_cat_2", name: "Alinhamento 3D + Balanceamento", description: "Alinhamento a laser computadorizado e balanceamento dinâmico de quatro rodas com chumbo.", price: 120.00, duration: "1h", category: "Alinhamento", empresaId: "comp_demo_1" },
-  { id: "srv_cat_3", name: "Mão de Obra Troca de Pastilhas de Freio", description: "Serviço profissional de desmontagem, limpeza dos reparos e sangria para novas pastilhas.", price: 80.00, duration: "45min", category: "Freios", empresaId: "comp_demo_1" },
-  { id: "srv_cat_4", name: "Mão de Obra de Troca de Óleo e Filtro", description: "Substituição sob as especificações do manual do fabricante, eliminação ecológica resíduos.", price: 50.00, duration: "30min", category: "Lubrificantes", empresaId: "comp_demo_1" },
-  { id: "srv_cat_5", name: "Diagnóstico Computadorizado OBD-II Scanner", description: "Varredura de centrais de injeção direta, airbags, abs e redefinição de intervalos revisão.", price: 150.00, duration: "1h", category: "Elétrica", empresaId: "comp_demo_1" }
+  { id: "srv_cat_1", name: "Revisão Geral Preventiva", description: "Inspeção minuciosa de mais de 40 itens vitais do veículo: sistema de arrefecimento, freios, suspensão, fluidos, luzes e varredura completa por scanner eletrônico.", price: 250.00, duration: "2h", category: "Revisão", empresaId: "comp_demo_1" },
+  { id: "srv_cat_2", name: "Alinhamento 3D + Balanceamento", description: "Medição geométrica tridimensional computadorizada dos eixos dianteiro e traseiro e balanceamento dinâmico das 4 rodas com pesos calibrados.", price: 120.00, duration: "1h", category: "Alinhamento", empresaId: "comp_demo_1" },
+  { id: "srv_cat_3", name: "Mão de Obra Troca de Pastilhas de Freio", description: "Substituição técnica das pastilhas de freio dianteiras/traseiras, escovação e lubrificação das guias de pinça, limpeza de resíduos e verificação de pinças.", price: 80.00, duration: "45min", category: "Freios", empresaId: "comp_demo_1" },
+  { id: "srv_cat_4", name: "Mão de Obra de Troca de Óleo e Filtro", description: "Esgotamento ecológico por gravidade do óleo lubrificante de motor usado, troca do filtro de óleo correspondente e lubrificação do visual de vedação.", price: 50.00, duration: "30min", category: "Lubrificantes", empresaId: "comp_demo_1" },
+  { id: "srv_cat_5", name: "Diagnóstico Computadorizado OBD-II Scanner", description: "Escaneamento completo de centrais (Injeção Eletrônica, ABS, Airbag, Transmissão, Carroceria), monitoramento de parâmetros ativos e limpeza de falhas.", price: 150.00, duration: "1h", category: "Injeção / Elétrica", empresaId: "comp_demo_1" },
+  { id: "srv_cat_6", name: "Limpeza Química do Sistema de Arrefecimento", description: "Esvaziamento do fluido antigo, flushing químico do radiador e bloco, enxágue pressurizado do sistema e reabastecimento com aditivo orgânico concentrado.", price: 180.00, duration: "1h 30min", category: "Arrefecimento", empresaId: "comp_demo_1" },
+  { id: "srv_cat_7", name: "Higienização de Ar Condicionado via Oxi-Sanitização", description: "Aplicação de máquina geradora de Ozônio ativa para neutralização completa de odores, vírus, fungos e bactérias nos dutos e cabine de ar.", price: 130.00, duration: "45min", category: "Climatização", empresaId: "comp_demo_1" },
+  { id: "srv_cat_8", name: "Mão de Obra substituição de Correia Dentada e Esticador", description: "Desmontagem dos periféricos de sincronismo de motor, substituição cirúrgica da correia de sincronização (ou corrente) e tensionador sob torque exato.", price: 380.00, duration: "3h", category: "Motor", empresaId: "comp_demo_1" },
+  { id: "srv_cat_9", name: "Limpeza Técnica e Equalização de Bicos Injetores", description: "Desmontagem da flauta de combustível, teste de vazão comparativo em bancada de ultrassom, limpeza piezoelétrica profunda e troca de kit de reparo.", price: 160.00, duration: "1h 15min", category: "Injeção / Elétrica", empresaId: "comp_demo_1" },
+  { id: "srv_cat_10", name: "Mão de Obra Troca de Amortecedores Dianteiros (Par)", description: "Serviço profissional de desmontagem de torre McPherson dianteira esquerda e direita, compressão de molas originais, troca de cartuchos e batentes.", price: 220.00, duration: "2h", category: "Suspensão", empresaId: "comp_demo_1" },
+  { id: "srv_cat_11", name: "Mão de Obra Troca de Kit de Embreagem Completo", description: "Isolamento de subquadro ou transmissão, substituição física do disco, platô e atuador hidráulico central de embreagem com sangria pneumática.", price: 450.00, duration: "4h", category: "Transmissão", empresaId: "comp_demo_1" },
+  { id: "srv_cat_12", name: "Substituição e Sangria Completa de Fluido de Freio DOT 4", description: "Substituição completa do fluido higroscópico do reservatório principal e purga individual em quatro pinças simultaneamente até saída de fluido límpido.", price: 110.00, duration: "1h", category: "Freios", empresaId: "comp_demo_1" },
+  { id: "srv_cat_13", name: "Troca do Fluido da Transmissão Automática via Máquina", description: "Operação por máquina dialítica de fluxo bidirecional, extraindo 100% do óleo velho da transmissão interna e conversor de torque trocando elementos filtrantes.", price: 390.00, duration: "2h 30min", category: "Transmissão", empresaId: "comp_demo_1" },
+  { id: "srv_cat_14", name: "Descarbonização Química de Válvulas e Admissão", description: "Flushing por micro-pulverização ou esferas de casca no coletor de admissão visando remover crostas duras de carbono nos dutos de cabeçote (injeção direta).", price: 480.00, duration: "3h", category: "Motor", empresaId: "comp_demo_1" },
+  { id: "srv_cat_15", name: "Instalação e Codificação OBD de Nova Bateria", description: "Remoção segura da bateria antiga sob fonte de backup auxiliar de pátio (evitando desconfigurar rádio e painéis) e codificação de repouso ciclado em central.", price: 60.00, duration: "30min", category: "Injeção / Elétrica", empresaId: "comp_demo_1" }
 ];
 
 export const INITIAL_COMPANY = {
@@ -23,7 +33,10 @@ export const INITIAL_COMPANY = {
   longitude: -46.6974,
   customDomain: "mecanica.autoprecision.com.br",
   subdomain: "autoprecision",
-  domainStatus: "Ativo" as const
+  domainStatus: "Ativo" as const,
+  pixKey: "cleciotecnologia@gmail.com",
+  pixBeneficiary: "AutoPrecision Premium",
+  pixCity: "SAO PAULO"
 };
 
 export const MOCK_CLIENTS: Cliente[] = [
@@ -36,7 +49,8 @@ export const MOCK_CLIENTS: Cliente[] = [
     empresaId: "comp_demo_1",
     oilChangeAlert: true,
     reviewAlert: true,
-    createdAt: "2026-02-15T14:30:00Z"
+    createdAt: "2026-02-15T14:30:00Z",
+    nextReviewDate: "2026-06-03" // Em 5 dias - Crítico / Próximo
   },
   {
     id: "cli_2",
@@ -47,7 +61,8 @@ export const MOCK_CLIENTS: Cliente[] = [
     empresaId: "comp_demo_1",
     oilChangeAlert: false,
     reviewAlert: true,
-    createdAt: "2026-03-01T09:15:00Z"
+    createdAt: "2026-03-01T09:15:00Z",
+    nextReviewDate: "2026-06-25" // Em ~26 dias - Atenção
   },
   {
     id: "cli_3",
@@ -58,7 +73,8 @@ export const MOCK_CLIENTS: Cliente[] = [
     empresaId: "comp_demo_1",
     oilChangeAlert: true,
     reviewAlert: false,
-    createdAt: "2026-03-10T11:45:00Z"
+    createdAt: "2026-03-10T11:45:00Z",
+    nextReviewDate: "2026-08-15" // Em 2 meses e meio - Seguro
   },
   {
     id: "cli_4",
@@ -69,7 +85,8 @@ export const MOCK_CLIENTS: Cliente[] = [
     empresaId: "comp_demo_1",
     oilChangeAlert: true,
     reviewAlert: true,
-    createdAt: "2026-04-05T16:20:00Z"
+    createdAt: "2026-04-05T16:20:00Z",
+    nextReviewDate: "2026-05-15" // Ultrapassado - Atrasado
   }
 ];
 

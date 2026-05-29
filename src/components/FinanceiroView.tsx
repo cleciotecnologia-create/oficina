@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   DollarSign, 
   ArrowUpRight, 
@@ -17,16 +17,95 @@ import {
   AlertTriangle,
   Clock,
   Filter,
-  Check
+  Check,
+  QrCode,
+  Copy,
+  Printer,
+  Settings
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Financeiro } from '../types';
+import QRCode from 'qrcode';
+import { generatePixPayload } from '../lib/pix';
 
 export const FinanceiroView: React.FC = () => {
-  const { financeiro, addFinanceiro, editFinanceiro, ordensServico, fornecedores } = useApp();
+  const { financeiro, addFinanceiro, editFinanceiro, ordensServico, fornecedores, company, updateCompany } = useApp();
 
   const [searchDesc, setSearchDesc] = useState('');
   const [typeFilter, setTypeFilter] = useState<'Todas' | 'Receita' | 'Despesa' | 'RemindersActive'>('Todas');
+
+  // Dynamic PIX billing states for Financeiro module faturas
+  const [pixSelectedReceivable, setPixSelectedReceivable] = useState<Financeiro | null>(null);
+  const [financeiroPixQrDataUrl, setFinanceiroPixQrDataUrl] = useState<string>('');
+  const [financeiroPixString, setFinanceiroPixString] = useState<string>('');
+  const [copiedText, setCopiedText] = useState<boolean>(false);
+
+  // Editable PIX States
+  const [showPixConfig, setShowPixConfig] = useState(false);
+  const [tempPixKey, setTempPixKey] = useState('');
+  const [tempPixBeneficiary, setTempPixBeneficiary] = useState('');
+  const [tempPixCity, setTempPixCity] = useState('');
+  const [pixFeedback, setPixFeedback] = useState('');
+  const [modalEditPix, setModalEditPix] = useState(false);
+
+  useEffect(() => {
+    if (company) {
+      setTempPixKey(company.pixKey || 'cleciotecnologia@gmail.com');
+      setTempPixBeneficiary(company.pixBeneficiary || company.name || 'AutoPrecision Premium');
+      setTempPixCity(company.pixCity || 'SAO PAULO');
+    }
+  }, [company]);
+
+  const handleSavePixConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateCompany({
+        pixKey: tempPixKey,
+        pixBeneficiary: tempPixBeneficiary,
+        pixCity: tempPixCity,
+      });
+      setPixFeedback('Dados bancários salvos com sucesso!');
+      setTimeout(() => setPixFeedback(''), 3000);
+    } catch (err) {
+      console.error(err);
+      setPixFeedback('Erro ao salvar os dados.');
+    }
+  };
+
+  useEffect(() => {
+    if (pixSelectedReceivable) {
+      const pKey = company?.pixKey || 'cleciotecnologia@gmail.com';
+      const pBeneficiary = company?.pixBeneficiary || company?.name || 'AutoPrecision Premium';
+      const pCity = company?.pixCity || 'SAO PAULO';
+
+      try {
+        const cleanedDesc = pixSelectedReceivable.description
+          ? pixSelectedReceivable.description.normalize("NFD").replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 15)
+          : 'Fatura';
+
+        const payload = generatePixPayload({
+          chave: pKey,
+          beneficiario: pBeneficiary,
+          cidade: pCity,
+          valor: pixSelectedReceivable.amount,
+          descricao: cleanedDesc
+        });
+
+        setFinanceiroPixString(payload);
+
+        QRCode.toDataURL(payload, { margin: 1 })
+          .then(url => {
+            setFinanceiroPixQrDataUrl(url);
+          })
+          .catch(e => console.error("Erro ao desenhar QR Code Financeiro:", e));
+      } catch (err) {
+        console.error("Erro ao montar payload PIX Financeiro:", err);
+      }
+    } else {
+      setFinanceiroPixString('');
+      setFinanceiroPixQrDataUrl('');
+    }
+  }, [pixSelectedReceivable, company]);
 
   // Add transaction states
   const [isAdding, setIsAdding] = useState(false);
@@ -174,6 +253,100 @@ export const FinanceiroView: React.FC = () => {
           <Plus className="w-4 h-4" /> Nova Célula Financeira
         </button>
       </div>
+
+      {/* DADOS BANCÁRIOS / PARÂMETROS PIX CONFIGURATION BAR */}
+      <div className="bg-slate-950/40 p-4 sm:p-5 rounded-2xl border border-gray-850 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-red-650/10 text-red-500 border border-red-900/30 flex items-center justify-center shrink-0">
+            <QrCode className="w-5 h-5 text-red-500 animate-pulse" />
+          </div>
+          <div className="text-left font-sans">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[9px] font-mono select-all bg-red-950/30 text-red-400 border border-red-900/40 px-2 py-0.5 rounded uppercase font-extrabold tracking-wider">
+                DADOS BANCÁRIOS CONFIGURADOS
+              </span>
+              <span className="text-[9px] font-mono text-gray-400">
+                Chave: <strong className="text-white select-all">{company?.pixKey || 'cleciotecnologia@gmail.com'}</strong>
+              </span>
+            </div>
+            <h3 className="text-white font-extrabold text-sm font-display block mt-1">Gerência de Dados para Cobrança Automática PIX</h3>
+            <p className="text-[10px] text-gray-450 font-mono mt-0.5 max-w-xl text-gray-400">
+              Configure os seus dados bancários para poder gerar os QR Codes e o Pix Copia e Cola dinamicamente nas ordens de serviço (DRE) e venda PDV.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 w-full md:w-auto shrink-0 font-mono">
+          <button
+            type="button"
+            onClick={() => setShowPixConfig(!showPixConfig)}
+            className="w-full md:w-auto py-2 px-4 rounded-xl bg-gray-900 border border-gray-855 border-gray-800 hover:border-gray-700 text-white text-xs font-bold leading-none flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all duration-200 select-none"
+          >
+            <Settings className="w-4 h-4 text-gray-400" /> {showPixConfig ? "OCULTAR DADOS" : "CADASTRAR DADOS PIX"}
+          </button>
+        </div>
+      </div>
+
+      {showPixConfig && (
+        <form onSubmit={handleSavePixConfig} className="bg-[#0c1223] border border-gray-800 p-5 rounded-2xl flex flex-col gap-4 animate-fade-in text-left">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Chave PIX (E-mail, CPF/CNPJ, Telefone ou Aleatória)</label>
+              <input 
+                type="text" 
+                required
+                placeholder="Ex e-mail: celciotecnologia@gmail.com"
+                value={tempPixKey}
+                onChange={e => setTempPixKey(e.target.value)}
+                className="bg-slate-950 border border-slate-850 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-550 text-xs font-mono focus:border-red-500" 
+              />
+            </div>
+            
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Nome Exato do Beneficiário / Titular da Conta</label>
+              <input 
+                type="text" 
+                required
+                placeholder="Ex Nome: AutoPrecision LTDA"
+                value={tempPixBeneficiary}
+                onChange={e => setTempPixBeneficiary(e.target.value)}
+                className="bg-slate-950 border border-slate-850 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-550 text-xs focus:border-red-500" 
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Cidade da Conta Corrente (Banco Central)</label>
+              <input 
+                type="text" 
+                required
+                placeholder="Ex Cidade: SAO PAULO"
+                value={tempPixCity}
+                onChange={e => setTempPixCity(e.target.value.toUpperCase())}
+                className="bg-slate-950 border border-slate-850 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-510 text-xs uppercase focus:border-red-500" 
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-3 border-t border-gray-850 pt-3">
+            <p className="text-[10px] text-gray-500 font-sans leading-relaxed">
+              * Ao salvar, a geração de QR Code em faturas a receber, ordens de serviços finalizadas e no PDV usará estes dados imediatamente.
+            </p>
+            <div className="flex items-center gap-2.5 w-full sm:w-auto font-mono shrink-0">
+              {pixFeedback && (
+                <span className="text-emerald-400 text-xs font-bold leading-normal animate-pulse shrink-0">
+                  {pixFeedback}
+                </span>
+              )}
+              <button 
+                type="submit"
+                className="w-full sm:w-auto py-2.5 px-4 bg-gradient-to-r from-red-650 to-red-700 bg-red-600 hover:from-red-600 hover:to-red-650 text-white font-bold text-xs rounded-xl shadow cursor-pointer tracking-wide border-0"
+              >
+                SALVAR DADOS DE COBRANÇA
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
 
       {/* OPERATIONAL ACCOUNTS PAYABLE REMINDERS & ALERTS BANNER MODULE */}
       {financeiro.filter(f => f.type === 'Despesa' && f.status === 'Pendente').length > 0 && (() => {
@@ -504,12 +677,24 @@ export const FinanceiroView: React.FC = () => {
                     </td>
 
                     <td className="p-4 text-right">
-                      <button 
-                        onClick={() => handleTogglePaidStatus(item)}
-                        className="text-gray-400 hover:text-white border border-gray-800 hover:border-gray-600 px-2.5 py-1 rounded cursor-pointer text-[10px] transition-colors"
-                      >
-                        Alternar
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5 font-mono">
+                        {item.type === 'Receita' && item.status === 'Pendente' && (
+                          <button
+                            type="button"
+                            onClick={() => setPixSelectedReceivable(item)}
+                            className="bg-red-950/25 hover:bg-red-650 text-red-400 hover:text-white border border-red-900/40 hover:border-red-500 px-2 py-1 rounded cursor-pointer text-[10px] font-bold flex items-center gap-1 transition-all"
+                            title="Visualizar ou imprimir QR Code PIX para esta fatura"
+                          >
+                            <QrCode className="w-3 h-3 text-red-500 hover:text-white shrink-0" /> PIX
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleTogglePaidStatus(item)}
+                          className="text-gray-400 hover:text-white border border-gray-800 hover:border-gray-600 px-2.5 py-1 rounded cursor-pointer text-[10px] transition-colors"
+                        >
+                          Alternar
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -725,6 +910,185 @@ export const FinanceiroView: React.FC = () => {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* DYNAMIC RECEIVABLE PIX QR CODE DIALOG MODAL */}
+      {pixSelectedReceivable && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#0c1223] border border-gray-800 text-white max-w-sm w-full rounded-2xl p-6 shadow-2xl relative text-center flex flex-col items-center gap-4 font-sans focus:outline-none">
+            
+            <button 
+              type="button"
+              onClick={() => setPixSelectedReceivable(null)}
+              className="absolute top-4 right-4 p-1 rounded-full bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 text-red-500 font-mono text-[10px] font-bold uppercase tracking-wider self-start border-b border-gray-850 pb-2 w-full text-left">
+              <QrCode className="w-5 h-5 animate-pulse shrink-0" />
+              <span>COBRANÇA DIGITAL AUTOMÁTICA PIX</span>
+            </div>
+
+            <div className="flex flex-col gap-1 w-full text-left">
+              <span className="text-[9.5px] text-gray-450 text-gray-400 font-mono uppercase">Lançamento / DRE Fatura:</span>
+              <span className="text-white font-bold text-sm leading-snug">{pixSelectedReceivable.description}</span>
+              <span className="text-amber-500 font-mono text-xs font-semibold mt-1 flex items-center gap-1 bg-amber-950/20 px-2 py-1 rounded border border-amber-900/30 w-fit">
+                <Calendar className="w-3.5 h-3.5 text-amber-500" /> Vencimento: {pixSelectedReceivable.dueDate}
+              </span>
+            </div>
+
+            {/* QR Code container */}
+            {financeiroPixQrDataUrl ? (
+              <div className="p-3 bg-white rounded-xl shadow-2xl border border-gray-200 inline-block">
+                <img 
+                  src={financeiroPixQrDataUrl} 
+                  alt="QR Code PIX Fatura" 
+                  className="w-48 h-48 object-contain"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            ) : (
+              <div className="w-48 h-48 border border-gray-800 rounded-xl flex items-center justify-center text-gray-400 text-xs font-mono">
+                Gerando QR Code...
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1 w-full text-left font-mono text-xs bg-[#090e1a] border border-gray-850 rounded-xl p-3">
+              <div className="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
+                <span>Beneficiário:</span>
+                <span className="text-white font-bold shrink-0 truncate max-w-[170px]">{company?.pixBeneficiary || company?.name || 'AutoPrecision Premium'}</span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
+                <span>Chave PIX:</span>
+                <span className="text-white font-bold break-all select-all font-mono">{company?.pixKey || 'cleciotecnologia@gmail.com'}</span>
+              </div>
+              <div className="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
+                <span>Cidade:</span>
+                <span className="text-white font-bold font-mono text-[10px]">{company?.pixCity || 'SAO PAULO'}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-extrabold text-white pt-1">
+                <span>Valor Cobrado:</span>
+                <span className="text-red-550 text-red-500 text-sm font-bold">R$ {pixSelectedReceivable.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setModalEditPix(!modalEditPix)}
+              className="text-[9.5px] font-mono font-bold text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 cursor-pointer bg-red-950/20 px-2.5 py-1 rounded-lg border border-red-900/45 self-end"
+            >
+              <Settings className="w-3.5 h-3.5" /> {modalEditPix ? "[Fechar Alteração]" : "⚙️ Cadastrar/Mudar Chave PIX"}
+            </button>
+
+            {modalEditPix && (
+              <div className="bg-[#080d1a] border border-gray-850 rounded-xl p-3 w-full flex flex-col gap-2.5 text-left font-mono text-[10px] animate-fade-in">
+                <span className="text-gray-400 font-bold uppercase text-[8.5px] block border-b border-gray-800 pb-1">ALTERAR CHAVE PIX IMEDIATA</span>
+                
+                <div className="flex flex-col gap-1">
+                  <span className="text-gray-400">Chave PIX:</span>
+                  <input 
+                    type="text" 
+                    value={tempPixKey} 
+                    onChange={e => setTempPixKey(e.target.value)}
+                    placeholder="E-mail ou CPF"
+                    className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[10px] focus:outline-none focus:border-red-500 font-mono"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-gray-400">Beneficiário:</span>
+                  <input 
+                    type="text" 
+                    value={tempPixBeneficiary} 
+                    onChange={e => setTempPixBeneficiary(e.target.value)}
+                    placeholder="Nome do Titular"
+                    className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[10px] focus:outline-none focus:border-red-500"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-gray-400">Cidade:</span>
+                  <input 
+                    type="text" 
+                    value={tempPixCity} 
+                    onChange={e => setTempPixCity(e.target.value.toUpperCase())}
+                    placeholder="Cidade"
+                    className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[10px] focus:outline-none focus:border-red-500 uppercase"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await updateCompany({
+                        pixKey: tempPixKey,
+                        pixBeneficiary: tempPixBeneficiary,
+                        pixCity: tempPixCity
+                      });
+                      setModalEditPix(false);
+                    } catch (err) {
+                      console.error("Erro inline:", err);
+                    }
+                  }}
+                  className="w-full mt-1 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[10px]"
+                >
+                  Confirmar Salvar Dados Bancários
+                </button>
+              </div>
+            )}
+
+            {/* Copia e Cola field */}
+            <div className="flex flex-col gap-1.5 w-full text-left font-mono">
+              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">PIX Copia e Cola</span>
+              <div className="flex gap-2 w-full">
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={financeiroPixString} 
+                  className="bg-black/50 border border-gray-800 rounded-lg px-2.5 py-1.5 text-[8.5px] text-gray-400 select-all truncate flex-1 outline-none text-left"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      navigator.clipboard.writeText(financeiroPixString);
+                      setCopiedText(true);
+                      setTimeout(() => setCopiedText(false), 2000);
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-750 rounded-lg font-bold text-[9.5px] uppercase tracking-wide text-white flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" /> {copiedText ? "COPIADO!" : "COPIAR"}
+                </button>
+              </div>
+            </div>
+
+            {/* Bottom Actions printable */}
+            <div className="flex gap-2 w-full font-mono mt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  window.print();
+                }}
+                className="flex-1 py-2 rounded-xl bg-gray-800 hover:bg-gray-750 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-colors"
+              >
+                <Printer className="w-3.5 h-3.5" /> Imprimir Fatura
+              </button>
+              <button 
+                type="button"
+                onClick={() => setPixSelectedReceivable(null)}
+                className="flex-1 py-2 rounded-xl border border-gray-850 hover:border-gray-750 text-gray-300 hover:text-white text-xs font-bold cursor-pointer transition-colors"
+              >
+                Fechar Painel
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 

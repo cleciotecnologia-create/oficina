@@ -30,6 +30,9 @@ export interface Company {
   subdomain?: string;
   domainStatus?: 'Pendente' | 'Verificando' | 'Ativo' | 'Falhado';
   cep?: string;
+  pixKey?: string;
+  pixBeneficiary?: string;
+  pixCity?: string;
 }
 
 export interface Cliente {
@@ -44,6 +47,7 @@ export interface Cliente {
   createdAt: string;
   cep?: string;
   address?: string;
+  nextReviewDate?: string; // Next scheduled/recommended preventive review date (YYYY-MM-DD)
 }
 
 export interface Veiculo {

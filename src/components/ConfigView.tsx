@@ -13,6 +13,8 @@ import {
   Sparkles,
   Copy,
   Plus,
+  Tag,
+  QrCode,
   Check,
   ExternalLink,
   Compass,
@@ -59,6 +61,10 @@ export const ConfigView: React.FC = () => {
   const [isFetchingCep, setIsFetchingCep] = useState(false);
   const [cepError, setCepError] = useState<string | null>(null);
 
+  const [pixKeyStr, setPixKeyStr] = useState(company.pixKey || 'cleciotecnologia@gmail.com');
+  const [pixBeneficiaryStr, setPixBeneficiaryStr] = useState(company.pixBeneficiary || 'AutoPrecision Premium');
+  const [pixCityStr, setPixCityStr] = useState(company.pixCity || 'SAO PAULO');
+
   React.useEffect(() => {
     if (company) {
       setCompanyName(company.name || '');
@@ -74,6 +80,9 @@ export const ConfigView: React.FC = () => {
       setCustomDomainStr(company.customDomain || '');
       setSubdomainStr(company.subdomain || '');
       setDomainStatusVal(company.domainStatus || 'Pendente');
+      setPixKeyStr(company.pixKey || 'cleciotecnologia@gmail.com');
+      setPixBeneficiaryStr(company.pixBeneficiary || 'AutoPrecision Premium');
+      setPixCityStr(company.pixCity || 'SAO PAULO');
     }
   }, [company]);
 
@@ -379,7 +388,10 @@ export const ConfigView: React.FC = () => {
         logoUrl: logoUrlStr,
         customDomain: customDomainStr,
         subdomain: subdomainStr,
-        domainStatus: domainStatusVal
+        domainStatus: domainStatusVal,
+        pixKey: pixKeyStr,
+        pixBeneficiary: pixBeneficiaryStr,
+        pixCity: pixCityStr
       });
       setTimeout(() => {
         setSaveFeedback("✅ Configurações e coordenadas de mapa salvas com sucesso!");
@@ -900,6 +912,55 @@ export const ConfigView: React.FC = () => {
                 </div>
               </div>
             )}
+
+            {/* Configuração PIX para Cobrança Dinâmica */}
+            <div className="border-t border-gray-850 pt-5 flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <QrCode className="w-5 h-5 text-red-500" />
+                <div className="text-left">
+                  <h3 className="font-display font-medium text-white text-sm">Parâmetros PIX Copia e Cola / QR Code</h3>
+                  <span className="text-[10px] text-gray-500 font-mono block">Chave e dados do titular para processar o recebimento dinâmico imediato nas faturas do PDV e Financeiro.</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono text-left">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Chave PIX (E-mail, CPF, Celular, etc.)</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: cleciotecnologia@gmail.com"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 font-mono text-xs"
+                    value={pixKeyStr}
+                    onChange={(e) => setPixKeyStr(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Nome do Titular / Beneficiário</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: AutoPrecision LTDA"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 text-xs"
+                    value={pixBeneficiaryStr}
+                    onChange={(e) => setPixBeneficiaryStr(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Cidade do Beneficiário</label>
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: SAO PAULO"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 uppercase text-xs"
+                    value={pixCityStr}
+                    onChange={(e) => setPixCityStr(e.target.value.toUpperCase())}
+                  />
+                </div>
+              </div>
+            </div>
 
             {/* Save controls */}
             {saveFeedback && (

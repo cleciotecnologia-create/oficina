@@ -17,11 +17,12 @@ import { useApp } from '../context/AppContext';
 import { Servico } from '../types';
 
 export const ServicosView: React.FC = () => {
-  const { servicos, addServico, editServico, deleteServico } = useApp();
+  const { servicos, addServico, editServico, deleteServico, importStandardServices } = useApp();
 
   const [activeTab, setActiveTab] = useState<'geral' | 'cadastro'>('geral');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
+  const [isImporting, setIsImporting] = useState(false);
 
   // New service fields
   const [newName, setNewName] = useState('');
@@ -36,7 +37,33 @@ export const ServicosView: React.FC = () => {
   const [editingName, setEditingName] = useState('');
 
   // Categories preset
-  const categoriesList = ['Todas', 'Mecânica', 'Alinhamento', 'Elétrica', 'Suspensão', 'Freios', 'Lubrificantes', 'Diagnósticos'];
+  const categoriesList = [
+    'Todas', 
+    'Revisão', 
+    'Mecânica', 
+    'Alinhamento', 
+    'Elétrica', 
+    'Injeção / Elétrica', 
+    'Suspensão', 
+    'Freios', 
+    'Lubrificantes', 
+    'Arrefecimento', 
+    'Climatização', 
+    'Motor', 
+    'Transmissão', 
+    'Diagnósticos'
+  ];
+
+  const handleImportStandardServices = async () => {
+    setIsImporting(true);
+    try {
+      await importStandardServices();
+    } catch (err) {
+      console.error("Erro ao importar catálogo:", err);
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   // Filter services
   const filteredServices = servicos.filter(s => {
@@ -123,6 +150,48 @@ export const ServicosView: React.FC = () => {
 
       {activeTab === 'geral' && (
         <>
+          {/* BULK SEEDING ACTION CARD IF EMPTY */}
+          {servicos.length === 0 && (
+            <div className="bg-gradient-to-br from-[#0f172a] to-[#0a0f1d] border border-gray-800 rounded-2xl p-6 md:p-8 flex flex-col md:flex-row items-center gap-6 justify-between shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-red-600/5 rounded-full filter blur-xl group-hover:bg-red-600/10 transition-all duration-500 pointer-events-none"></div>
+              
+              <div className="flex-1 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-red-500 font-mono text-[10px] font-bold tracking-wider uppercase">
+                  <Sparkles className="w-4 h-4 text-amber-500 animate-spin-slow animate-pulse" />
+                  <span>BANCO DE DADOS DETECTADO VAZIO</span>
+                </div>
+                <h3 className="text-white font-extrabold text-base sm:text-lg leading-snug font-display">
+                  Pré-Cadastro de Serviços e Mão de Obras Padrão
+                </h3>
+                <p className="text-gray-400 text-xs font-sans leading-relaxed max-w-2xl">
+                  Não gaste tempo digitando tudo do zero! Comece sua experiência imediatamente preenchendo sua oficina com mais de <strong>15 serviços automotivos pré-configurados</strong> com valores médios e tempos de pátio padrão de mercado (Mão de Obra de Revisão Geral, Alinhamento 3D, Troca de Correia, Higienização, Troca de Óleo, etc.).
+                </p>
+              </div>
+
+              <button
+                type="button"
+                disabled={isImporting}
+                onClick={handleImportStandardServices}
+                className="w-full md:w-auto shrink-0 px-6 py-3.5 bg-red-650 hover:bg-red-700 bg-red-600 text-white font-mono text-xs font-bold rounded-xl shadow-lg hover:shadow-red-950/20 active:scale-[98.5%] transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer border-0"
+              >
+                {isImporting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>IMPORTANDO...</span>
+                  </>
+                ) : (
+                  <>
+                    <Wrench className="w-4 h-4 shrink-0 text-white" />
+                    <span>CARREGAR MÃO DE OBRAS PADRÃO</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+
           {/* SEARCH AND FILTERS */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-[#0a0f1d] p-4 rounded-xl border border-gray-900">
             <div className="relative md:col-span-8">

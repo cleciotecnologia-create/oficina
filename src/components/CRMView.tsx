@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Cliente, Veiculo, OrdemServico } from '../types';
+import { AUTO_SUGGESTIONS } from '../lib/autoSuggestions';
 
 interface OilRecommendation {
   oilType: string;
@@ -186,6 +187,13 @@ export const CRMView: React.FC = () => {
     setEditVehChassi(veh.chassi || '');
     setEditVehKm(String(veh.km || 0));
     setVehicleModalTab('cadastro');
+
+    const matchBrand = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === veh.brand.toLowerCase());
+    if (matchBrand) {
+      setEditCrmModelsList(matchBrand.models);
+    } else {
+      setEditCrmModelsList([]);
+    }
   };
 
   const handleFetchEditClientCep = async (cepCode: string) => {
@@ -338,6 +346,8 @@ export const CRMView: React.FC = () => {
   const [vehPlate, setVehPlate] = useState('');
   const [vehChassi, setVehChassi] = useState('');
   const [vehKm, setVehKm] = useState('');
+  const [crmModelsList, setCrmModelsList] = useState<string[]>([]);
+  const [editCrmModelsList, setEditCrmModelsList] = useState<string[]>([]);
 
   // Loyalty rewards mocks
   const [loyaltyLedger, setLoyaltyLedger] = useState([
@@ -982,10 +992,38 @@ export const CRMView: React.FC = () => {
                     placeholder="Volkswagen"
                     className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
                     value={vehBrand}
-                    onChange={(e) => setVehBrand(e.target.value)}
+                    onChange={(e) => {
+                      setVehBrand(e.target.value);
+                      const matched = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === e.target.value.toLowerCase());
+                      if (matched) {
+                        setCrmModelsList(matched.models);
+                      }
+                    }}
                     required
                   />
                 </div>
+              </div>
+
+              {/* CRM Brand selection suggestions */}
+              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pb-1.5 pt-0.5 border-b border-gray-850/20">
+                {AUTO_SUGGESTIONS.map(sug => (
+                  <button
+                    key={sug.name}
+                    type="button"
+                    onClick={() => {
+                      setVehBrand(sug.name);
+                      setCrmModelsList(sug.models);
+                      setVehModel('');
+                    }}
+                    className={`px-2 py-0.5 rounded text-[9px] font-mono transition-colors border cursor-pointer flex items-center gap-1 ${
+                      vehBrand === sug.name
+                        ? "bg-red-950/40 border-red-500/80 text-red-400 font-bold"
+                        : "bg-slate-950/40 border-gray-900 text-gray-400 hover:text-white hover:border-gray-800"
+                    }`}
+                  >
+                    <span>{sug.emoji}</span> {sug.name}
+                  </button>
+                ))}
               </div>
 
               <div className="flex flex-col gap-1.5">
@@ -999,6 +1037,29 @@ export const CRMView: React.FC = () => {
                   required
                 />
               </div>
+
+              {/* CRM Model selection suggestions */}
+              {crmModelsList.length > 0 && (
+                <div className="flex flex-col gap-1 pb-1">
+                  <span className="text-[8.5px] font-mono text-gray-500 uppercase">Sugestões de Modelos:</span>
+                  <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                    {crmModelsList.map(md => (
+                      <button
+                        key={md}
+                        type="button"
+                        onClick={() => setVehModel(md)}
+                        className={`px-2 py-0.5 rounded text-[9px] font-medium transition-colors border cursor-pointer ${
+                          vehModel === md
+                            ? "bg-cyan-950/40 border-cyan-500/80 text-cyan-400 font-bold"
+                            : "bg-slate-950 border-gray-900 text-gray-500 hover:text-gray-300 hover:border-gray-800"
+                        }`}
+                      >
+                        {md}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
@@ -1370,10 +1431,38 @@ export const CRMView: React.FC = () => {
                       placeholder="Volkswagen"
                       className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-red-500 transition-colors"
                       value={editVehBrand}
-                      onChange={(e) => setEditVehBrand(e.target.value)}
+                      onChange={(e) => {
+                        setEditVehBrand(e.target.value);
+                        const matched = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === e.target.value.toLowerCase());
+                        if (matched) {
+                          setEditCrmModelsList(matched.models);
+                        }
+                      }}
                       required
                     />
                   </div>
+                </div>
+
+                {/* CRM Edit Brand selection suggestions */}
+                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pb-1.5 pt-0.5 border-b border-gray-850/20">
+                  {AUTO_SUGGESTIONS.map(sug => (
+                    <button
+                      key={sug.name}
+                      type="button"
+                      onClick={() => {
+                        setEditVehBrand(sug.name);
+                        setEditCrmModelsList(sug.models);
+                        setEditVehModel('');
+                      }}
+                      className={`px-2 py-0.5 rounded text-[9px] font-mono transition-colors border cursor-pointer flex items-center gap-1 ${
+                        editVehBrand === sug.name
+                          ? "bg-red-950/40 border-red-500/80 text-red-400 font-bold"
+                          : "bg-slate-950/40 border-gray-900 text-gray-400 hover:text-white hover:border-gray-800"
+                      }`}
+                    >
+                      <span>{sug.emoji}</span> {sug.name}
+                    </button>
+                  ))}
                 </div>
 
                 <div className="flex flex-col gap-1.5">
@@ -1387,6 +1476,29 @@ export const CRMView: React.FC = () => {
                     required
                   />
                 </div>
+
+                {/* CRM Edit Model selection suggestions */}
+                {editCrmModelsList.length > 0 && (
+                  <div className="flex flex-col gap-1 pb-1">
+                    <span className="text-[8.5px] font-mono text-gray-500 uppercase">Sugestões de Modelos:</span>
+                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                      {editCrmModelsList.map(md => (
+                        <button
+                          key={md}
+                          type="button"
+                          onClick={() => setEditVehModel(md)}
+                          className={`px-2 py-0.5 rounded text-[9px] font-medium transition-colors border cursor-pointer ${
+                            editVehModel === md
+                              ? "bg-cyan-950/40 border-cyan-500/80 text-cyan-400 font-bold"
+                              : "bg-slate-950 border-gray-900 text-gray-500 hover:text-gray-300 hover:border-gray-800"
+                          }`}
+                        >
+                          {md}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">

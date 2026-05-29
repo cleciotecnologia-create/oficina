@@ -78,6 +78,63 @@ export interface GeminiUsage {
   monthlyLimit: number;
 }
 
+const getNextReviewInfo = (reviewDateStr: string | undefined | null) => {
+  if (!reviewDateStr) {
+    return {
+      status: 'Desconhecido',
+      label: 'Manutenção: Não Monitorado',
+      color: 'text-gray-400 bg-[#070b13] border-gray-800',
+      pulseColor: 'bg-gray-600',
+      daysLeft: null,
+      description: 'Nenhuma revisão de manutenção preventiva cadastrada.'
+    };
+  }
+
+  const currentDate = new Date('2026-05-29'); // Set current date matching physical local time context
+  const parts = reviewDateStr.split('-');
+  const reviewDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  const diffTime = reviewDate.getTime() - currentDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return {
+      status: 'Atrasada',
+      label: `Atrasada (${Math.abs(diffDays)}d)`,
+      color: 'text-red-400 bg-red-950/30 border-red-800/80 shadow shadow-red-500/5',
+      pulseColor: 'bg-red-500 animate-pulse',
+      daysLeft: diffDays,
+      description: `Revisão de manutenção vencida há ${Math.abs(diffDays)} dias.`
+    };
+  } else if (diffDays <= 7) {
+    return {
+      status: 'Crítico',
+      label: `Crítico (${diffDays}d)`,
+      color: 'text-orange-400 bg-orange-950/30 border-orange-850/80 shadow shadow-orange-500/5',
+      pulseColor: 'bg-orange-500 animate-ping duration-[1200ms]',
+      daysLeft: diffDays,
+      description: `Revisão de manutenção em estado crítico! Faltam ${diffDays} dias.`
+    };
+  } else if (diffDays <= 30) {
+    return {
+      status: 'Atenção',
+      label: `Atenção (${diffDays}d)`,
+      color: 'text-amber-400 bg-amber-955/35 border-amber-850/80 shadow shadow-amber-500/5',
+      pulseColor: 'bg-amber-400 animate-pulse',
+      daysLeft: diffDays,
+      description: `Revisão de manutenção se aproximando. Faltam ${diffDays} dias.`
+    };
+  } else {
+    return {
+      status: 'Seguro',
+      label: `No Prazo (${diffDays}d)`,
+      color: 'text-emerald-400 bg-emerald-950/30 border-emerald-850/80 shadow shadow-emerald-500/5',
+      pulseColor: 'bg-emerald-500',
+      daysLeft: diffDays,
+      description: `Revisão de manutenção agendada para ${reviewDateStr} (${diffDays} dias).`
+    };
+  }
+};
+
 export const SuperAdminView: React.FC = () => {
   const { company, updateCompany, user, setUser, setCompany, clientes, editCliente, deleteCliente, addCliente, veiculos } = useApp();
 
@@ -876,6 +933,7 @@ export const SuperAdminView: React.FC = () => {
   const [editCrmClientCpf, setEditCrmClientCpf] = useState('');
   const [editCrmClientCep, setEditCrmClientCep] = useState('');
   const [editCrmClientAddress, setEditCrmClientAddress] = useState('');
+  const [editCrmClientNextReviewDate, setEditCrmClientNextReviewDate] = useState('');
   const [crmSearchTerm, setCrmSearchTerm] = useState('');
   const [isFetchingCrmCep, setIsFetchingCrmCep] = useState(false);
   const [crmCepError, setCrmCepError] = useState<string | null>(null);
@@ -1111,6 +1169,7 @@ export const SuperAdminView: React.FC = () => {
     setEditCrmClientCpf(cli.cpfCnpj);
     setEditCrmClientCep(cli.cep || '');
     setEditCrmClientAddress(cli.address || '');
+    setEditCrmClientNextReviewDate(cli.nextReviewDate || '');
     setCrmCepError(null);
   };
 
@@ -1125,6 +1184,7 @@ export const SuperAdminView: React.FC = () => {
         cpfCnpj: editCrmClientCpf,
         cep: editCrmClientCep,
         address: editCrmClientAddress,
+        nextReviewDate: editCrmClientNextReviewDate || undefined,
       });
 
       // Log to terminal
@@ -4012,8 +4072,23 @@ export const SuperAdminView: React.FC = () => {
                 <h3 className="text-base font-display font-extrabold text-white flex items-center gap-2 mt-1">
                   Corrigir Cadastro do Cliente
                 </h3>
-                <p className="text-[10px] text-slate-400 font-mono">
-                  Edite as informações cadastrais do cliente <span className="text-purple-300 font-bold">{selectedCrmClient.name}</span>.
+                <p className="text-[10px] text-slate-400 font-mono flex flex-wrap items-center gap-2">
+                  <span>Edite as informações cadastrais do cliente <span className="text-purple-300 font-bold">{selectedCrmClient.name}</span>.</span>
+                  {(() => {
+                    const info = getNextReviewInfo(selectedCrmClient.nextReviewDate);
+                    return (
+                      <span 
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border ${info.color} transition-all duration-300 transform hover:scale-105 cursor-help`}
+                        title={info.description}
+                      >
+                        <span className="relative flex h-1.5 w-1.5 mr-0.5">
+                          <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${info.pulseColor}`}></span>
+                          <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${info.pulseColor.split(' ')[0]}`}></span>
+                        </span>
+                        Manutenção Preventiva: <strong className="uppercase">{info.label}</strong>
+                      </span>
+                    );
+                  })()}
                 </p>
               </div>
               <button
@@ -4102,6 +4177,39 @@ export const SuperAdminView: React.FC = () => {
                   onChange={e => setEditCrmClientAddress(e.target.value)}
                   className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-sans" 
                 />
+              </div>
+
+              <div className="flex flex-col gap-1.5 border-t border-gray-900 pt-3">
+                <label className="text-gray-400 font-mono text-[10px] font-bold flex items-center gap-1">
+                  📅 CALENDÁRIO DE MANUTENÇÃO PREVENTIVA
+                </label>
+                <div className="flex gap-2">
+                  <input 
+                    type="date" 
+                    value={editCrmClientNextReviewDate}
+                    onChange={e => {
+                      setEditCrmClientNextReviewDate(e.target.value);
+                      // Instantly update the selected customer's property to reflect in the animation state
+                      setSelectedCrmClient((prev: any) => prev ? { ...prev, nextReviewDate: e.target.value } : null);
+                    }}
+                    className="bg-slate-950 border border-slate-850 rounded py-1.5 px-3 text-white text-xs font-mono flex-1 focus:border-purple-500 focus:outline-none" 
+                  />
+                  {editCrmClientNextReviewDate && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditCrmClientNextReviewDate('');
+                        setSelectedCrmClient((prev: any) => prev ? { ...prev, nextReviewDate: undefined } : null);
+                      }}
+                      className="px-2.5 py-1 text-red-400 hover:text-red-300 rounded bg-red-950/20 hover:bg-red-900/40 border border-red-900/40 hover:border-red-500 text-[10px] font-bold cursor-pointer transition-colors"
+                    >
+                      Remover Data
+                    </button>
+                  )}
+                </div>
+                <p className="text-[9px] text-slate-500 font-sans leading-relaxed">
+                  A data selecionada regula automaticamente o indicador de urgência de pós-venda/revisão (Verde: Seguro &bull; Amarelo: Atenção &bull; Vermelho/Laranja: Crítico ou Vencido).
+                </p>
               </div>
 
               <button
