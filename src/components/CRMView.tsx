@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Search, 
@@ -267,10 +267,24 @@ export const CRMView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'clientes' | 'veiculos' | 'fidelidade' | 'campanhas' | 'lembretes'>('clientes');
 
   // Automated maintenance reminders states
-  const [reminderKmThreshold, setReminderKmThreshold] = useState<number>(9000);
-  const [reminderTemplate, setReminderTemplate] = useState<string>(
-    'Olá, {nome_cliente}! Seu {modelo_veiculo} ({placa_veiculo}) rodou {km_rodados} KM desde a última troca de óleo preventiva que ocorreu aos {ultima_troca_km} KM (KM Atual: {km_atual} KM). Recomendamos agendar a manutenção preventiva! Quer alinhar um horário?'
-  );
+  const [reminderKmThreshold, setReminderKmThreshold] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('autotech_reminder_km_threshold');
+      return saved ? parseInt(saved, 10) : 9000;
+    } catch {
+      return 9000;
+    }
+  });
+
+  const [reminderTemplate, setReminderTemplate] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('autotech_reminder_template');
+      return saved || 'Olá, {nome_cliente}! Seu {modelo_veiculo} ({placa_veiculo}) rodou {km_rodados} KM desde a última troca de óleo preventiva que ocorreu aos {ultima_troca_km} KM (KM Atual: {km_atual} KM). Recomendamos agendar a manutenção preventiva! Quer alinhar um horário?';
+    } catch {
+      return 'Olá, {nome_cliente}! Seu {modelo_veiculo} ({placa_veiculo}) rodou {km_rodados} KM desde a última troca de óleo preventiva que ocorreu aos {ultima_troca_km} KM (KM Atual: {km_atual} KM). Recomendamos agendar a manutenção preventiva! Quer alinhar um horário?';
+    }
+  });
+
   const [scheduledReminders, setScheduledReminders] = useState<{
     id: string;
     clientId: string;
@@ -284,35 +298,69 @@ export const CRMView: React.FC = () => {
     status: 'Agendado' | 'Enviado' | 'Cancelado';
     scheduledDate: string;
     sentDate?: string;
-  }[]>([
-    {
-      id: "rem_1",
-      clientId: "cli_1",
-      vehicleId: "veh_1",
-      clientName: "Alexandre Pires",
-      vehicleName: "Honda Civic 2.0 LXR",
-      plate: "CVX-4591",
-      lastOilChangeKm: 42000,
-      currentKm: 51200,
-      kmDelta: 9200,
-      status: "Agendado",
-      scheduledDate: "2026-06-05 09:30"
-    },
-    {
-      id: "rem_2",
-      clientId: "cli_2",
-      vehicleId: "veh_2",
-      clientName: "Mariana Souza Santos",
-      vehicleName: "Toyota Corolla GLi",
-      plate: "BRA-2C99",
-      lastOilChangeKm: 85000,
-      currentKm: 94500,
-      kmDelta: 9505,
-      status: "Enviado",
-      scheduledDate: "2026-05-28 14:00",
-      sentDate: "2026-05-28 14:05"
+  }[]>(() => {
+    try {
+      const saved = localStorage.getItem('autotech_scheduled_reminders');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error(e);
     }
-  ]);
+    return [
+      {
+        id: "rem_1",
+        clientId: "cli_1",
+        vehicleId: "veh_1",
+        clientName: "Alexandre Pires",
+        vehicleName: "Honda Civic 2.0 LXR",
+        plate: "CVX-4591",
+        lastOilChangeKm: 42000,
+        currentKm: 51200,
+        kmDelta: 9200,
+        status: "Agendado",
+        scheduledDate: "2026-06-05 09:30"
+      },
+      {
+        id: "rem_2",
+        clientId: "cli_2",
+        vehicleId: "veh_2",
+        clientName: "Mariana Souza Santos",
+        vehicleName: "Toyota Corolla GLi",
+        plate: "BRA-2C99",
+        lastOilChangeKm: 85000,
+        currentKm: 94500,
+        kmDelta: 9505,
+        status: "Enviado",
+        scheduledDate: "2026-05-28 14:00",
+        sentDate: "2026-05-28 14:05"
+      }
+    ];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('autotech_reminder_km_threshold', reminderKmThreshold.toString());
+    } catch (e) {
+      console.error(e);
+    }
+  }, [reminderKmThreshold]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('autotech_reminder_template', reminderTemplate);
+    } catch (e) {
+      console.error(e);
+    }
+  }, [reminderTemplate]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('autotech_scheduled_reminders', JSON.stringify(scheduledReminders));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [scheduledReminders]);
 
   const [filterReminderStatus, setFilterReminderStatus] = useState<'Todos' | 'Agendado' | 'Enviado' | 'Cancelado'>('Todos');
   const [newReminderScheduledDate, setNewReminderScheduledDate] = useState('2026-06-01');
