@@ -21,7 +21,9 @@ import {
   Check,
   MapPin,
   Edit2,
-  Trash2
+  Trash2,
+  ShoppingBag,
+  Printer
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Cliente, Veiculo, OrdemServico } from '../types';
@@ -126,12 +128,198 @@ export const CRMView: React.FC = () => {
     editCliente, 
     deleteCliente,
     addVeiculo, 
-    editVeiculo,
+    editVeiculo, 
     deleteVeiculo,
-    ordensServico 
+    ordensServico,
+    vendas,
+    company
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'clientes' | 'veiculos' | 'fidelidade' | 'campanhas'>('clientes');
+  const printSaleReceiptDirect = (v: any, comp: any) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert("Por favor, desative o bloqueador de popups para imprimir.");
+      return;
+    }
+
+    const itemsHtml = v.items.map((it: any) => `
+      <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
+        <span style="font-weight: 500;">${it.name}</span>
+        <span>${it.quantity}x R$ ${it.sellPrice.toFixed(2)}</span>
+      </div>
+    `).join('');
+
+    const estornoHtml = v.status === 'estornada' ? `
+      <div style="margin: 8px 0; padding: 6px; border: 2px solid #dc2626; background: #fee2e2; color: #991b1b; text-align: center; border-radius: 4px; font-weight: bold; font-size: 11px;">
+        ⚠️ CUPOM ESTORNADO / CANCELADO ⚠️
+        <div style="font-size: 9px; font-weight: normal; margin-top: 2px; text-transform: none;">
+          motivo: "${v.justification || 'não informado'}"
+        </div>
+      </div>
+    ` : '';
+
+    const discountValue = v.discount || 0;
+    const discountHtml = discountValue > 0 ? `
+      <div style="display: flex; justify-content: space-between; color: red;">
+        <span>Desconto:</span>
+        <span>- R$ ${discountValue.toFixed(2)}</span>
+      </div>
+    ` : '';
+
+    const subtotalText = (v.total + discountValue).toFixed(2);
+    const totalPaidText = v.total.toFixed(2);
+    const dateText = new Date(v.date).toLocaleString('pt-BR');
+    const paymentMethodText = v.paymentMethod;
+    const clientNameText = v.clienteName || 'Consumidor Final';
+    const clientCpfText = v.clienteCpfCnpj || 'Consumidor Final';
+
+    const content = `
+      <html>
+        <head>
+          <title>Reimpressão Cupom #${v.id}</title>
+          <style>
+            body {
+              font-family: monospace;
+              padding: 20px;
+              color: black;
+              background: white;
+              max-width: 300px;
+              margin: 0 auto;
+              font-size: 11px;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 2px solid black;
+              padding-bottom: 8px;
+              margin-bottom: 8px;
+            }
+            .dashed-line {
+              border-bottom: 1px dashed black;
+              margin: 8px 0;
+            }
+            .total {
+              font-weight: bold;
+              font-size: 13px;
+              display: flex;
+              justify-content: space-between;
+              margin-top: 6px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <strong style="font-size: 13px;">${comp.name.toUpperCase()}</strong><br/>
+            <span>${comp.address || 'Av. das Nações Unidas, 1040'}</span><br/>
+            <span>CNPJ: ${comp.cnpj || '12.345.678/0001-90'} • Fone: ${comp.phone || '(11) 98765-4321'}</span>
+          </div>
+
+          ${estornoHtml}
+
+          <div style="display: flex; justify-content: space-between; font-weight: bold;">
+            <span>REIMPRESSÃO CUPOM</span>
+            <span>ID #${v.id}</span>
+          </div>
+          <div>Data/Hora: ${dateText}</div>
+          <div class="dashed-line"></div>
+
+          <div style="background: #f3f4f6; padding: 4px; font-size: 10px; border-radius: 3px;">
+            <strong>CLIENTE:</strong> ${clientNameText}<br/>
+            CPF/CNPJ: ${clientCpfText}
+          </div>
+
+          <div class="dashed-line"></div>
+          <div style="font-weight: bold; margin-bottom: 4px;">ITENS:</div>
+          ${itemsHtml}
+          <div class="dashed-line"></div>
+
+          <div style="display: flex; justify-content: space-between;">
+            <span>Subtotal:</span>
+            <span>R$ ${subtotalText}</span>
+          </div>
+          ${discountHtml}
+
+          <div class="total">
+            <span>TOTAL PAGO:</span>
+            <span>R$ ${totalPaidText}</span>
+          </div>
+          <div style="margin-top: 4px; text-transform: uppercase;">Método: <strong>${paymentMethodText}</strong></div>
+
+          <div class="dashed-line"></div>
+          <div style="text-align: center; margin-top: 20px; font-size: 10px;">
+            Agradecemos a preferência!<br/>
+            AutoTech Software Integrado
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(content);
+    printWindow.document.close();
+  };
+
+  const [activeTab, setActiveTab] = useState<'clientes' | 'veiculos' | 'fidelidade' | 'campanhas' | 'lembretes'>('clientes');
+
+  // Automated maintenance reminders states
+  const [reminderKmThreshold, setReminderKmThreshold] = useState<number>(9000);
+  const [reminderTemplate, setReminderTemplate] = useState<string>(
+    'Olá, {nome_cliente}! Seu {modelo_veiculo} ({placa_veiculo}) rodou {km_rodados} KM desde a última troca de óleo preventiva que ocorreu aos {ultima_troca_km} KM (KM Atual: {km_atual} KM). Recomendamos agendar a manutenção preventiva! Quer alinhar um horário?'
+  );
+  const [scheduledReminders, setScheduledReminders] = useState<{
+    id: string;
+    clientId: string;
+    vehicleId: string;
+    clientName: string;
+    vehicleName: string;
+    plate: string;
+    lastOilChangeKm: number;
+    currentKm: number;
+    kmDelta: number;
+    status: 'Agendado' | 'Enviado' | 'Cancelado';
+    scheduledDate: string;
+    sentDate?: string;
+  }[]>([
+    {
+      id: "rem_1",
+      clientId: "cli_1",
+      vehicleId: "veh_1",
+      clientName: "Alexandre Pires",
+      vehicleName: "Honda Civic 2.0 LXR",
+      plate: "CVX-4591",
+      lastOilChangeKm: 42000,
+      currentKm: 51200,
+      kmDelta: 9200,
+      status: "Agendado",
+      scheduledDate: "2026-06-05 09:30"
+    },
+    {
+      id: "rem_2",
+      clientId: "cli_2",
+      vehicleId: "veh_2",
+      clientName: "Mariana Souza Santos",
+      vehicleName: "Toyota Corolla GLi",
+      plate: "BRA-2C99",
+      lastOilChangeKm: 85000,
+      currentKm: 94500,
+      kmDelta: 9505,
+      status: "Enviado",
+      scheduledDate: "2026-05-28 14:00",
+      sentDate: "2026-05-28 14:05"
+    }
+  ]);
+
+  const [filterReminderStatus, setFilterReminderStatus] = useState<'Todos' | 'Agendado' | 'Enviado' | 'Cancelado'>('Todos');
+  const [newReminderScheduledDate, setNewReminderScheduledDate] = useState('2026-06-01');
+  const [newReminderScheduledTime, setNewReminderScheduledTime] = useState('10:00');
+  const [selectedReminderVehicleId, setSelectedReminderVehicleId] = useState('');
+  const [reminderSearchQuery, setReminderSearchQuery] = useState('');
+  const [showAutoReminderSavedToast, setShowAutoReminderSavedToast] = useState(false);
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
   const [copiedAnalysisId, setCopiedAnalysisId] = useState<string | null>(null);
 
@@ -475,10 +663,18 @@ export const CRMView: React.FC = () => {
             Programa Cashback
           </button>
           <button 
+            type="button"
             onClick={() => setActiveTab('campanhas')}
             className={activeTab === 'campanhas' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
           >
             Ações WhatsApp
+          </button>
+          <button 
+            type="button"
+            onClick={() => setActiveTab('lembretes')}
+            className={activeTab === 'lembretes' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
+          >
+            Lembretes Automáticos
           </button>
         </div>
       </div>
@@ -724,6 +920,88 @@ export const CRMView: React.FC = () => {
                             })}
                           </div>
                         )}
+
+                        {/* 🛍️ HISTÓRICO DE COMPRAS (PDV) DO CLIENTE */}
+                        <div className="border-t border-gray-900 pt-4 mt-2">
+                          <div className="flex items-center justify-between border-b border-gray-900 pb-2 mb-3">
+                            <h4 className="text-xs font-mono font-bold text-red-500 flex items-center gap-1.5 uppercase">
+                              <ShoppingBag className="w-4 h-4 text-red-500" /> Histórico de Compras no PDV ({vendas.filter(vl => vl.clienteId === cli.id).length})
+                            </h4>
+                            <span className="text-[9px] font-mono text-gray-500">Fluxo Integrado de Frente de Loja</span>
+                          </div>
+
+                          {(() => {
+                            const clientSales = vendas.filter(vl => vl.clienteId === cli.id);
+                            if (clientSales.length === 0) {
+                              return (
+                                <p className="text-gray-500 text-xs italic py-1 text-left">
+                                  🛍️ Nenhuma compra registrada no PDV Balcão para este cliente.
+                                </p>
+                              );
+                            }
+                            return (
+                              <div className="flex flex-col gap-2.5">
+                                {clientSales.map(v => {
+                                  const isEstornada = v.status === 'estornada';
+                                  return (
+                                    <div key={v.id} className={`bg-[#070b14]/50 p-3 rounded-xl border border-gray-900 flex flex-col sm:flex-row justify-between sm:items-center gap-3 ${isEstornada ? 'opacity-55' : ''}`}>
+                                      <div className="text-left font-mono text-xs">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="font-bold text-white uppercase">{v.id}</span>
+                                          <span className="text-[10px] text-gray-500">{new Date(v.date).toLocaleString('pt-BR')}</span>
+                                          <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                            v.paymentMethod === 'PIX' ? 'bg-cyan-950/45 text-cyan-400' :
+                                            v.paymentMethod === 'Cartão' ? 'bg-purple-950/45 text-purple-400' :
+                                            'bg-emerald-950/45 text-emerald-400'
+                                          }`}>
+                                            {v.paymentMethod}
+                                          </span>
+                                          {isEstornada && (
+                                            <span className="bg-red-950/55 text-red-400 border border-red-900/40 text-[8.5px] px-1 rounded font-bold uppercase">
+                                              🚨 ESTORNADA
+                                            </span>
+                                          )}
+                                        </div>
+                                        
+                                        <div className="mt-1.5 flex flex-col gap-0.5 text-gray-400 text-[10.5px] font-sans">
+                                          {v.items.map((it: any, idx: number) => (
+                                            <div key={idx} className="flex gap-1">
+                                              <span>• {it.name}</span>
+                                              <span className="text-gray-500">({it.quantity}x de R$ {it.sellPrice.toFixed(2)})</span>
+                                            </div>
+                                          ))}
+                                          {v.justification && (
+                                            <div className="text-[9.5px] text-red-400 mt-1 italic font-sans normal-case block text-left">
+                                              Motivo do Estorno: "{v.justification}"
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-3 justify-between sm:justify-end shrink-0">
+                                        <div className="text-right font-mono">
+                                          <span className="text-[9px] text-gray-400 block uppercase">VALOR TOTAL</span>
+                                          <span className="text-xs text-white font-extrabold">R$ {v.total.toFixed(2)}</span>
+                                        </div>
+                                        
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            printSaleReceiptDirect(v, company);
+                                          }}
+                                          className="py-1 px-2.5 rounded bg-gray-900 hover:bg-[#121c33] border border-gray-800 hover:border-cyan-900 text-[10px] font-mono text-gray-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 uppercase font-bold"
+                                        >
+                                          <Printer className="w-3.5 h-3.5 text-cyan-400" /> Cupom
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1214,6 +1492,602 @@ export const CRMView: React.FC = () => {
             </div>
 
           </div>
+        </div>
+      )}
+
+      {activeTab === 'lembretes' && (
+        <div className="flex flex-col gap-6 w-full text-left font-mono">
+          
+          {/* TOAST ON SAVING RULES */}
+          {showAutoReminderSavedToast && (
+            <div className="p-4 bg-green-950/80 border border-green-500 rounded-xl text-xs text-green-400 font-bold mb-2 flex items-center justify-between animate-pulse">
+              <span>✓ Regras e templates de manutenção salvos com sucesso! O motor de agendamentos foi atualizado.</span>
+              <button type="button" onClick={() => setShowAutoReminderSavedToast(false)} className="text-white hover:text-green-300">✕</button>
+            </div>
+          )}
+
+          {/* TWO PANEL TOP CONFIG: RULE CONFIG AND PREVIEW */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            {/* Rule settings */}
+            <div className="lg:col-span-7 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4">
+              <div className="border-b border-gray-850 pb-3 flex items-center gap-2">
+                <Sliders className="w-5 h-5 text-red-500" />
+                <div>
+                  <h3 className="font-display font-extrabold text-white text-base">Configurar Regras de Manutenção</h3>
+                  <p className="text-[10px] text-gray-400 font-mono">Defina os parâmetros analíticos para os canais de disparos integrados.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5 text-left">
+                  <label className="text-[10px] text-gray-400 uppercase font-black">Intervalo de Alerta Preventivo (KM)</label>
+                  <input 
+                    type="number"
+                    value={reminderKmThreshold}
+                    onChange={(e) => setReminderKmThreshold(parseInt(e.target.value) || 0)}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-red-500"
+                    placeholder="Ex: 9000"
+                  />
+                  <span className="text-[9px] text-gray-500 leading-normal">
+                    Recomendamos <strong>9000 KM</strong> (o limite crítico padrão do sistema de lubrificação é de 10.000 KM). Isto provê margem segura de aviso.
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-1.5 text-left justify-end">
+                  <div className="p-3 bg-[#0d1627] border border-gray-900 rounded-xl text-[10px] text-gray-400 leading-normal">
+                    💡 <strong>Tags Dinâmicas Suportadas:</strong>
+                    <ul className="list-disc pl-4 mt-1 space-y-0.5">
+                      <li><code>{`{nome_cliente}`}</code> - Nome completo do cliente</li>
+                      <li><code>{`{modelo_veiculo}`}</code> - Modelo do carro</li>
+                      <li><code>{`{placa_veiculo}`}</code> - Placa do veículo</li>
+                      <li><code>{`{km_rodados}`}</code> - KM rodados desde a última troca</li>
+                      <li><code>{`{ultima_troca_km}`}</code> - KM da última troca registrada</li>
+                      <li><code>{`{km_atual}`}</code> - KM atual registrado no veículo</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5 flex-1 text-left">
+                <label className="text-[10px] text-gray-400 uppercase font-black">Corpo da Mensagem de Notificação (Template WhatsApp)</label>
+                <textarea 
+                  rows={4}
+                  value={reminderTemplate}
+                  onChange={(e) => setReminderTemplate(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 font-sans leading-relaxed w-full"
+                  placeholder="Escreva a mensagem usando as tags necessárias..."
+                />
+              </div>
+
+              <div className="flex justify-end mt-2">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowAutoReminderSavedToast(true);
+                    setTimeout(() => setShowAutoReminderSavedToast(false), 5000);
+                  }}
+                  className="px-6 py-2.5 bg-red-650 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl font-sans transition-colors"
+                >
+                  Gravar Configurações & Template
+                </button>
+              </div>
+            </div>
+
+            {/* Smart Preview */}
+            <div className="lg:col-span-5 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4">
+              <div className="border-b border-gray-850 pb-3 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-green-500" />
+                <div>
+                  <h3 className="font-display font-extrabold text-white text-base">Visualização de Amostra (WhatsApp)</h3>
+                  <p className="text-[10px] text-gray-400 font-mono">Assim será exibida a mensagem final enviada ao celular do cliente.</p>
+                </div>
+              </div>
+
+              {/* Chat frame */}
+              <div className="bg-[#060c15] rounded-2xl border border-gray-900 p-4 flex flex-col gap-4 relative min-h-[220px]">
+                {/* Header chat style */}
+                <div className="flex items-center gap-2.5 border-b border-gray-900 pb-2.5 text-left">
+                  <div className="w-8 h-8 rounded-full bg-green-900 text-green-400 font-bold flex items-center justify-center text-[11px]">
+                    AT
+                  </div>
+                  <div>
+                    <span className="text-white text-xs font-bold block leading-none">AutoTech Suporte Preventivo</span>
+                    <span className="text-[9px] text-green-500 font-bold block mt-1">● Online</span>
+                  </div>
+                </div>
+
+                {/* Bubble message */}
+                <div className="max-w-[85%] self-start bg-emerald-950/40 border border-emerald-900/40 p-3 rounded-2xl rounded-tl-none text-[11px] text-gray-305 text-gray-300 text-left font-sans shadow-md">
+                  <div className="whitespace-pre-wrap leading-relaxed">
+                    {(() => {
+                      const sampleClient = "Carlos Eduardo Souza";
+                      const sampleVehicle = "Renault Sandero 1.6 Stepway";
+                      const samplePlate = "REK-3H20";
+                      const lastChange = 61000;
+                      const current = 70250;
+                      const delta = current - lastChange;
+                      
+                      return reminderTemplate
+                        .replace('{nome_cliente}', `*${sampleClient}*`)
+                        .replace('{modelo_veiculo}', `*${sampleVehicle}*`)
+                        .replace('{placa_veiculo}', `*${samplePlate}*`)
+                        .replace('{km_rodados}', `*${delta.toLocaleString()}*`)
+                        .replace('{km_atual}', `*${current.toLocaleString()}*`)
+                        .replace('{ultima_troca_km}', `*${lastChange.toLocaleString()}*`);
+                    })()}
+                  </div>
+                  <span className="text-[8px] text-emerald-500/80 font-mono text-right block mt-1.5 font-bold">12:35 PM • WhatsApp Cloud API</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* TWO PANEL BOTTOM CORRESPONDENT: REALTIME RECOMMENDATION DETECTOR AND SCHEDULE REMINDERS MANUAL SCHEDULER */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            {/* Automatic detector from DB */}
+            <div className="col-span-12 lg:col-span-7 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4">
+              <div className="border-b border-[#1c2236] pb-3 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-amber-500" />
+                  <div>
+                    <h3 className="font-display font-extrabold text-white text-base">Fila de Alertas de Óleo (KM Excedido)</h3>
+                    <p className="text-[10px] text-gray-400 font-mono">Clientes e veículos cujas quilometragens rodadas superaram o limite estipulado.</p>
+                  </div>
+                </div>
+                <div className="px-2.5 py-1 text-[10px] text-amber-400 border border-amber-900/30 rounded bg-amber-950/20 font-bold uppercase animate-pulse">
+                  Análise Real-Time
+                </div>
+              </div>
+
+              {/* Table / List representation */}
+              <div className="flex flex-col gap-3.5 max-h-[480px] overflow-y-auto pr-1">
+                {(() => {
+                  const compileTemplateMessage = (templateText: string, clientName: string, vehicleModel: string, plateStr: string, kmRodadosVal: number | string, currentKmVal: string | number, lastChangeKmVal: string | number) => {
+                    return templateText
+                      .replace('{nome_cliente}', clientName)
+                      .replace('{modelo_veiculo}', vehicleModel)
+                      .replace('{placa_veiculo}', plateStr)
+                      .replace('{km_rodados}', kmRodadosVal.toLocaleString())
+                      .replace('{km_atual}', currentKmVal.toLocaleString())
+                      .replace('{ultima_troca_km}', lastChangeKmVal.toLocaleString());
+                  };
+
+                  // Get vehicles whose delta exceeds threshold
+                  const alertVehicles = (veiculos || []).map(vh => {
+                    const analise = analyzeVehicleOil(vh, ordensServico);
+                    const client = clientes.find(c => c.id === vh.clienteId);
+                    
+                    return {
+                      vehicle: vh,
+                      analise,
+                      client,
+                      kmDelta: analise.kmRodados !== null ? analise.kmRodados : (vh.km || 0)
+                    };
+                  }).filter(item => {
+                    return item.kmDelta >= reminderKmThreshold || item.analise.status === 'critical' || item.analise.status === 'unknown';
+                  });
+
+                  if (alertVehicles.length === 0) {
+                    return (
+                      <div className="text-center py-12 bg-black/10 rounded-xl border border-dashed border-gray-850">
+                        <span className="text-gray-500 font-bold block text-xs">Nenhum veículo em atraso crítico de lubrificação!</span>
+                        <p className="text-[10px] text-gray-400 mt-1">Todos os carros com passagens registradas encontram-se abaixo de {reminderKmThreshold} KM rodados.</p>
+                      </div>
+                    );
+                  }
+
+                  return alertVehicles.map(item => {
+                    const clientName = item.client ? item.client.name : 'Cliente Avulso';
+                    const isAlreadyScheduled = scheduledReminders.some(r => r.vehicleId === item.vehicle.id && r.status === 'Agendado');
+                    const phone = item.client ? item.client.phone : '';
+                    
+                    return (
+                      <div key={item.vehicle.id} className="p-4 bg-black/15 hover:bg-[#070c16] rounded-xl border border-gray-900 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all">
+                        <div className="flex flex-col gap-1 text-xs text-left">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-white text-[11px] uppercase tracking-wide">
+                              {item.vehicle.brand} {item.vehicle.model}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-[8px] font-mono font-bold bg-cyan-950/30 text-cyan-400 border border-cyan-900/35 leading-tight">
+                              {item.vehicle.plate}
+                            </span>
+                            <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold shrink-0 ${item.analise.badgeStyle}`}>
+                              {item.analise.status === 'critical' ? '🔴 CRÍTICO' : item.analise.status === 'unknown' ? '🚨 SEM HISTÓRICO' : '🟡 ATENÇÃO'}
+                            </span>
+                          </div>
+                          
+                          <div className="text-[10px] text-gray-400 leading-normal font-sans pt-0.5">
+                            Cliente: <strong className="text-gray-300 font-mono">{clientName}</strong> • {phone || 'Sem telefone'}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mt-1 text-[10px] tracking-tight bg-slate-950/35 p-2 rounded border border-gray-900/40 font-mono">
+                            <span>KM Atual: <strong className="text-white font-mono">{item.vehicle.km?.toLocaleString()} KM</strong></span>
+                            <span>Última Troca: <strong className="text-white font-mono">{item.analise.lastChangeKm !== null ? `${item.analise.lastChangeKm?.toLocaleString()} KM` : 'Sem histórico'}</strong></span>
+                            <span className="col-span-2 text-cyan-400 font-sans mt-0.5">
+                              Rodou: <strong className="text-white font-mono">{item.kmDelta?.toLocaleString()} KM</strong> desde o histórico prévio.
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-stretch sm:items-end gap-1.5 min-w-[130px]">
+                          {isAlreadyScheduled ? (
+                            <div className="px-3 py-1.5 text-center bg-green-950/20 text-green-500 border border-green-900/40 text-[10px] font-extrabold uppercase rounded-lg font-mono">
+                              ✓ Agendado
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedReminderVehicleId(item.vehicle.id);
+                                const nextWeek = new Date();
+                                nextWeek.setDate(nextWeek.getDate() + 2);
+                                setNewReminderScheduledDate(nextWeek.toISOString().split('T')[0]);
+                                setNewReminderScheduledTime('10:00');
+                              }}
+                              className="px-3 py-1.5 text-center text-red-500 hover:text-white bg-red-950/20 hover:bg-red-900 border border-red-900/40 rounded-lg text-[10px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              🕒 Agendar Alerta
+                            </button>
+                          )}
+
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const plainPhone = phone.replace(/\D/g, '');
+                              const msg = compileTemplateMessage(
+                                reminderTemplate, 
+                                clientName, 
+                                `${item.vehicle.brand} ${item.vehicle.model}`,
+                                item.vehicle.plate,
+                                item.kmDelta,
+                                item.vehicle.km,
+                                item.analise.lastChangeKm !== null ? item.analise.lastChangeKm : 'Sem anterior'
+                              );
+                              const whatsappLink = `https://api.whatsapp.com/send?phone=55${plainPhone}&text=${encodeURIComponent(msg)}`;
+                              window.open(whatsappLink, '_blank');
+                              
+                              // Track in sent list immediately
+                              const newRem = {
+                                id: `rem_auto_${Date.now()}`,
+                                clientId: item.vehicle.clienteId,
+                                vehicleId: item.vehicle.id,
+                                clientName,
+                                vehicleName: `${item.vehicle.brand} ${item.vehicle.model}`,
+                                plate: item.vehicle.plate,
+                                lastOilChangeKm: item.analise.lastChangeKm !== null ? item.analise.lastChangeKm : 0,
+                                currentKm: item.vehicle.km,
+                                kmDelta: item.kmDelta,
+                                status: 'Enviado' as const,
+                                scheduledDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
+                                sentDate: new Date().toISOString().replace('T', ' ').substring(0, 16)
+                              };
+                              setScheduledReminders([newRem, ...scheduledReminders]);
+                            }}
+                            className="px-3 py-1.5 text-center bg-green-600 hover:bg-green-750 text-white rounded-lg text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1 cursor-pointer shadow font-mono"
+                          >
+                            <span>WhatsApp Agora</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {/* Quick Manual Reminder scheduler */}
+            <div className="col-span-12 lg:col-span-5 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4">
+              <div className="border-b border-gray-850 pb-3 text-left">
+                <span className="font-sans font-extrabold text-white text-sm uppercase flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-red-500" /> Agendar Alerta de Manutenção Manual
+                </span>
+                <p className="text-[10px] text-gray-500 leading-normal mt-0.5 font-sans">
+                  Use este formulário para agendar um contato futuro. O CRM criará a tarefa na fila para disparo programado.
+                </p>
+              </div>
+
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!selectedReminderVehicleId) return;
+                  
+                  const targetVehObj = veiculos.find(v => v.id === selectedReminderVehicleId);
+                  if (!targetVehObj) return;
+
+                  const clientObj = clientes.find(c => c.id === targetVehObj.clienteId);
+                  const analise = analyzeVehicleOil(targetVehObj, ordensServico);
+                  const clientName = clientObj ? clientObj.name : 'Cliente Avulso';
+
+                  const newRem = {
+                    id: `rem_man_${Date.now()}`,
+                    clientId: targetVehObj.clienteId,
+                    vehicleId: targetVehObj.id,
+                    clientName,
+                    vehicleName: `${targetVehObj.brand} ${targetVehObj.model}`,
+                    plate: targetVehObj.plate,
+                    lastOilChangeKm: analise.lastChangeKm || 0,
+                    currentKm: targetVehObj.km,
+                    kmDelta: analise.kmRodados !== null ? analise.kmRodados : targetVehObj.km,
+                    status: 'Agendado' as const,
+                    scheduledDate: `${newReminderScheduledDate} ${newReminderScheduledTime}`
+                  };
+
+                  setScheduledReminders([newRem, ...scheduledReminders]);
+                  setSelectedReminderVehicleId('');
+                  
+                  setShowAutoReminderSavedToast(true);
+                  setTimeout(() => setShowAutoReminderSavedToast(false), 3000);
+                }}
+                className="flex flex-col gap-4 text-xs font-mono"
+              >
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase">Selecione o Veículo</label>
+                  <select
+                    value={selectedReminderVehicleId}
+                    onChange={(e) => setSelectedReminderVehicleId(e.target.value)}
+                    className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-white focus:outline-none focus:border-red-500 font-mono w-full"
+                    required
+                  >
+                    <option value="">-- Escolha um Veículo em Alerta --</option>
+                    {(veiculos || []).map(v => {
+                      const client = clientes.find(c => c.id === v.clienteId);
+                      const text = `${v.brand} ${v.model} (${v.plate}) • ${client ? client.name : 'Cliente avulso'}`;
+                      return (
+                        <option key={v.id} value={v.id}>{text}</option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5 text-left">
+                    <label className="text-[10px] text-gray-400 font-extrabold uppercase">Data Agendada</label>
+                    <input 
+                      type="date"
+                      value={newReminderScheduledDate}
+                      onChange={(e) => setNewReminderScheduledDate(e.target.value)}
+                      className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-white font-mono focus:outline-none w-full"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 text-left">
+                    <label className="text-[10px] text-gray-400 font-extrabold uppercase">Hora Programada</label>
+                    <input 
+                      type="time"
+                      value={newReminderScheduledTime}
+                      onChange={(e) => setNewReminderScheduledTime(e.target.value)}
+                      className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-white font-mono focus:outline-none w-full"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!selectedReminderVehicleId}
+                  className={`w-full py-3 rounded-xl font-bold font-sans text-xs uppercase shadow transition-all ${
+                    selectedReminderVehicleId 
+                      ? 'bg-red-650 bg-red-600 hover:bg-red-700 text-white cursor-pointer' 
+                      : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-850'
+                  }`}
+                >
+                  Confirmar Agendamento CRM
+                </button>
+              </form>
+            </div>
+
+          </div>
+
+          {/* HISTORIC TAB AND ACTION FIELD LOGS */}
+          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-5 text-left">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-gray-850 pb-4">
+              <div>
+                <h3 className="font-display font-extrabold text-white text-base">Fila de Agendamentos e Histórico de Envio</h3>
+                <p className="text-[10px] text-gray-400 font-mono">Gerencie alertas agendados para disparos futuros ou revise envios concluídos ou cancelados.</p>
+              </div>
+
+              {/* Filtering block in toolbar list */}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-gray-400 uppercase font-bold shrink-0">Filtrar Status:</span>
+                <div className="flex bg-[#080d19] p-0.5 rounded-lg border border-gray-850 text-[10px] [&>button]:px-2.5 [&>button]:py-1">
+                  {(['Todos', 'Agendado', 'Enviado', 'Cancelado'] as const).map(st => (
+                    <button 
+                      key={st}
+                      type="button"
+                      onClick={() => setFilterReminderStatus(st)}
+                      className={`font-mono font-bold rounded ${
+                        filterReminderStatus === st 
+                          ? 'bg-red-600 text-white' 
+                          : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Searching toolbar filter */}
+            <div className="relative">
+              <Search className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
+              <input 
+                type="text" 
+                placeholder="Filtrar por nome de cliente, modelo de veículo ou placa..."
+                value={reminderSearchQuery}
+                onChange={(e) => setReminderSearchQuery(e.target.value)}
+                className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2 px-4 pl-10 text-xs text-white focus:outline-none focus:border-red-500 font-sans"
+              />
+            </div>
+
+            {/* List representation */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-mono text-xs">
+                <thead className="bg-[#080d19] border-b border-gray-850 text-gray-400 uppercase text-[10px]">
+                  <tr>
+                    <th className="p-4">Cliente / Contato</th>
+                    <th className="p-4">Veículo / Placa</th>
+                    <th className="p-4 text-center">Início Período</th>
+                    <th className="p-4 text-center">Status</th>
+                    <th className="p-4">Programado Para</th>
+                    <th className="p-4 text-right">Ação</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-850">
+                  {(() => {
+                    const compileTemplateMessage = (templateText: string, clientName: string, vehicleModel: string, plateStr: string, kmRodadosVal: number | string, currentKmVal: string | number, lastChangeKmVal: string | number) => {
+                      return templateText
+                        .replace('{nome_cliente}', clientName)
+                        .replace('{modelo_veiculo}', vehicleModel)
+                        .replace('{placa_veiculo}', plateStr)
+                        .replace('{km_rodados}', kmRodadosVal.toLocaleString())
+                        .replace('{km_atual}', currentKmVal.toLocaleString())
+                        .replace('{ultima_troca_km}', lastChangeKmVal.toLocaleString());
+                    };
+
+                    return scheduledReminders
+                      .filter(rem => {
+                        const matchSt = filterReminderStatus === 'Todos' || rem.status === filterReminderStatus;
+                        const qLower = reminderSearchQuery.toLowerCase();
+                        const matchQu = !reminderSearchQuery || 
+                                        rem.clientName.toLowerCase().includes(qLower) || 
+                                        rem.vehicleName.toLowerCase().includes(qLower) || 
+                                        rem.plate.toLowerCase().includes(qLower);
+                        return matchSt && matchQu;
+                      })
+                      .map(rem => {
+                        const clientInfo = clientes.find(c => c.id === rem.clientId);
+                        const isAgendado = rem.status === 'Agendado';
+                        
+                        return (
+                          <tr key={rem.id} className="hover:bg-gray-950/25">
+                            <td className="p-4">
+                              <div className="flex flex-col text-left">
+                                <span className="font-sans font-semibold text-white">{rem.clientName}</span>
+                                <span className="text-[10px] text-gray-400">{clientInfo?.phone || 'Sem celular'}</span>
+                              </div>
+                            </td>
+
+                            <td className="p-4">
+                              <div className="flex flex-col text-left">
+                                <span className="text-gray-100 font-bold">{rem.vehicleName}</span>
+                                <span className="text-[10px] text-rose-500 font-black">{rem.plate}</span>
+                              </div>
+                            </td>
+
+                            <td className="p-4 text-center">
+                              <div className="flex flex-col items-center">
+                                <span className="text-gray-350">Delta: +{rem.kmDelta?.toLocaleString()} KM</span>
+                                <span className="text-[9px] text-gray-500 font-sans">desde os {rem.lastOilChangeKm?.toLocaleString()} KM</span>
+                              </div>
+                            </td>
+
+                            <td className="p-4 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                                rem.status === 'Agendado' 
+                                  ? 'bg-amber-900/40 text-amber-500 border border-amber-900/60' 
+                                  : rem.status === 'Enviado' 
+                                  ? 'bg-green-900/40 text-green-400 border border-green-900/60' 
+                                  : 'bg-gray-800 text-gray-500 border border-gray-850'
+                              }`}>
+                                {rem.status}
+                              </span>
+                            </td>
+
+                            <td className="p-4 text-gray-305 text-gray-400">
+                              <div className="flex flex-col text-left">
+                                <span>📅 {rem.scheduledDate}</span>
+                                {rem.sentDate && (
+                                  <span className="text-[10px] text-green-500 font-bold pt-0.5">Enviado em: {rem.sentDate}</span>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="p-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {isAgendado && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const phoneForSend = clientInfo?.phone || '';
+                                        const plainPhone = phoneForSend.replace(/\D/g, '');
+                                        const msg = compileTemplateMessage(
+                                          reminderTemplate, 
+                                          rem.clientName, 
+                                          rem.vehicleName, 
+                                          rem.plate, 
+                                          rem.kmDelta, 
+                                          rem.currentKm, 
+                                          rem.lastOilChangeKm
+                                        );
+                                        const link = `https://api.whatsapp.com/send?phone=55${plainPhone}&text=${encodeURIComponent(msg)}`;
+                                        window.open(link, '_blank');
+
+                                        // Mark as Sent
+                                        setScheduledReminders(scheduledReminders.map(r => r.id === rem.id ? {
+                                          ...r,
+                                          status: 'Enviado',
+                                          sentDate: new Date().toISOString().replace('T', ' ').substring(0, 16)
+                                        } : r));
+                                      }}
+                                      className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded animate-pulse font-mono text-[10px] select-none cursor-pointer"
+                                      title="Disparar mensagem no WhatsApp agora"
+                                    >
+                                      Disparar WhatsApp
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setScheduledReminders(scheduledReminders.map(r => r.id === rem.id ? {
+                                          ...r,
+                                          status: 'Cancelado'
+                                        } : r));
+                                      }}
+                                      className="p-1 text-gray-400 hover:text-red-500 transition-colors font-bold text-[10px] hover:underline"
+                                      title="Cancelar agendamento"
+                                    >
+                                      ✕ Cancelar
+                                    </button>
+                                  </>
+                                )}
+                                
+                                {rem.status === 'Cancelado' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setScheduledReminders(scheduledReminders.map(r => r.id === rem.id ? {
+                                        ...r,
+                                        status: 'Agendado'
+                                      } : r));
+                                    }}
+                                    className="text-[10px] text-cyan-400 hover:underline"
+                                    title="Reativar agendamento"
+                                  >
+                                    Reativar
+                                  </button>
+                                )}
+
+                                {rem.status === 'Enviado' && (
+                                  <span className="text-[10px] text-gray-500 italic block py-1 font-sans">Enviado</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      });
+                  })()}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+
         </div>
       )}
 

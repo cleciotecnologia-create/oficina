@@ -298,6 +298,8 @@ export const EstoqueView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
   const [onlyCriticalFilter, setOnlyCriticalFilter] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
 
   // New product form states
   const [newProdName, setNewProdName] = useState('');
@@ -472,8 +474,9 @@ export const EstoqueView: React.FC = () => {
                         (p.compatibility && p.compatibility.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchCategory = categoryFilter === 'Todas' || p.category === categoryFilter;
+    const matchMultiCategory = selectedCategories.length === 0 || selectedCategories.includes(p.category);
     const matchCritical = !onlyCriticalFilter || (p.quantity <= p.minStock);
-    return matchSearch && matchCategory && matchCritical;
+    return matchSearch && matchCategory && matchMultiCategory && matchCritical;
   });
 
   // Calculate margin & markup helpers
@@ -1250,6 +1253,120 @@ export const EstoqueView: React.FC = () => {
                 </div>
               );
             })()}
+
+            {/* MULTI-SELECT CATEGORY PIECE GROUPS FILTER */}
+            <div className="p-4 sm:p-5 border-b border-gray-850/80 bg-slate-950/20 flex flex-col gap-3 font-mono">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] bg-red-950/30 text-red-400 border border-red-900/40 px-2 py-0.5 rounded font-extrabold uppercase tracking-wider shrink-0 animate-pulse">
+                    Filtro Avançado Categorias
+                  </span>
+                  <span className="text-[11px] text-gray-500 hidden md:inline font-sans">
+                    Selecione múltiplas famílias de autopeças para restringir a listagem de estoque atual.
+                  </span>
+                </div>
+
+                {/* Dropdown Multi-Seleção container */}
+                <div className="relative shrink-0 w-full sm:w-auto">
+                  <button 
+                    type="button"
+                    onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                    className="w-full sm:w-64 bg-[#080c16] border border-gray-800 rounded-xl px-4 py-2.5 text-xs flex items-center justify-between hover:border-gray-700 transition-all cursor-pointer text-white"
+                  >
+                    <span className="truncate">
+                      {selectedCategories.length === 0 
+                        ? '📂 Todas as Categorias Ativas' 
+                        : `📂 ${selectedCategories.join(', ')}`}
+                    </span>
+                    <span className="text-[10px] text-gray-500 ml-1">▼</span>
+                  </button>
+
+                  {isCategoryDropdownOpen && (
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-[#0a0f1d] border border-gray-800 rounded-xl shadow-2xl p-3 z-30 flex flex-col gap-2 animate-fade-in animate-duration-150">
+                      <div className="flex justify-between items-center text-[10px] text-gray-400 border-b border-gray-850 pb-1.5 font-bold">
+                        <span>SELECIONAR GRUPOS</span>
+                        <div className="flex gap-1.5">
+                          <button 
+                            type="button"
+                            onClick={() => setSelectedCategories([])}
+                            className="text-red-400 hover:text-red-300 font-bold"
+                          >
+                            Limpar
+                          </button>
+                          <span className="text-gray-600">|</span>
+                          <button 
+                            type="button"
+                            onClick={() => setSelectedCategories(['Freios', 'Filtros', 'Lubrificantes', 'Suspensão', 'Ignição', 'Carroceria', 'Elétrica'])}
+                            className="text-cyan-400 hover:text-cyan-350 font-bold"
+                          >
+                            Todos
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1 max-h-48 overflow-y-auto pt-1 font-mono text-[11px]">
+                        {['Freios', 'Filtros', 'Lubrificantes', 'Suspensão', 'Ignição', 'Carroceria', 'Elétrica'].map((cat) => {
+                          const isSel = selectedCategories.includes(cat);
+                          return (
+                            <label 
+                              key={cat} 
+                              className="flex items-center gap-2 px-2 py-1 rounded hover:bg-gray-900/50 cursor-pointer text-gray-300 hover:text-white transition-colors"
+                            >
+                              <input 
+                                type="checkbox"
+                                checked={isSel}
+                                onChange={() => {
+                                  if (isSel) {
+                                    setSelectedCategories(selectedCategories.filter(c => c !== cat));
+                                  } else {
+                                    setSelectedCategories([...selectedCategories, cat]);
+                                  }
+                                }}
+                                className="w-3.5 h-3.5 bg-slate-950 border border-slate-800 rounded text-red-500 focus:ring-0 checked:bg-red-500"
+                              />
+                              <span>{cat}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+
+                      <div className="border-t border-gray-850 pt-2 flex justify-end">
+                        <button 
+                          type="button"
+                          onClick={() => setIsCategoryDropdownOpen(false)}
+                          className="px-2.5 py-1 bg-red-650 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded"
+                        >
+                          Aplicar Filtro
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Show Pills/Badges of currently selected categories with quick delete action 'x' */}
+              {selectedCategories.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-900/40 pt-2 font-mono">
+                  <span className="text-[9px] text-gray-400 uppercase font-black mr-1">Filtrando por:</span>
+                  {selectedCategories.map((cat) => (
+                    <span 
+                      key={cat} 
+                      className="px-2 py-0.5 rounded-lg bg-red-950/20 text-red-400 border border-red-900/30 text-[10px] font-bold flex items-center gap-1 cursor-pointer hover:bg-red-950/40 hover:border-red-500/40 transition-all select-none"
+                      onClick={() => setSelectedCategories(selectedCategories.filter(c => c !== cat))}
+                    >
+                      {cat} <span className="hover:text-white text-[9px] text-red-500 font-bold">✕</span>
+                    </span>
+                  ))}
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedCategories([])}
+                    className="text-[9.5px] font-bold text-gray-500 hover:text-white underline transition-all leading-none ml-2"
+                  >
+                    Exibir Tudo
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Donut Chart - Stock Category Density & Occupancy */}
             {(() => {

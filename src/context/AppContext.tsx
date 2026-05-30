@@ -92,6 +92,7 @@ interface AppContextType {
   editOS: (id: string, os: Partial<OrdemServico>) => Promise<void>;
   deleteOS: (id: string) => Promise<void>;
   addVenda: (v: Omit<Venda, 'id' | 'empresaId' | 'date'>) => Promise<void>;
+  estornarVenda: (id: string, justificativa: string) => Promise<void>;
   addFinanceiro: (f: Omit<Financeiro, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
   editFinanceiro: (id: string, f: Partial<Financeiro>) => Promise<void>;
   abrirCaixa: (amount: number) => Promise<void>;
@@ -996,6 +997,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const estornarVenda = async (id: string, justificativa: string) => {
+    const sale = vendas.find(v => v.id === id);
+    if (!sale) {
+      throw new Error("Venda não encontrada!");
+    }
+
+    if (sale.status === 'estornada') {
+      throw new Error("Venda já foi estornada anteriormente!");
+    }
+
+    // 1. Mark as estornada and set justification in context state:
+    setVendas(prev => prev.map(v => v.id === id ? { ...v, status: 'estornada', justification: justificativa } : v));
+
+    // 2. Add as a Despesa (outflow) inside local financeiro collection
+    const finId = "fin_" + Math.random().toString(36).substr(2, 9);
+    const refundExpense: Financeiro = {
+      id: finId,
+      empresaId: company.id,
+      description: `Estorno de Venda PDV #${id.substring(4, 9).toUpperCase()} - Motivo: ${justificativa}`,
+      type: "Despesa",
+      amount: sale.total,
+      dueDate: new Date().toISOString().split('T')[0],
+      status: "Pago",
+      category: "Estorno Vendas",
+      createdAt: new Date().toISOString()
+    };
+    setFinanceiro(prev => [refundExpense, ...prev]);
+
+    // 3. Increment returned product stock back to inventory (only for actual products, not services)
+    sale.items.forEach(sold => {
+      // Services were marked with '🛠️ ' prefix or start with srv_ dummy. Check if item has product in list.
+      const product = produtos.find(p => p.id === sold.produtoId);
+      if (product) {
+        updateProdutoStock(product.id, product.quantity + sold.quantity);
+      }
+    });
+
+    // 4. Update Cash register balance if it's currently open
+    if (caixaStatus && caixaStatus.status === "Aberto") {
+      setCaixaStatus(prev => prev ? {
+        ...prev,
+        currentAmount: Math.max(0, prev.currentAmount - sale.total)
+      } : null);
+    }
+
+    // 5. Audit Log
+    addLocalAuditLog("Estorno Venda PDV", `Venda #${id.toUpperCase()} estornada. Motivo: ${justificativa}. Valor extinto: R$ ${sale.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`);
+
+    // 6. Firebase write
+    if (firebaseUser) {
+      await executeWrite("vendas", id, { ...sale, status: 'estornada', justification: justificativa }, 'merge');
+      await executeWrite("financeiro", finId, refundExpense, 'set');
+      if (caixaStatus && caixaStatus.status === "Aberto") {
+        const openedCaixaId = caixaStatus.id;
+        const newAmt = Math.max(0, caixaStatus.currentAmount - sale.total);
+        await executeWrite("caixa", openedCaixaId, { currentAmount: newAmt }, 'merge');
+      }
+    }
+  };
+
   const addFinanceiro = async (f: Omit<Financeiro, 'id' | 'empresaId' | 'createdAt'>) => {
     const id = "fin_" + Math.random().toString(36).substr(2, 9);
     const newEntry: Financeiro = {
@@ -1401,6 +1462,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addOS,
       editOS,
       addVenda,
+      estornarVenda,
       addFinanceiro,
       editFinanceiro,
       abrirCaixa,

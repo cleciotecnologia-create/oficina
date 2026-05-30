@@ -29,7 +29,10 @@ import {
   Edit,
   AlertTriangle,
   Copy,
-  Settings
+  Settings,
+  History,
+  RotateCcw,
+  FileText
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Produto, Servico, Cliente, SaleItem } from '../types';
@@ -54,6 +57,7 @@ export const PDVView: React.FC = () => {
     abrirCaixa, 
     fecharCaixa, 
     addVenda, 
+    estornarVenda,
     vendas,
     user,
     company,
@@ -278,6 +282,14 @@ export const PDVView: React.FC = () => {
   // Checkout & invoice state
   const [saleFinished, setSaleFinished] = useState(false);
   const [lastFinishedSale, setLastFinishedSale] = useState<any | null>(null);
+
+  // Reversal modal states
+  const [reversalSaleId, setReversalSaleId] = useState<string | null>(null);
+  const [reversalJustification, setReversalJustification] = useState<string>('');
+  const [reversalError, setReversalError] = useState<string | null>(null);
+  
+  // History search query
+  const [historySearchQuery, setHistorySearchQuery] = useState('');
 
   // Resolved active customer object
   const activeCustomer = useMemo(() => {
@@ -1684,6 +1696,218 @@ export const PDVView: React.FC = () => {
 
       </div>
 
+      {/* 📊 HISTÓRICO DE VENDAS RECENTES & GESTÃO DE ESTORNOS DE CAIXA */}
+      <div id="historico-de-vendas" className="col-span-12 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4 mt-2">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-800 pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <History className="w-5 h-5 text-red-500 shrink-0" />
+              <h3 className="font-display font-extrabold text-base sm:text-lg text-white">HISTÓRICO OPERACIONAL DO PDV</h3>
+              <span className="text-[10px] bg-red-950/40 text-red-400 font-bold px-2 py-0.5 rounded font-mono uppercase tracking-wide">Frente de Caixa</span>
+            </div>
+            <p className="text-[10px] text-gray-500 font-mono mt-1 uppercase">Acesso rápido para reemissão de cupons de vendas e solicitação de estornos com recomposição automática de estoque.</p>
+          </div>
+
+          <div className="relative w-full md:w-72 shrink-0">
+            <Search className="absolute left-3/5 top-2.5 w-3.5 h-3.5 text-gray-500" />
+            <input 
+              type="text" 
+              placeholder="Buscar por ID, Cliente..."
+              value={historySearchQuery}
+              onChange={(e) => setHistorySearchQuery(e.target.value)}
+              className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 pl-9.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-red-500 font-mono"
+            />
+          </div>
+        </div>
+
+        {vendas.length === 0 ? (
+          <div className="py-8 text-center flex flex-col items-center justify-center gap-2 text-gray-500">
+            <FileText className="w-8 h-8 text-gray-500 animate-pulse" />
+            <p className="text-xs italic">Nenhuma venda registrada neste terminal operacional de caixa.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gray-850 font-mono text-[9.5px] uppercase tracking-wider text-gray-400">
+                  <th className="py-3 px-4 font-bold">Venda ID</th>
+                  <th className="py-3 px-4 font-bold">Data / Hora</th>
+                  <th className="py-3 px-4 font-bold">Cliente Vinculado</th>
+                  <th className="py-3 px-4 font-bold">Forma Pagto</th>
+                  <th className="py-3 px-4 font-bold text-right">Desconto</th>
+                  <th className="py-3 px-4 font-bold text-right">Valor Total</th>
+                  <th className="py-3 px-4 font-bold text-center">Status</th>
+                  <th className="py-3 px-4 font-bold text-right">Ações de Frente</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-850">
+                {vendas
+                  .filter(v => 
+                    v.id.toLowerCase().includes(historySearchQuery.toLowerCase()) ||
+                    (v.clienteName && v.clienteName.toLowerCase().includes(historySearchQuery.toLowerCase())) ||
+                    (v.clienteId && v.clienteId.toLowerCase().includes(historySearchQuery.toLowerCase()))
+                  )
+                  .map((v) => {
+                    const isEstornada = v.status === 'estornada';
+                    return (
+                      <tr key={v.id} className={`hover:bg-[#070b14]/45 transition-colors ${isEstornada ? 'opacity-55' : ''}`}>
+                        <td className="py-3.5 px-4 font-mono font-bold text-white uppercase">{v.id}</td>
+                        <td className="py-3.5 px-4 text-gray-400 font-mono">{new Date(v.date).toLocaleString('pt-BR')}</td>
+                        <td className="py-3.5 px-4">
+                          <div className="flex flex-col">
+                            <span className="text-white font-semibold">{v.clienteName || 'Consumidor Final'}</span>
+                            {v.clienteId && (
+                              <span className="text-[9px] text-gray-500 font-mono uppercase">ID Cliente: {v.clienteId}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                            v.paymentMethod === 'PIX' ? 'bg-cyan-950/45 text-cyan-400 border border-cyan-900/30' :
+                            v.paymentMethod === 'Cartão' ? 'bg-purple-950/45 text-purple-400 border border-purple-900/30' :
+                            'bg-emerald-950/45 text-emerald-400 border border-emerald-900/30'
+                          }`}>
+                            {v.paymentMethod}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono text-right text-gray-400 font-semibold">R$ {v.discount.toFixed(2)}</td>
+                        <td className="py-3.5 px-4 font-mono text-right font-extrabold text-white">R$ {v.total.toFixed(2)}</td>
+                        <td className="py-3.5 px-4 text-center">
+                          {isEstornada ? (
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span className="px-2 py-0.5 rounded bg-red-950/45 text-red-500 border border-red-900/20 text-[9px] font-mono font-bold uppercase tracking-wider">
+                                🚨 ESTORNADA
+                              </span>
+                              {v.justification && (
+                                <span className="text-[8.5px] text-gray-500 max-w-[150px] truncate italic block text-center" title={v.justification}>
+                                  "{v.justification}"
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded bg-green-950/40 text-green-400 border border-green-900/20 text-[9px] font-mono font-bold uppercase tracking-wider">
+                              ✅ OPERACIONAL
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playScannerBeep();
+                                setLastFinishedSale(v);
+                                setSaleFinished(true);
+                              }}
+                              className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-gray-800 bg-[#080d16] hover:bg-[#121c33] text-gray-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
+                              title="Reimprimir Cupom Térmico Não Fiscal"
+                            >
+                              <Printer className="w-3.5 h-3.5 text-cyan-450" /> Re-imprimir
+                            </button>
+
+                            {!isEstornada && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playScannerBeep();
+                                  setReversalSaleId(v.id);
+                                  setReversalJustification('');
+                                  setReversalError(null);
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-900 hover:text-white text-red-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
+                                title="Solicitar Reversão / Estorno com Justificativa"
+                              >
+                                <RotateCcw className="w-3 text-red-400" /> Estornar
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* 🚨 INTERACTIVE SALES REVERSAL MODAL */}
+      {reversalSaleId && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm text-left">
+          <div className="bg-[#0b101d] border border-red-950/40 rounded-3xl max-w-md w-full p-6 shadow-2xl relative flex flex-col gap-4">
+            <button
+              type="button"
+              onClick={() => setReversalSaleId(null)}
+              className="absolute top-4 right-4 text-gray-500 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-red-950/40 text-red-500 border border-red-900/40 rounded-xl">
+                <AlertCircle className="w-5 h-5 animate-pulse" />
+              </span>
+              <div>
+                <span className="bg-red-950/50 border border-red-800 text-red-400 text-[9px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded font-mono">
+                  Confirmar Estorno
+                </span>
+                <h3 className="text-md font-display font-extrabold text-white uppercase">Estorno Operacional de Venda</h3>
+              </div>
+            </div>
+
+            <div className="p-3 bg-[#070b14] border border-red-950/30 rounded-xl text-xs font-mono text-gray-400 flex flex-col gap-1 text-left">
+              <div>Venda Selecionada: <strong className="text-white uppercase">#{reversalSaleId}</strong></div>
+              <div>Valor a Refundar: <strong className="text-red-400">R$ {vendas.find(v => v.id === reversalSaleId)?.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></div>
+              <div className="text-[10px] text-gray-500 mt-1 leading-normal uppercase">Os itens desta venda serão retornados ao estoque de peças e o valor será abatido da movimentação financeira.</div>
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[10px] font-mono text-gray-400 uppercase font-bold">JUSTIFICATIVA DO ESTORNO *</label>
+              <textarea 
+                value={reversalJustification}
+                onChange={(e) => {
+                  setReversalJustification(e.target.value);
+                  setReversalError(null);
+                }}
+                placeholder="Exemplo: Peça incompatível com veículo do cliente / Devolução de compra por arrependimento..."
+                rows={3}
+                className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-red-500 font-sans resize-none"
+              />
+              {reversalError && (
+                <span className="text-[10px] font-mono text-red-400 mt-0.5">{reversalError}</span>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-gray-850 pt-3">
+              <button
+                type="button"
+                onClick={() => setReversalSaleId(null)}
+                className="py-2 px-3.5 bg-slate-950 hover:bg-slate-900 text-gray-400 text-[10px] sm:text-xs font-mono uppercase font-bold border border-gray-800 rounded-xl transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!reversalJustification.trim()) {
+                    setReversalError("Por favor, informe uma justificativa válida para concluir o estorno.");
+                    return;
+                  }
+                  try {
+                    await estornarVenda(reversalSaleId, reversalJustification);
+                    setReversalSaleId(null);
+                  } catch (err: any) {
+                    setReversalError(err.message || "Erro durante o processamento do estorno.");
+                  }
+                }}
+                className="py-2 px-4 bg-red-650 hover:bg-red-750 text-white font-mono text-[10px] sm:text-xs font-bold rounded-xl transition-all shadow-md cursor-pointer uppercase select-none border-0"
+              >
+                Confirmar Estorno
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* DYNAMIC THERMAL PRINTER RECEIPT DIALOG MODAL */}
       {saleFinished && lastFinishedSale && (
         <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
@@ -1705,6 +1929,15 @@ export const PDVView: React.FC = () => {
               <span className="text-[10px] block mt-0.5">{company.address || "Av. das Nações Unidas, 1040 - São Paulo, SP"}</span>
               <span className="text-[10px] block">CNPJ: {company.cnpj || "12.345.678/0001-90"} • Fone: {company.phone || "(11) 98765-4321"}</span>
             </div>
+
+            {lastFinishedSale.status === 'estornada' && (
+              <div className="my-2 p-2.5 border-2 border-red-600 bg-red-50 text-red-700 text-center rounded-xl text-xs font-mono font-bold uppercase tracking-wider leading-tight">
+                ⚠️ CUPOM ESTORNADO / CANCELADO ⚠️
+                <span className="block text-[9px] text-red-500 font-semibold mt-0.5 lowercase italic font-sans normal-case">
+                  motivo: "{lastFinishedSale.justification || 'não informado'}"
+                </span>
+              </div>
+            )}
             
             <div className="my-4 font-mono text-[11px] flex flex-col gap-1">
               <div className="flex justify-between font-bold">

@@ -103,6 +103,8 @@ export interface Venda {
   sellerId: string;
   sellerName?: string;
   linkedOSId?: string;
+  status?: 'paga' | 'estornada';
+  justification?: string;
 }
 
 export interface ChecklistItem {
