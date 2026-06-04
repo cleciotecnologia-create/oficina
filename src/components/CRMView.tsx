@@ -831,6 +831,27 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                const trackingUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?cpf=${encodeURIComponent(cli.phone)}`;
+                                const textMessage = `Olá *${cli.name}*! Segue o link exclusivo da nossa oficina para você acompanhar em tempo real o andamento e histórico de manutenção do seu veículo:\n\n📈 ${trackingUrl}`;
+                                
+                                try {
+                                  navigator.clipboard.writeText(trackingUrl);
+                                } catch (err) {
+                                  console.warn(err);
+                                }
+                                
+                                const cleanPhone = cli.phone.replace(/[^0-9]/g, '');
+                                window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(textMessage)}`, '_blank');
+                              }}
+                              className="text-[10px] font-mono font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 bg-[#082218] hover:bg-[#0c3425] px-2.5 py-1 rounded border border-emerald-950/60 transition-all cursor-pointer"
+                              title="Enviar link do portal de acompanhamento via WhatsApp"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5 text-emerald-400" /> ENVIAR PORTAL
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 startEditClient(cli);
                               }}
                               className="text-[10px] font-mono font-bold text-slate-300 hover:text-white flex items-center gap-1 bg-[#121c33] hover:bg-[#1a2b4d] px-2.5 py-1 rounded border border-gray-800 transition-all cursor-pointer"

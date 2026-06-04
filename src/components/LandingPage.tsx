@@ -22,10 +22,9 @@ import { motion } from 'motion/react';
 interface LandingPageProps {
   onEnterApp: () => void;
   onEnterDemo: () => void;
-  onTrackOS: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp, onEnterDemo, onTrackOS }) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp, onEnterDemo }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeFaq, setActiveFaq] = useState<number | null>(null);
 
@@ -129,12 +128,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp, onEnterDem
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
-            <button 
-              onClick={onTrackOS}
-              className="text-xs font-bold font-mono text-cyan-400 hover:text-cyan-300 border border-cyan-950/60 bg-[#0e172a] hover:bg-cyan-950/40 px-3.5 py-2.5 rounded-lg transition-all cursor-pointer"
-            >
-              🔎 ÁREA DO CLIENTE: ACOMPANHAR OS
-            </button>
             <button 
               onClick={onEnterApp}
               className="text-sm font-semibold hover:text-white text-gray-300 px-4 py-2 hover:bg-white/15 rounded-lg transition-all cursor-pointer"

@@ -199,7 +199,6 @@ function AppContent() {
           await loginDemo();
           setActiveRoute('dashboard');
         }} 
-        onTrackOS={() => setCustomerPortalOpen(true)}
       />
     );
   }

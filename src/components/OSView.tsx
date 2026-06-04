@@ -44,8 +44,34 @@ export const OSView: React.FC = () => {
     company
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'lista' | 'nova'>('lista');
+  const [activeTab, setActiveTab] = useState<'lista' | 'nova' | 'orcamento'>('lista');
   const [pdfOSSelected, setPdfOSSelected] = useState<OrdemServico | null>(null);
+  
+  // Orçamento Fácil states
+  const [easyClientName, setEasyClientName] = useState('');
+  const [easyClientPhone, setEasyClientPhone] = useState('');
+  const [easyClientEmail, setEasyClientEmail] = useState('');
+  const [easyVehicleDesc, setEasyVehicleDesc] = useState('');
+  const [easyVehiclePlate, setEasyVehiclePlate] = useState('');
+  const [easyServices, setEasyServices] = useState<ServiceItem[]>([]);
+  const [easyParts, setEasyParts] = useState<PartUsed[]>([]);
+  const [easyDiscount, setEasyDiscount] = useState<number>(0);
+  
+  // Quick manual input fields for Orçamento Fácil
+  const [easySelectedSrvId, setEasySelectedSrvId] = useState('');
+  const [easyManualSrvDesc, setEasyManualSrvDesc] = useState('');
+  const [easyManualSrvPrice, setEasyManualSrvPrice] = useState('');
+  const [easySelectedProdId, setEasySelectedProdId] = useState('');
+  const [easySelectedProdQty, setEasySelectedProdQty] = useState('1');
+  const [easyManualPartName, setEasyManualPartName] = useState('');
+  const [easyManualPartPrice, setEasyManualPartPrice] = useState('');
+  const [easyManualPartQty, setEasyManualPartQty] = useState('1');
+
+  // Sharing flows
+  const [showEasyShareModal, setShowEasyShareModal] = useState(false);
+  const [easyShareMsg, setEasyShareMsg] = useState('');
+  const [easySavedOSId, setEasySavedOSId] = useState<string | null>(null);
+
   const [searchPlate, setSearchPlate] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todas');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -331,6 +357,7 @@ export const OSView: React.FC = () => {
   // Build WhatsApp template text link
   const createWhatsAppShare = (os: OrdemServico) => {
     const isReady = os.services.length > 0 || os.parts.length > 0;
+    const trackingUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?osId=${os.id}`;
     const msg = `Olá *${os.clienteName}*! Tudo bem? 
 
 Sua Ordem de Serviço *${os.id}* do veículo *${os.veiculoInfo}* foi avaliada por nossa equipe de mecânicos.
@@ -345,7 +372,10 @@ ${os.parts.map(p => `- Peça ${p.name} (x${p.quantity}): R$ ${(p.sellPrice * p.q
 💵 *Valor Total Orçado:*
 *R$ ${os.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*
 
-Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execução dos serviços! Obrigado.`;
+📈 *Acompanhe em Tempo Real:*
+${trackingUrl}
+
+Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a execução dos serviços! Obrigado.`;
 
     setWhatsappTextCreated(msg);
     setActiveOSForModal(os);
@@ -364,6 +394,194 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
     setCustomSignName('');
     setActiveOSForModal(null);
     alert("Ordem de serviço devidamente assinada! O status mudou automaticamente para 'Em execução'.");
+  };
+
+  // --- Orçamento Fácil Action Helper Callbacks ---
+  const addEasyService = (desc: string, price: number) => {
+    if (!desc || isNaN(price) || price <= 0) {
+      alert("Por favor, informe uma descrição válida e um preço numérico maior que zero para a mão de obra.");
+      return;
+    }
+    const newItem: ServiceItem = {
+      id: `srv_easy_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      description: desc,
+      price: price
+    };
+    setEasyServices([...easyServices, newItem]);
+    setEasyManualSrvDesc('');
+    setEasyManualSrvPrice('');
+    setEasySelectedSrvId('');
+  };
+
+  const addEasyPart = (name: string, price: number, qty: number) => {
+    if (!name || isNaN(price) || price <= 0 || isNaN(qty) || qty <= 0) {
+      alert("Por favor, preencha o nome do material, o valor unitário e uma quantidade positiva.");
+      return;
+    }
+    const newItem: PartUsed = {
+      id: `prt_easy_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      name: name,
+      sellPrice: price,
+      quantity: qty
+    };
+    setEasyParts([...easyParts, newItem]);
+    setEasyManualPartName('');
+    setEasyManualPartPrice('');
+    setEasyManualPartQty('1');
+    setEasySelectedProdId('');
+  };
+
+  const easyServicesTotal = easyServices.reduce((acc, s) => acc + s.price, 0);
+  const easyPartsTotal = easyParts.reduce((acc, p) => acc + (p.sellPrice * p.quantity), 0);
+  const easySubtotal = easyServicesTotal + easyPartsTotal;
+  const easyTotal = Math.max(0, easySubtotal - easyDiscount);
+
+  const handleEasyWhatsAppShare = () => {
+    const srvLines = easyServices.map(s => `• Mão de Obra: *${s.description}* - R$ ${s.price.toFixed(2)}`).join('\n');
+    const prtLines = easyParts.map(p => `• Peça: *${p.name}* (x${p.quantity}) - R$ ${(p.sellPrice * p.quantity).toFixed(2)}`).join('\n');
+    
+    let msg = `⚡ *ORÇAMENTO PARCIAL - ${company?.name || 'AutoPrecision Premium'}* ⚡\n\n`;
+    if (easyClientName) {
+      msg += `Prezado(a) *${easyClientName}*,\n`;
+    } else {
+      msg += `Prezado Cliente,\n`;
+    }
+    msg += `Abaixo enviamos a simulação detalhada de orçamento para o seu veículo${easyVehicleDesc ? ` *${easyVehicleDesc}*` : ''}${easyVehiclePlate ? ` (Placa: ${easyVehiclePlate.toUpperCase()})` : ''}.\n\n`;
+    
+    if (easyServices.length > 0) {
+      msg += `🛠️ *MÃO DE OBRA / SERVIÇOS:*\n${srvLines}\n\n`;
+    }
+    if (easyParts.length > 0) {
+      msg += `📦 *PEÇAS / MATERIAIS DE REPOSIÇÃO:*\n${prtLines}\n\n`;
+    }
+    
+    msg += `------------------------------------\n`;
+    msg += `• Custo operacional: R$ ${easySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+    if (easyDiscount > 0) {
+      msg += `• Desconto aplicado: R$ ${easyDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+    }
+    msg += `💰 *VALOR TOTAL: R$ ${easyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*\n\n`;
+    msg += `_Este orçamento fácil é provisório de pátio técnico e válido por 10 dias._\n\n`;
+    msg += `Deseja aprovar e dar início à execução rápida? Fale conosco!`;
+    
+    try {
+      navigator.clipboard.writeText(msg);
+    } catch (e) {
+      console.warn("Clipboard access not fully permitted under iframe environment.");
+    }
+    
+    const cleanPhone = easyClientPhone.replace(/[^0-9]/g, '');
+    const url = `https://wa.me/${cleanPhone || ''}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+  };
+
+  const handleEasyEmailShare = () => {
+    const srvLines = easyServices.map(s => `- Mão de Obra: ${s.description} - R$ ${s.price.toFixed(2)}`).join('\n');
+    const prtLines = easyParts.map(p => `- Peça: ${p.name} (x${p.quantity}) - R$ ${(p.sellPrice * p.quantity).toFixed(2)}`).join('\n');
+    
+    const subject = encodeURIComponent(`Orçamento Rápido - ${easyVehicleDesc || 'Seu Veículo'} - ${company?.name || 'AutoPrecision'}`);
+    let bodyText = `Olá${easyClientName ? ` ${easyClientName}` : ''},\n\n`;
+    bodyText += `Seguem as tarifas e diagnósticos operacionais de orçamento provisório para o seu veículo${easyVehicleDesc ? ` (${easyVehicleDesc})` : ''}${easyVehiclePlate ? ` placa ${easyVehiclePlate.toUpperCase()}` : ''}.\n\n`;
+    
+    if (easyServices.length > 0) {
+      bodyText += `--- SERVIÇOS E OPERAÇÕES ---\n${srvLines}\n\n`;
+    }
+    if (easyParts.length > 0) {
+      bodyText += `--- PEÇAS E MATERIAIS DE REPOSIÇÃO ---\n${prtLines}\n\n`;
+    }
+    
+    bodyText += `Subtotal: R$ ${easySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+    if (easyDiscount > 0) {
+      bodyText += `Desconto Especial: R$ ${easyDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+    }
+    bodyText += `VALOR TOTAL ESTIMADO: R$ ${easyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
+    bodyText += `Responderemos imediatamente caso queira aprovar por este canal.\n\n`;
+    bodyText += `Atenciosamente,\n${company?.name || 'AutoPrecision Premium'}\nContato Telefônico: ${company?.phone || '(11) 98765-4321'}`;
+    
+    const url = `mailto:${easyClientEmail || ''}?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
+    window.location.href = url;
+  };
+
+  const handleConvertEasyToOS = async () => {
+    let clientToUseId = "";
+    if (easyClientName) {
+      const match = clientes.find(c => 
+        c.name.toLowerCase().includes(easyClientName.toLowerCase()) || 
+        (easyClientPhone && c.phone.replace(/[^0-9]/g, '') === easyClientPhone.replace(/[^0-9]/g, ''))
+      );
+      if (match) {
+        clientToUseId = match.id;
+      } else {
+        clientToUseId = clientes[0]?.id || "client_temp_123";
+      }
+    } else {
+      clientToUseId = clientes[0]?.id || "client_temp_123";
+    }
+
+    const clientNameSelected = easyClientName || "Cliente Particular";
+    const clientPhoneSelected = easyClientPhone || "(11) 99999-9999";
+
+    const payload = {
+      clienteId: clientToUseId,
+      clienteName: clientNameSelected,
+      clientePhone: clientPhoneSelected,
+      veiculoId: "veh_temp_quick",
+      veiculoInfo: easyVehicleDesc ? `${easyVehicleDesc} (${easyVehiclePlate.toUpperCase() || 'S/ PLACA'})` : "Veículo Orçado Provisório",
+      plate: easyVehiclePlate || "ORC-9999",
+      km: 0,
+      problem: "Orçamento Fácil instantâneo convertido em Ordem de Serviço de pátio.",
+      diagnosis: "Orçamento de peças/mão de obra simplificado de pátio técnico.",
+      status: "Aberta" as const,
+      mechanicId: "staff_2",
+      mechanicName: "Marcio Rezende",
+      services: [...easyServices],
+      parts: [...easyParts],
+      checklist: [],
+      total: easyTotal,
+      reminderEnabled: false,
+      vencimentoDays: 30,
+      reminderDays: 3
+    };
+
+    await addOS(payload);
+    alert("✔️ Orçamento instantâneo convertido com sucesso em uma Ordem de Serviço oficial! Veja-a na fila ativa.");
+    
+    // Reset easy states
+    setEasyClientName('');
+    setEasyClientPhone('');
+    setEasyClientEmail('');
+    setEasyVehicleDesc('');
+    setEasyVehiclePlate('');
+    setEasyServices([]);
+    setEasyParts([]);
+    setEasyDiscount(0);
+    
+    setActiveTab('lista');
+  };
+
+  const handlePrintEasyBudget = () => {
+    const placeholderOS: OrdemServico = {
+      id: `SIMUL-${Math.floor(1000 + Math.random() * 9000)}`,
+      empresaId: company?.id || 'company_1',
+      clienteId: 'temp_cliente',
+      clienteName: easyClientName || 'Cliente Particular',
+      clientePhone: easyClientPhone || 'Não Informado',
+      veiculoId: 'temp_veiculo',
+      veiculoInfo: easyVehicleDesc || 'Veículo Sob Regulação',
+      plate: easyVehiclePlate || 'PREVENTIVO',
+      km: 0,
+      problem: `Cotação de Serviços e Peças de Pátio executada em ${new Date().toLocaleDateString('pt-BR')}`,
+      diagnosis: 'Diagnóstico mecânico e materiais orçados através do assistente de orçamento rápido.',
+      status: 'Aberta',
+      mechanicId: 'temp_mechanic',
+      mechanicName: 'Consultor Técnico',
+      services: [...easyServices],
+      parts: [...easyParts],
+      checklist: [],
+      total: easyTotal,
+      createdAt: new Date().toISOString()
+    };
+    setPdfOSSelected(placeholderOS);
   };
 
   return (
@@ -390,6 +608,13 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
             className={activeTab === 'nova' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
           >
             + Abrir Nova OS
+          </button>
+          <button 
+            onClick={() => setActiveTab('orcamento')}
+            className={activeTab === 'orcamento' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
+            id="tab-orcamento-facil"
+          >
+            ⚡ Orçamento Fácil
           </button>
         </div>
       </div>
@@ -1296,6 +1521,451 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
             💾 SALVAR E EMITIR ORDEM DE SERVIÇO
           </button>
         </form>
+      )}
+
+      {activeTab === 'orcamento' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full items-start">
+          
+          {/* Left Column: Form Controls */}
+          <div className="lg:col-span-7 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6">
+            
+            {/* Section 1: Client and Vehicle details */}
+            <div className="flex flex-col gap-4 text-left">
+              <div className="border-b border-gray-850 pb-2 flex justify-between items-center">
+                <div>
+                  <h3 className="font-display font-extrabold text-white text-base">⚡ GERADOR DE ORÇAMENTO RÁPIDO</h3>
+                  <span className="text-xs text-gray-400 font-mono">Peças, mão de obra e compartilhamento em instantes.</span>
+                </div>
+                <div className="bg-red-500/10 text-red-500 text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-red-500/20">
+                  Easy Mode
+                </div>
+              </div>
+
+              {/* Quick lookup of existing registered customer */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-mono text-gray-500 uppercase">Preencher com Cliente Cadastrado (Opcional)</label>
+                <select 
+                  onChange={(e) => {
+                    const found = clientes.find(c => c.id === e.target.value);
+                    if (found) {
+                      setEasyClientName(found.name);
+                      setEasyClientPhone(found.phone);
+                      setEasyClientEmail(found.email || '');
+                      
+                      // auto fetch corresponding vehicle if exists
+                      const firstVeh = veiculos.find(v => v.clienteId === found.id);
+                      if (firstVeh) {
+                        setEasyVehicleDesc(`${firstVeh.brand} ${firstVeh.model} ${firstVeh.engine}`);
+                        setEasyVehiclePlate(firstVeh.plate);
+                      } else {
+                        setEasyVehicleDesc('');
+                        setEasyVehiclePlate('');
+                      }
+                    }
+                  }}
+                  className="bg-[#080c16] border border-gray-850 rounded-xl py-2 px-3 text-xs text-white cursor-pointer"
+                >
+                  <option value="">-- Puxar cliente cadastrado... --</option>
+                  {clientes.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-gray-400 uppercase">Nome do Cliente *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: Clecio Tecnologia"
+                    value={easyClientName}
+                    onChange={(e) => setEasyClientName(e.target.value)}
+                    className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-xs text-white focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-gray-400 uppercase">WhatsApp (Celular) *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: (11) 98765-4321"
+                    value={easyClientPhone}
+                    onChange={(e) => setEasyClientPhone(e.target.value)}
+                    className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-xs text-white focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-gray-400 uppercase">E-mail do Cliente</label>
+                  <input 
+                    type="email" 
+                    placeholder="Ex: cleciotecnologia@gmail.com"
+                    value={easyClientEmail}
+                    onChange={(e) => setEasyClientEmail(e.target.value)}
+                    className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-xs text-white focus:border-red-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-gray-400 uppercase">Veículo *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Civic 2.0"
+                      value={easyVehicleDesc}
+                      onChange={(e) => setEasyVehicleDesc(e.target.value)}
+                      className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-xs text-white focus:border-red-500 focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-gray-400 uppercase">Placa</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: ABC-1234"
+                      value={easyVehiclePlate}
+                      onChange={(e) => setEasyVehiclePlate(e.target.value)}
+                      className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-xs text-white focus:border-red-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section 2: Add services and labor */}
+            <div className="flex flex-col gap-3 pt-4 border-t border-gray-850 text-left">
+              <h4 className="text-[10px] font-mono text-gray-400 uppercase flex items-center gap-1">
+                <Wrench className="w-3.5 h-3.5 text-red-500" /> 1. ADICIONAR MÃO DE OBRA / SERVIÇOS
+              </h4>
+
+              {/* Quick Select Catalogue */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-[#080c16] p-3 rounded-xl border border-gray-900">
+                <div className="md:col-span-8 flex flex-col gap-1">
+                  <span className="text-[9px] font-mono text-gray-500">Selecionar do Catálogo de Serviços</span>
+                  <select
+                    value={easySelectedSrvId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setEasySelectedSrvId(id);
+                      const found = servicos.find(s => s.id === id);
+                      if (found) {
+                        const newItem: ServiceItem = {
+                          id: `srv_easy_${Date.now()}_${Math.floor(Math.random()*1000)}`,
+                          description: found.name,
+                          price: found.price
+                        };
+                        setEasyServices([...easyServices, newItem]);
+                        setEasySelectedSrvId('');
+                      }
+                    }}
+                    className="bg-[#04080e] border border-gray-800 rounded-lg p-2 text-xs text-white"
+                  >
+                    <option value="">-- Escolher Serviço do Catálogo... --</option>
+                    {servicos.map(s => (
+                      <option key={s.id} value={s.id}>{s.name} (R$ {s.price.toFixed(2)})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-4 text-center">
+                  <span className="text-[9px] text-gray-500 font-mono block mb-1">ou adicionar manual abaixo</span>
+                </div>
+              </div>
+
+              {/* Manual input */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-2 mt-1">
+                <div className="md:col-span-8">
+                  <input 
+                    type="text" 
+                    placeholder="Descrição do serviço manual..."
+                    value={easyManualSrvDesc}
+                    onChange={(e) => setEasyManualSrvDesc(e.target.value)}
+                    className="w-full bg-[#080c16] border border-gray-850 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    placeholder="Preço R$"
+                    value={easyManualSrvPrice}
+                    onChange={(e) => setEasyManualSrvPrice(e.target.value)}
+                    className="w-full bg-[#080c16] border border-gray-850 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => addEasyService(easyManualSrvDesc, parseFloat(easyManualSrvPrice))}
+                  className="md:col-span-1 py-2.5 bg-red-600/20 border border-red-500/30 hover:bg-red-600 hover:text-white text-red-400 font-bold rounded-lg cursor-pointer flex items-center justify-center transition-all text-xs"
+                  title="Anexar Serviço"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Section 3: Add Parts */}
+            <div className="flex flex-col gap-3 pt-4 border-t border-gray-850 text-left">
+              <h4 className="text-[10px] font-mono text-gray-400 uppercase flex items-center gap-1">
+                <Plus className="w-3.5 h-3.5 text-red-500" /> 2. ADICIONAR PEÇAS / MATERIAIS
+              </h4>
+
+              {/* Selector from Stock */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-[#080c16] p-3 rounded-xl border border-gray-900">
+                <div className="md:col-span-7 flex flex-col gap-1">
+                  <span className="text-[9px] font-mono text-gray-500">Puxar do Almoxarifado / Estoque</span>
+                  <select
+                    value={easySelectedProdId}
+                    onChange={(e) => setEasySelectedProdId(e.target.value)}
+                    className="bg-[#04080e] border border-gray-800 rounded-lg p-2 text-xs text-gray-300"
+                  >
+                    <option value="">-- Escolher Peça em Estoque... --</option>
+                    {produtos.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} (Qtd: {p.quantity} | R$ {p.sellPrice.toFixed(2)})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="md:col-span-3 flex flex-col gap-1">
+                  <span className="text-[9px] font-mono text-gray-500">Qtd</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={easySelectedProdQty}
+                    onChange={(e) => setEasySelectedProdQty(e.target.value)}
+                    className="bg-[#04080e] border border-gray-800 rounded-lg p-1.5 text-xs text-white w-full text-center"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const found = produtos.find(p => p.id === easySelectedProdId);
+                    if (found) {
+                      addEasyPart(found.name, found.sellPrice, parseInt(easySelectedProdQty) || 1);
+                    }
+                  }}
+                  className="md:col-span-2 py-2 px-3 bg-red-600/30 border border-red-500/40 hover:bg-red-600 text-white rounded-lg text-xs font-bold font-mono text-center cursor-pointer transition-all"
+                >
+                  Anexar
+                </button>
+              </div>
+
+              {/* Manual input */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-2 mt-1">
+                <div className="md:col-span-6">
+                  <input 
+                    type="text" 
+                    placeholder="Descrição da peça manual..."
+                    value={easyManualPartName}
+                    onChange={(e) => setEasyManualPartName(e.target.value)}
+                    className="w-full bg-[#080c16] border border-gray-850 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
+                  />
+                </div>
+                <div className="md:col-span-3">
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    placeholder="Valor R$"
+                    value={easyManualPartPrice}
+                    onChange={(e) => setEasyManualPartPrice(e.target.value)}
+                    className="w-full bg-[#080c16] border border-gray-850 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-red-500 font-mono"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <input 
+                    type="number" 
+                    min="1"
+                    placeholder="Qtd"
+                    value={easyManualPartQty}
+                    onChange={(e) => setEasyManualPartQty(e.target.value)}
+                    className="w-full bg-[#080c16] border border-gray-850 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-red-500 text-center font-mono"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => addEasyPart(easyManualPartName, parseFloat(easyManualPartPrice), parseInt(easyManualPartQty) || 1)}
+                  className="md:col-span-1 py-2.5 bg-red-600/20 border border-red-500/30 hover:bg-red-600 hover:text-white text-red-400 font-bold rounded-lg cursor-pointer flex items-center justify-center transition-all text-xs"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Section 4: Discount */}
+            <div className="pt-4 border-t border-gray-850 flex flex-col gap-2 text-left">
+              <label className="text-[10px] font-mono text-gray-400 uppercase">3. DESCONTO ESPECIAL ADICIONAL (R$)</label>
+              <div className="relative max-w-[200px]">
+                <span className="absolute left-3.5 top-3 text-xs text-gray-500 font-mono">R$</span>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  placeholder="0.00"
+                  value={easyDiscount || ''}
+                  onChange={(e) => setEasyDiscount(parseFloat(e.target.value) || 0)}
+                  className="w-full bg-[#080c16] border border-gray-850 rounded-xl py-2 px-3 pl-9 text-xs text-white focus:outline-none focus:border-red-500 font-mono font-bold text-red-400"
+                />
+              </div>
+            </div>
+
+          </div>
+
+          {/* Right Column: Real-Time Virtual Ticket Receipt */}
+          <div className="lg:col-span-5 bg-[#080d1a] border border-gray-850 rounded-2xl p-6 shadow-xl flex flex-col gap-4 sticky top-6">
+            <div className="flex items-center justify-between border-b border-gray-850 pb-3">
+              <span className="font-mono text-xs font-bold text-amber-500 tracking-widest uppercase flex items-center gap-1">
+                <Printer className="w-4 h-4 text-amber-500 animate-pulse" /> COMPROVANTE GERAL DE ENTRADA
+              </span>
+              <span className="text-[9px] font-mono bg-slate-900 border border-gray-800 text-gray-405 px-2 py-0.5 rounded uppercase">
+                Cotação Provisória
+              </span>
+            </div>
+
+            {/* Virtual Invoice */}
+            <div className="bg-white text-black p-5 rounded-xl border border-gray-200 flex flex-col gap-4 font-mono text-[10.5px] shadow-inner text-left">
+              
+              {/* Ticket header details */}
+              <div className="text-center border-b border-dashed border-gray-300 pb-3">
+                <span className="font-sans font-extrabold text-xs block uppercase tracking-wide">{company?.name || 'AUTOPRECISION OFFICE'}</span>
+                <span className="text-[8.5px] text-gray-500 block leading-tight">{company?.address || "Avenida das Nações Unidas, 1040 - SP"}</span>
+                <span className="text-[8.5px] text-gray-500 block font-bold">ORÇAMENTO DE PREVENÇÃO #EASY-{new Date().getSeconds()}{Math.floor(Math.random()*90)}</span>
+              </div>
+
+              {/* Client specifications */}
+              <div className="flex flex-col gap-0.5 border-b border-dashed border-gray-200 pb-2">
+                <div><span className="text-gray-500 uppercase font-bold">CLIENTE:</span> <strong className="text-black text-[11px] font-sans">{easyClientName || 'Cliente Particular'}</strong></div>
+                {easyClientPhone && <div><span className="text-gray-500 uppercase font-bold">TELEFONE:</span> <span className="text-black">{easyClientPhone}</span></div>}
+                {easyClientEmail && <div><span className="text-gray-500 uppercase font-bold">E-MAIL:</span> <span className="text-black lowercase">{easyClientEmail}</span></div>}
+                <div><span className="text-gray-500 uppercase font-bold">VEÍCULO:</span> <strong className="text-black uppercase">{easyVehicleDesc || 'Não especificado'}</strong></div>
+                {easyVehiclePlate && <div><span className="text-gray-500 uppercase font-bold">PLACA CARRO:</span> <span className="bg-blue-100 text-blue-900 px-1 border border-blue-200 rounded text-[9px] font-bold inline-block uppercase mt-0.5">{easyVehiclePlate.toUpperCase()}</span></div>}
+              </div>
+
+              {/* Services List */}
+              <div>
+                <span className="text-[10px] font-bold text-gray-600 block mb-1 uppercase tracking-wider">🛠️ SERVIÇOS DE MÃO DE OBRA</span>
+                {easyServices.length > 0 ? (
+                  <div className="flex flex-col gap-1 pr-1 max-h-36 overflow-y-auto">
+                    {easyServices.map((srv) => (
+                      <div key={srv.id} className="flex justify-between items-center text-black font-sans py-0.5 border-b border-gray-100 last:border-0">
+                        <span className="font-medium text-left truncate max-w-[150px]">{srv.description}</span>
+                        <div className="flex items-center gap-1 font-mono">
+                          <strong className="text-black">R$ {srv.price.toFixed(2)}</strong>
+                          <button 
+                            type="button"
+                            onClick={() => setEasyServices(easyServices.filter(s => s.id !== srv.id))}
+                            className="text-red-500 hover:text-red-700 bg-transparent border-0 cursor-pointer p-0.5 font-bold"
+                            title="Remover serviço"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-gray-400 italic block pl-1 text-[9.5px]">Nenhum serviço inserido ou programado.</span>
+                )}
+              </div>
+
+              {/* Parts List */}
+              <div className="mt-2 border-t border-gray-100 pt-2">
+                <span className="text-[10px] font-bold text-gray-600 block mb-1 uppercase tracking-wider">📦 PEÇAS E MATERIAIS DE REPOSIÇÃO</span>
+                {easyParts.length > 0 ? (
+                  <div className="flex flex-col gap-1 pr-1 max-h-36 overflow-y-auto">
+                    {easyParts.map((part) => (
+                      <div key={part.id} className="flex justify-between items-center text-black font-sans py-0.5 border-b border-gray-100 last:border-0">
+                        <div className="flex flex-col text-left">
+                          <span className="font-medium truncate max-w-[150px]">{part.name}</span>
+                          <span className="text-[8.5px] text-gray-500 italic block">{part.quantity} un. x R$ {part.sellPrice.toFixed(2)}</span>
+                        </div>
+                        <div className="flex items-center gap-1 font-mono">
+                          <strong className="text-black">R$ {(part.sellPrice * part.quantity).toFixed(2)}</strong>
+                          <button 
+                            type="button"
+                            onClick={() => setEasyParts(easyParts.filter(p => p.id !== part.id))}
+                            className="text-red-500 hover:text-red-700 bg-transparent border-0 cursor-pointer p-0.5 font-bold"
+                            title="Remover peça"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="text-gray-400 italic block pl-1 text-[9.5px]">Nenhum componente ou óleo adicionado.</span>
+                )}
+              </div>
+
+              {/* Totals Section */}
+              <div className="border-t-2 border-black pt-3 mt-3 flex flex-col gap-1">
+                <div className="flex justify-between">
+                  <span className="text-gray-550">SUBTOTAL MÃO DE OBRA:</span>
+                  <span>R$ {easyServicesTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-550">SUBTOTAL PEÇAS/MATERIAIS:</span>
+                  <span>R$ {easyPartsTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                {easyDiscount > 0 && (
+                  <div className="flex justify-between text-red-600 font-bold">
+                    <span>DESCONTO APLICADO:</span>
+                    <span>- R$ {easyDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-black font-extrabold text-xs border-t border-gray-300 pt-1.5 mt-1">
+                  <span>TOTAL CONSOLIDADO:</span>
+                  <span className="text-red-650 bg-yellow-105 bg-amber-100 border border-amber-300 px-1.5 rounded">R$ {easyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              {/* Disclaimer */}
+              <p className="text-[7.5px] text-gray-400 text-center uppercase leading-tight mt-3">
+                AUTOTECH FACILITADOR • ESTE DOCUMENTO CONSTITUI APENAS UMA ESTIMATIVA NÃO VINCULANTE.
+              </p>
+
+            </div>
+
+            {/* Actions Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2 font-mono text-xs">
+              
+              <button
+                type="button"
+                onClick={handleEasyWhatsAppShare}
+                disabled={easyServices.length === 0 && easyParts.length === 0}
+                className="py-3 px-3 duration-200 transition-all text-white rounded-xl font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Phone className="w-4 h-4 text-white" /> WhatsApp Rápido
+              </button>
+
+              <button
+                type="button"
+                onClick={handleEasyEmailShare}
+                disabled={easyServices.length === 0 && easyParts.length === 0}
+                className="py-3 px-3 duration-200 transition-all text-white rounded-xl font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Bell className="w-4 h-4 text-white" /> Enviar por E-mail
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintEasyBudget}
+                disabled={easyServices.length === 0 && easyParts.length === 0}
+                className="py-3 px-3 bg-[#0c1223] border border-gray-800 text-amber-400 hover:bg-slate-900 rounded-xl font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Printer className="w-4 h-4 text-amber-400" /> PDF / Imprimir
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConvertEasyToOS}
+                disabled={easyServices.length === 0 && easyParts.length === 0}
+                className="py-3 px-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed uppercase"
+              >
+                <FileCheck className="w-4 h-4 text-white" /> Converter em OS
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
       )}
 
       {/* WHATSAPP SHARE & DIGITAL SIGNATURE PORT MODAL DIALOG */}
