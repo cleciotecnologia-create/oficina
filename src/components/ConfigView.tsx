@@ -42,14 +42,19 @@ export const ConfigView: React.FC = () => {
     clientes,
     veiculos,
     produtos,
+    servicos,
     ordensServico,
     financeiro,
     fornecedores,
     vendas,
+    caixaStatus,
     autoBackups,
     triggerDailyBackup,
     deleteAutoBackup,
-    resetToProduction
+    localAuditLogs,
+    resetToProduction,
+    user,
+    updateUserProfile
   } = useApp();
 
   // Primary Company fields state
@@ -64,6 +69,14 @@ export const ConfigView: React.FC = () => {
   const [pixKeyStr, setPixKeyStr] = useState(company.pixKey || 'cleciotecnologia@gmail.com');
   const [pixBeneficiaryStr, setPixBeneficiaryStr] = useState(company.pixBeneficiary || 'AutoPrecision Premium');
   const [pixCityStr, setPixCityStr] = useState(company.pixCity || 'SAO PAULO');
+  const [defaultMarkupVal, setDefaultMarkupVal] = useState<number>(company.defaultMarkup !== undefined ? company.defaultMarkup : 50);
+  const [userReversalPassword, setUserReversalPassword] = useState('');
+
+  React.useEffect(() => {
+    if (user) {
+      setUserReversalPassword(user.reversalPassword || 'admin123');
+    }
+  }, [user]);
 
   React.useEffect(() => {
     if (company) {
@@ -83,6 +96,7 @@ export const ConfigView: React.FC = () => {
       setPixKeyStr(company.pixKey || 'cleciotecnologia@gmail.com');
       setPixBeneficiaryStr(company.pixBeneficiary || 'AutoPrecision Premium');
       setPixCityStr(company.pixCity || 'SAO PAULO');
+      setDefaultMarkupVal(company.defaultMarkup !== undefined ? company.defaultMarkup : 50);
     }
   }, [company]);
 
@@ -354,6 +368,86 @@ export const ConfigView: React.FC = () => {
     }, 1200);
   };
 
+  const [isZustandGenerating, setIsZustandGenerating] = useState(false);
+  const [zustandBackupReady, setZustandBackupReady] = useState(false);
+  const [zustandBackupStats, setZustandBackupStats] = useState<{
+    sizeKb: string;
+    totalRows: number;
+    fileName: string;
+    timestamp: string;
+  } | null>(null);
+
+  const handleExportZustandState = () => {
+    setIsZustandGenerating(true);
+    setZustandBackupReady(false);
+    
+    setTimeout(() => {
+      try {
+        const totalRecordsCount = 
+          clientes.length +
+          veiculos.length +
+          produtos.length +
+          servicos.length +
+          ordensServico.length +
+          financeiro.length +
+          fornecedores.length +
+          vendas.length +
+          localAuditLogs.length +
+          autoBackups.length;
+
+        const statePayload = {
+          metadata: {
+            storeType: "ZustandGlobalStore",
+            description: "Exportacao manual do estado global do Zustand e AppContext AutoTech",
+            exportedAt: new Date().toISOString(),
+            tenantId: company.id,
+            companyName: company.name,
+            totalRows: totalRecordsCount
+          },
+          state: {
+            company,
+            clientes,
+            veiculos,
+            produtos,
+            servicos,
+            ordensServico,
+            financeiro,
+            fornecedores,
+            vendas,
+            caixaStatus,
+            autoBackups,
+            localAuditLogs
+          }
+        };
+
+        const jsonString = JSON.stringify(statePayload, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        const formattedDate = new Date().toISOString().substring(0, 10);
+        a.href = url;
+        a.download = `autotech_zustand_store_${company.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_${formattedDate}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        setZustandBackupStats({
+          sizeKb: (blob.size / 1024).toFixed(2),
+          totalRows: totalRecordsCount,
+          fileName: a.download,
+          timestamp: new Date().toLocaleTimeString('pt-BR')
+        });
+        setZustandBackupReady(true);
+      } catch (err) {
+        console.error("Erro ao converter e exportar estado do Zustand:", err);
+      } finally {
+        setIsZustandGenerating(false);
+      }
+    }, 1000);
+  };
+
   const handleDownloadAutoBackup = (backup: any) => {
     try {
       const blob = new Blob([backup.payload], { type: "application/json" });
@@ -391,10 +485,16 @@ export const ConfigView: React.FC = () => {
         domainStatus: domainStatusVal,
         pixKey: pixKeyStr,
         pixBeneficiary: pixBeneficiaryStr,
-        pixCity: pixCityStr
+        pixCity: pixCityStr,
+        defaultMarkup: defaultMarkupVal
       });
+      if (user && user.role === 'Administrador' && userReversalPassword) {
+        await updateUserProfile({
+          reversalPassword: userReversalPassword
+        });
+      }
       setTimeout(() => {
-        setSaveFeedback("✅ Configurações e coordenadas de mapa salvas com sucesso!");
+        setSaveFeedback("✅ Configurações salvas com sucesso!");
       }, 1000);
     } catch (err) {
       setSaveFeedback("❌ Erro ao sincronizar catálogo fiscal: " + String(err));
@@ -667,6 +767,56 @@ export const ConfigView: React.FC = () => {
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* Margens e Precificacao */}
+            <div className="border-t border-gray-850 pt-4 flex items-center gap-2">
+              <Tag className="w-5 h-5 text-red-500" />
+              <div>
+                <h3 className="font-display font-bold text-white text-sm">Precificação e Margens de Lucro</h3>
+                <span className="text-[10px] text-gray-500 font-mono block">Configure parâmetros comerciais e as sugestões de margem de venda.</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+              <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Margem de Lucro Padrão (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    id="input-default-markup"
+                    placeholder="Ex: 50"
+                    min="0"
+                    max="1000"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 pl-3 pr-10 text-white w-full focus:outline-none focus:border-red-500 font-mono text-xs"
+                    value={defaultMarkupVal}
+                    onChange={(e) => setDefaultMarkupVal(Math.max(0, parseFloat(e.target.value) || 0))}
+                  />
+                  <div className="absolute right-3 top-2.5 text-gray-500 text-[10px] font-mono">%</div>
+                </div>
+                <span className="text-[9px] text-gray-500 font-sans block mt-1 leading-normal">
+                  Novos produtos criados sugerem automaticamente o Preço de Venda somando esta porcentagem (%) ao Preço de Custo.
+                </span>
+              </div>
+
+              {user && user.role === 'Administrador' && (
+                <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Sua Senha de Estorno Pessoal (Admin)</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      id="input-user-reversal-password"
+                      placeholder="Ex: admin123"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2.5 px-3 text-white w-full focus:outline-none focus:border-red-500 font-mono text-xs"
+                      value={userReversalPassword}
+                      onChange={(e) => setUserReversalPassword(e.target.value)}
+                    />
+                  </div>
+                  <span className="text-[9px] text-gray-500 font-sans block mt-1 leading-normal">
+                    Defina sua chave de liberação individual de estornos no PDV. Se vazio, o padrão é <code className="text-gray-400">admin123</code>.
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Printer configs */}
@@ -1019,14 +1169,35 @@ export const ConfigView: React.FC = () => {
               </div>
             )}
 
+            {zustandBackupReady && zustandBackupStats && (
+              <div className="p-3.5 bg-purple-950/35 border border-purple-900/40 rounded-xl text-xs font-mono flex flex-col gap-1.5 text-gray-300">
+                <span className="text-purple-400 font-bold">🔮 ESTADO GLOBAL DO ZUSTAND DISPONIBILIZADO:</span>
+                <div>• Nome: <strong>{zustandBackupStats.fileName}</strong></div>
+                <div>• Registros empacotados: <strong>{zustandBackupStats.totalRows} itens</strong></div>
+                <div>• Hora de criação: <strong>{zustandBackupStats.timestamp}</strong></div>
+              </div>
+            )}
+
             <div className="flex flex-col gap-2.5">
               <button
+                type="button"
                 onClick={handleExportBackup}
                 disabled={isGenerating}
                 className={`py-3 px-4 rounded-xl font-mono text-xs font-bold w-full flex items-center justify-center gap-2 cursor-pointer transition-all ${isGenerating ? 'bg-slate-800 text-gray-500' : 'bg-red-650 bg-red-600 hover:bg-red-700 text-white'}`}
               >
                 <Download className="w-4 h-4" />
                 {isGenerating ? "GERANDO PACOTE..." : "CRIAR BACKUP MANUAL IMEDIATO"}
+              </button>
+
+              <button
+                type="button"
+                id="btn-export-zustand"
+                onClick={handleExportZustandState}
+                disabled={isZustandGenerating}
+                className={`py-3 px-4 rounded-xl font-mono text-xs font-bold w-full flex items-center justify-center gap-2 cursor-pointer transition-all ${isZustandGenerating ? 'bg-slate-800 text-gray-500' : 'bg-purple-650 bg-purple-600 hover:bg-purple-700 text-white'}`}
+              >
+                <Database className="w-4 h-4 text-purple-200" />
+                {isZustandGenerating ? "EXPORTANDO ESTADO..." : "EXPORTAR ESTADO GLOBAL DO ZUSTAND (JSON)"}
               </button>
             </div>
 
@@ -1193,6 +1364,7 @@ export const ConfigView: React.FC = () => {
               {!showResetConfirm ? (
                 <button
                   type="button"
+                  id="btn-production-reset"
                   onClick={() => {
                     setShowResetConfirm(true);
                     setResetFeedback(null);
@@ -1200,22 +1372,23 @@ export const ConfigView: React.FC = () => {
                   className="py-3 px-4 bg-red-950/20 hover:bg-red-900/30 border border-red-500/20 hover:border-red-500/50 rounded-xl text-xs font-mono font-bold text-red-400 transition-all flex items-center justify-center gap-2 cursor-pointer w-full text-center"
                 >
                   <Trash2 className="w-4 h-4 text-red-500" />
-                  LIMPAR DADOS DE TESTE (INICIAR SISTEMA DO ZERO)
+                  RESET DE PRODUÇÃO (LIMPAR BANCOS DE DADOS)
                 </button>
               ) : (
                 <div className="bg-[#0e0708] border border-red-900/40 rounded-xl p-4 flex flex-col gap-3">
                   <div className="flex items-center gap-2.5 text-red-400">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span className="font-mono text-xs font-bold uppercase tracking-wider">Atenção Extrema! Ação Irreversível</span>
+                    <span className="font-mono text-xs font-bold uppercase tracking-wider">CONFIRMAÇÃO DE SEGURANÇA OBRIGATÓRIA</span>
                   </div>
                   
                   <p className="text-[11px] text-gray-400 leading-normal font-sans">
-                    Você está prestes a apagar todas as tabelas (clientes, veículos, O.S., fluxo financeiro, vendas, produtos e fornecedores) associadas à sua conta. Para prosseguir, digite <strong className="text-white text-xs font-mono">CONFIRMAR</strong> no campo abaixo:
+                    Você está prestes a apagar permanentemente todas as tabelas e bancos de dados (clientes, veículos, O.S., fluxo financeiro, vendas, produtos e fornecedores). Esta ação é irreversível. Para autorizar o reset para a produção, digite <strong className="text-white text-xs font-mono">CONFIRMAR</strong> no campo abaixo:
                   </p>
 
                   <div className="flex flex-col gap-1.5 mt-1">
                     <input
                       type="text"
+                      id="input-reset-confirm"
                       value={resetConfirmationInput}
                       onChange={(e) => setResetConfirmationInput(e.target.value)}
                       placeholder="Digite CONFIRMAR em letras maiúsculas"
@@ -1226,7 +1399,6 @@ export const ConfigView: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2.5 mt-1 text-xs font-mono">
                     <button
                       type="button"
-                      disabled={isResetExecuting}
                       onClick={() => {
                         setShowResetConfirm(false);
                         setResetConfirmationInput('');
@@ -1238,6 +1410,7 @@ export const ConfigView: React.FC = () => {
 
                     <button
                       type="button"
+                      id="btn-confirm-reset-execute"
                       disabled={isResetExecuting || resetConfirmationInput !== 'CONFIRMAR'}
                       onClick={handleExecuteResetToProduction}
                       className={`py-2.5 px-3 rounded-lg text-center font-bold transition-all flex justify-center items-center gap-1.5 cursor-pointer ${
@@ -1249,10 +1422,10 @@ export const ConfigView: React.FC = () => {
                       {isResetExecuting ? (
                         <>
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          LIMPANDO...
+                          REDEFININDO...
                         </>
                       ) : (
-                        "SIM, APAGAR TUDO"
+                        "CONFIRMAR RESET"
                       )}
                     </button>
                   </div>

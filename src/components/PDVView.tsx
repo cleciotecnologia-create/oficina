@@ -286,7 +286,10 @@ export const PDVView: React.FC = () => {
   // Reversal modal states
   const [reversalSaleId, setReversalSaleId] = useState<string | null>(null);
   const [reversalJustification, setReversalJustification] = useState<string>('');
+  const [reversalAdminPassword, setReversalAdminPassword] = useState<string>('');
   const [reversalError, setReversalError] = useState<string | null>(null);
+  const [showReversalReceipt, setShowReversalReceipt] = useState(false);
+  const [reversalReceiptSale, setReversalReceiptSale] = useState<any | null>(null);
   
   // History search query
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -1805,6 +1808,25 @@ export const PDVView: React.FC = () => {
                               <Printer className="w-3.5 h-3.5 text-cyan-450" /> Re-imprimir
                             </button>
 
+                            {isEstornada && (
+                              <button
+                                type="button"
+                                id={`btn-comprovante-estorno-${v.id}`}
+                                onClick={() => {
+                                  playScannerBeep();
+                                  setReversalReceiptSale({
+                                    ...v,
+                                    reversalDate: v.date // or standard date of reference
+                                  });
+                                  setShowReversalReceipt(true);
+                                }}
+                                className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-900 hover:text-white text-red-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
+                                title="Visualizar Comprovante de Estorno"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-red-400" /> Comprovante
+                              </button>
+                            )}
+
                             {!isEstornada && (
                               <button
                                 type="button"
@@ -1812,6 +1834,7 @@ export const PDVView: React.FC = () => {
                                   playScannerBeep();
                                   setReversalSaleId(v.id);
                                   setReversalJustification('');
+                                  setReversalAdminPassword('');
                                   setReversalError(null);
                                 }}
                                 className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-900 hover:text-white text-red-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
@@ -1872,8 +1895,26 @@ export const PDVView: React.FC = () => {
                 rows={3}
                 className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-red-500 font-sans resize-none"
               />
+            </div>
+
+            <div className="flex flex-col gap-1.5 text-left">
+              <label className="text-[10px] font-mono text-gray-400 uppercase font-bold">SENHA DE LIBERAÇÃO DO ADMINISTRADOR *</label>
+              <input 
+                type="password"
+                id="input-reversal-password"
+                value={reversalAdminPassword}
+                onChange={(e) => {
+                  setReversalAdminPassword(e.target.value);
+                  setReversalError(null);
+                }}
+                placeholder="Digite a senha mestre de liberação..."
+                className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-red-500 font-mono text-left"
+              />
+              <span className="text-[9px] text-gray-500 font-sans block leading-normal mt-0.5 uppercase">
+                🔑 Use a senha gravada pelo Admin ou as senhas mestre: <strong className="text-gray-300 font-mono">admin123</strong> / <strong className="text-gray-300 font-mono">1234</strong>
+              </span>
               {reversalError && (
-                <span className="text-[10px] font-mono text-red-400 mt-0.5">{reversalError}</span>
+                <span className="text-[10px] font-mono text-red-500 mt-0.5">{reversalError}</span>
               )}
             </div>
 
@@ -1887,13 +1928,34 @@ export const PDVView: React.FC = () => {
               </button>
               <button
                 type="button"
+                id="btn-confirm-reversal"
                 onClick={async () => {
                   if (!reversalJustification.trim()) {
                     setReversalError("Por favor, informe uma justificativa válida para concluir o estorno.");
                     return;
                   }
+                  if (!reversalAdminPassword) {
+                    setReversalError("Por favor, informe a senha de liberação do administrador.");
+                    return;
+                  }
+                  const isLoggedAdminMatch = user?.role === 'Administrador' && user.reversalPassword && reversalAdminPassword === user.reversalPassword;
+                  const isDefaultMatch = reversalAdminPassword === "admin123" || reversalAdminPassword === "1234";
+                  if (!isLoggedAdminMatch && !isDefaultMatch) {
+                    setReversalError("Senha de liberação incorreta! Apenas administradores autorizados podem liberar estornos.");
+                    return;
+                  }
                   try {
+                    const foundSale = vendas.find(v => v.id === reversalSaleId);
                     await estornarVenda(reversalSaleId, reversalJustification);
+                    if (foundSale) {
+                      setReversalReceiptSale({
+                        ...foundSale,
+                        status: 'estornada',
+                        justification: reversalJustification,
+                        reversalDate: new Date().toISOString()
+                      });
+                      setShowReversalReceipt(true);
+                    }
                     setReversalSaleId(null);
                   } catch (err: any) {
                     setReversalError(err.message || "Erro durante o processamento do estorno.");
@@ -1904,6 +1966,148 @@ export const PDVView: React.FC = () => {
                 Confirmar Estorno
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚨 COMPROVANTE DE ESTORNO DE VENDA DIALOG MODAL */}
+      {showReversalReceipt && reversalReceiptSale && (
+        <div id="reversal-receipt-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-white text-black max-w-sm w-full rounded-2xl p-6 shadow-2xl relative">
+            
+            <button 
+              type="button"
+              id="btn-close-reversal-receipt"
+              onClick={() => {
+                setShowReversalReceipt(false);
+                setReversalReceiptSale(null);
+              }}
+              className="absolute top-4 right-4 p-1 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="text-center font-mono text-xs border-b-2 border-black pb-3">
+              <span className="font-extrabold text-sm block tracking-widest text-red-650 uppercase">🚨 COMPROVANTE DE ESTORNO</span>
+              <span className="font-extrabold text-[11px] block tracking-wide mt-1 text-black">{company.name.toUpperCase()}</span>
+              <span className="text-[10px] block mt-0.5">{company.address || "Av. das Nações Unidas, 1040 - São Paulo, SP"}</span>
+              <span className="text-[10px] block">CNPJ: {company.cnpj || "12.345.678/0001-90"} • Fone: {company.phone || "(11) 98765-4321"}</span>
+            </div>
+
+            <div className="my-3 p-3 bg-red-50 border-2 border-red-600 rounded-xl font-mono text-[10px] text-red-800 leading-normal flex flex-col gap-1">
+              <div className="font-extrabold text-xs text-center border-b border-red-200 pb-1.5 uppercase">
+                ❌ TRANSAÇÃO CANCELADA
+              </div>
+              <div className="mt-1 flex justify-between">
+                <span>ESTORNO EFETUADO EM:</span>
+                <span className="font-bold">{new Date(reversalReceiptSale.reversalDate || reversalReceiptSale.date).toLocaleString('pt-BR')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>STATUS DO CAIXA:</span>
+                <span className="font-bold">SALDO AJUSTADO</span>
+              </div>
+              <div className="mt-1 pt-1.5 border-t border-red-200">
+                <span className="font-extrabold block">MOTIVO DO LOG DE AUDITORIA:</span>
+                <span className="italic block font-sans text-neutral-800 text-xs text-left mt-0.5 select-all leading-normal">
+                  "{reversalReceiptSale.justification || 'Estorno acordado com o cliente'}"
+                </span>
+              </div>
+              <div className="flex justify-between mt-1 pt-1 border-t border-red-200/50 text-[9px] text-red-650">
+                <span>LIBERAÇÃO:</span>
+                <span className="font-bold">SENHA MASTER ADMIN</span>
+              </div>
+            </div>
+
+            <div className="my-4 font-mono text-[11px] flex flex-col gap-1">
+              <div className="flex justify-between font-bold">
+                <span>REGISTRO DO PDV</span>
+                <span className="uppercase">#{reversalReceiptSale.id}</span>
+              </div>
+              <span>Data da Compra ID: {new Date(reversalReceiptSale.date).toLocaleString('pt-BR')}</span>
+              <span className="border-b border-dashed border-black my-1"></span>
+              
+              {/* Customer Area */}
+              <div className="bg-neutral-100 p-2 rounded text-[10px] flex flex-col gap-0.5">
+                <span className="font-bold text-neutral-700">CONTRA-PARTE/CLIENTE:</span>
+                <span className="text-black font-semibold uppercase">{reversalReceiptSale.clienteName || "Consumidor Final"}</span>
+                {reversalReceiptSale.clienteCpfCnpj && (
+                  <span>CPF/CNPJ: {reversalReceiptSale.clienteCpfCnpj}</span>
+                )}
+              </div>
+
+              {reversalReceiptSale.sellerName && (
+                <div className="text-[10px] text-gray-600 mt-1 pl-1">
+                  <span>Operador de Venda: <strong>{reversalReceiptSale.sellerName}</strong></span>
+                </div>
+              )}
+
+              <span className="border-b border-dashed border-black my-1"></span>
+              
+              <div className="flex flex-col gap-1 font-sans">
+                <span className="font-bold font-mono text-[9px] uppercase text-neutral-500 block">ITENS ESTORNADOS (RETORNADOS AO ESTOQUE):</span>
+                {reversalReceiptSale.items && reversalReceiptSale.items.map((it: any, index: number) => (
+                  <div key={index} className="flex justify-between items-start text-xs leading-none">
+                    <span className="pr-2">{it.quantity}x {it.name}</span>
+                    <span className="font-mono text-right whitespace-nowrap">R$ {it.subtotal.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+
+              <span className="border-b border-dashed border-black my-1.5"></span>
+              
+              <div className="flex justify-between text-xs">
+                <span>Subtotal bruto:</span>
+                <span>R$ {(reversalReceiptSale.total + (reversalReceiptSale.discount || 0)).toFixed(2)}</span>
+              </div>
+
+              {reversalReceiptSale.discount > 0 && (
+                <div className="flex justify-between text-red-650 font-bold text-xs">
+                  <span>Desconto Abatido:</span>
+                  <span>- R$ {reversalReceiptSale.discount.toFixed(2)}</span>
+                </div>
+              )}
+
+              <div className="flex justify-between font-extrabold text-sm border-t border-neutral-300 pt-1 mt-1 font-mono text-black">
+                <span>VALOR DEVOLVIDO:</span>
+                <span className="text-red-600">R$ {reversalReceiptSale.total.toFixed(2)}</span>
+              </div>
+
+              <div className="flex justify-between text-[10px] text-neutral-600 mt-1 pl-1 font-mono border-t border-neutral-200/60 pt-1">
+                <span>Origem do Pagamento:</span>
+                <span className="font-bold text-black uppercase">{reversalReceiptSale.paymentMethod}</span>
+              </div>
+            </div>
+
+            <div className="text-center text-[10px] font-mono border-t border-black pt-2 flex flex-col gap-0.5 text-gray-500 my-2">
+              <span>Este documento atesta a anulação fiscal e devolução financeira.</span>
+              <span className="block italic text-[8.5px]">AutoTech Cloud ERP Systems • Módulo Financeiro</span>
+            </div>
+
+            {/* Actions */}
+            <div className="mt-4 flex gap-2 font-mono">
+              <button 
+                type="button"
+                id="btn-print-reversal"
+                onClick={() => {
+                  window.print();
+                }}
+                className="flex-1 py-2 rounded-xl bg-red-650 hover:bg-red-750 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] border-0"
+              >
+                <Printer className="w-4 h-4 text-white" /> Imprimir Comprovante
+              </button>
+              <button 
+                type="button"
+                id="btn-close-reversal-receipt-footer"
+                onClick={() => {
+                  setShowReversalReceipt(false);
+                  setReversalReceiptSale(null);
+                }}
+                className="flex-1 py-1 px-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center bg-transparent text-black font-semibold"
+              >
+                Fechar
+              </button>
+            </div>
+
           </div>
         </div>
       )}

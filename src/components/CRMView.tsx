@@ -666,11 +666,19 @@ export const CRMView: React.FC = () => {
       } else if (selectedCampaignType === 'review' && cli.reviewAlert) {
         triggeredCount++;
         outputsList.push(`[WhatsApp Disparo API] Enviado para ${cli.name} (${cli.phone}) -> "Revisão AutoTech: ${customMsgText}"`);
+      } else if (selectedCampaignType === 'weekly_updates') {
+        triggeredCount++;
+        const newsletterText = `Informativo Semanal ${company.name || 'Oficina'}: Olá ${cli.name}! Lançamos novidades incríveis para você esta semana:
+1. ORDENAÇÃO CRONOLÓGICA DE FILA DE PÁTIO (Muito mais agilidade e controle no atendimento do seu veículo sem atrasos).
+2. CLIENT PORTAL (Acompanhe as etapas de sua mão de obra ao vivo informando apenas seu CPF ou código de OS no link de status).
+3. SEGURANÇA EM GARANTIA (Qualquer persistência de sintomas pode ser reaberta de imediato pelo consultor para ajuste fino).
+Acompanhe sempre o status do seu veículo em tempo real!`;
+        outputsList.push(`[WhatsApp Disparo API] Enviado para ${cli.name} (${cli.phone}) -> "${newsletterText.substring(0, 160)}..."`);
       }
     });
 
     setCampaignOutputs(outputsList);
-    alert(`Disparador de Campanha Automatizado com Sucesso para ${triggeredCount} clientes que possuem alerta ativado!`);
+    alert(`Disparador de Campanha Automatizado com Sucesso para ${triggeredCount} clientes que possuem alerta ativo!`);
   };
 
   // Helpers to fetch linked cars count
@@ -1502,6 +1510,7 @@ export const CRMView: React.FC = () => {
                 >
                   <option value="oil">Troca de Óleo Periódica (Lubri Alerta)</option>
                   <option value="review">Vistoria e Alinhamento Periódico</option>
+                  <option value="weekly_updates">📣 Informativo Semanal de Novidades e Status</option>
                 </select>
               </div>
 
@@ -1517,10 +1526,24 @@ export const CRMView: React.FC = () => {
                 </div>
               )}
 
+              {selectedCampaignType === 'weekly_updates' && (
+                <div className="p-3.5 bg-[#070b16] border border-blue-950/40 rounded-xl flex flex-col gap-2">
+                  <span className="font-sans font-bold text-[10px] text-cyan-400 block uppercase">🌟 Preview do Informativo</span>
+                  <div className="text-[10.5px] text-slate-300 font-sans leading-relaxed border-t border-[#1a2e4c] pt-2">
+                    <p className="font-extrabold text-white mb-2">📢 Novidades de Gestão Técnica Implantadas:</p>
+                    <ul className="space-y-1 text-gray-400 text-[10px] list-disc pl-4">
+                      <li><strong>Fila de Pátio FIFO</strong>: Reduz tempo ocioso e as atrasos técnicos ordenando as OS cronologicamente;</li>
+                      <li><strong>Acompanhamento 24h</strong>: Painel do cliente ao vivo sem apps, permitindo rastrear etapas via CPF;</li>
+                      <li><strong>Garantia Estendida</strong>: Opção técnica de reabertura sem encerramento de custos na recorrência.</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+
               <button 
                 type="button" 
                 onClick={handleLaunchCampaign}
-                className="w-full py-3 bg-green-600 hover:bg-green-700 font-bold text-white font-sans text-xs rounded-xl"
+                className="w-full py-3 bg-green-600 hover:bg-green-700 font-bold text-white font-sans text-xs rounded-xl cursor-pointer transition-all uppercase"
               >
                 🚀 LANÇAR DISPAROS MASSA
               </button>

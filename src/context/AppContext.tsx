@@ -101,6 +101,7 @@ interface AppContextType {
   editFornecedor: (id: string, f: Partial<Fornecedor>) => Promise<void>;
   deleteFornecedor: (id: string) => Promise<void>;
   updateCompany: (c: Partial<Company>) => Promise<void>;
+  updateUserProfile: (u: Partial<UserProfile>) => Promise<void>;
 
   // AI Integration
   getSmartDiagnosis: (model: string, plate: string, problem: string) => Promise<any>;
@@ -1176,6 +1177,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateUserProfile = async (updatedFields: Partial<UserProfile>) => {
+    if (!user) return;
+    setUser(prev => prev ? ({ ...prev, ...updatedFields }) : null);
+    if (firebaseUser) {
+      try {
+        const { updateDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          const userRef = doc(db, 'users', user.uid);
+          await updateDoc(userRef, updatedFields);
+        }
+      } catch (err) {
+        console.warn("Direct online user profile update failed, local state modified.", err);
+      }
+    }
+  };
+
   // AI API Integrations call server side proxy
   const getSmartDiagnosis = async (model: string, plate: string, problem: string) => {
     setAiLoading(true);
@@ -1471,6 +1488,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       editFornecedor,
       deleteFornecedor,
       updateCompany,
+      updateUserProfile,
       
       getSmartDiagnosis,
       sendChatMessage,

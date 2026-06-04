@@ -40,6 +40,31 @@ export const FinanceiroView: React.FC = () => {
   const [financeiroPixString, setFinanceiroPixString] = useState<string>('');
   const [copiedText, setCopiedText] = useState<boolean>(false);
 
+  // States for simulated approval and partial payments
+  const [pixAmountToApproveStr, setPixAmountToApproveStr] = useState<string>('');
+  const [pixPaymentReceipt, setPixPaymentReceipt] = useState<{
+    id: string;
+    originalAmount: number;
+    paidAmount: number;
+    remainingAmount: number;
+    date: string;
+    type: 'Integral' | 'Parcial';
+    title: string;
+    category: string;
+    txId: string;
+  } | null>(null);
+
+  // Auto-fill and reset simulation states when receivable is set
+  useEffect(() => {
+    if (pixSelectedReceivable) {
+      setPixAmountToApproveStr(pixSelectedReceivable.amount.toString());
+      setPixPaymentReceipt(null);
+    } else {
+      setPixAmountToApproveStr('');
+      setPixPaymentReceipt(null);
+    }
+  }, [pixSelectedReceivable]);
+
   // Editable PIX States
   const [showPixConfig, setShowPixConfig] = useState(false);
   const [tempPixKey, setTempPixKey] = useState('');
@@ -123,6 +148,11 @@ export const FinanceiroView: React.FC = () => {
   const [reminderDaysBeforeInput, setReminderDaysBeforeInput] = useState(3);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
 
+  // Duplicatas and Parcelamento (Installments) custom configurations
+  const [isInstallment, setIsInstallment] = useState(false);
+  const [installmentsCount, setInstallmentsCount] = useState<number>(3);
+  const [installmentsInterval, setInstallmentsInterval] = useState<number>(30);
+
   // Categories lists
   const categoriesInflow = ['Serviços', 'Vendas Peças', 'Investimento', 'Ajuste Caixa'];
   const categoriesOutflow = ['Compra de Peças', 'Infraestrutura', 'Serviços Básicos', 'Salários', 'Impostos'];
@@ -153,10 +183,15 @@ export const FinanceiroView: React.FC = () => {
       }, 0);
   };
 
-  // Live Accounts Payable Reminder Analyzer (relative to 2026-05-26)
+  // Live Accounts Payable Reminder Analyzer (relative to actual local clock)
   const getDaysRemainingInfo = (dueDateStr: string) => {
-    const today = new Date('2026-05-26');
-    const due = new Date(dueDateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Parse dueDateStr safely
+    const [year, month, day] = dueDateStr.split('-').map(Number);
+    const due = new Date(year, month - 1, day, 12, 0, 0); // avoid time zone bias shift
+    
     const diffTime = due.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
@@ -170,7 +205,7 @@ export const FinanceiroView: React.FC = () => {
     } else if (diffDays === 0) {
       return { 
         days: diffDays, 
-        colorClass: 'text-amber-500 bg-amber-950/20 border-amber-900/45 animate-pulse', 
+        colorClass: 'text-amber-500 bg-amber-955/20 border-amber-900/45 animate-pulse', 
         badgeClass: 'bg-amber-500 text-black',
         text: `⚡ Vence HOJE!` 
       };
@@ -191,7 +226,7 @@ export const FinanceiroView: React.FC = () => {
     }
   };
 
-  // Submit transaction
+  // Submit transaction supporting standard and duplicate installments loops
   const handleCreateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!desc || !amountStr || !dueDate) {
@@ -199,24 +234,61 @@ export const FinanceiroView: React.FC = () => {
       return;
     }
 
+    const totalAmount = parseFloat(amountStr) || 0;
     const matchedSupplier = fornecedores?.find(f => f.id === selectedSupplierId);
 
-    await addFinanceiro({
-      description: desc,
-      type,
-      amount: parseFloat(amountStr) || 0,
-      dueDate,
-      category,
-      status,
-      invoiceNumber: invoiceNumberInput || undefined,
-      purchaseOrder: purchaseOrderInput || undefined,
-      reminderEnabled: reminderEnabledInput,
-      reminderDaysBefore: reminderEnabledInput ? reminderDaysBeforeInput : undefined,
-      supplierId: selectedSupplierId || undefined,
-      supplierName: matchedSupplier ? matchedSupplier.name : undefined
-    });
+    if (isInstallment) {
+      // Loop to generate consecutive duplicate installments entries
+      for (let i = 1; i <= installmentsCount; i++) {
+        // Calculate shifted due date per installment
+        const [year, month, day] = dueDate.split('-').map(Number);
+        const installmentDate = new Date(year, month - 1, day, 12, 0, 0);
+        installmentDate.setDate(installmentDate.getDate() + (i - 1) * installmentsInterval);
+        
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const calculatedDueDate = `${installmentDate.getFullYear()}-${pad(installmentDate.getMonth() + 1)}-${pad(installmentDate.getDate())}`;
 
-    // Reset standard & custom states
+        const installmentAmount = Number((totalAmount / installmentsCount).toFixed(2));
+        const installmentInvoice = invoiceNumberInput 
+          ? `${invoiceNumberInput}/${pad(i)}` 
+          : undefined;
+
+        await addFinanceiro({
+          description: `${desc} (Parc. ${i}/${installmentsCount})`,
+          type,
+          amount: installmentAmount,
+          dueDate: calculatedDueDate,
+          category,
+          status,
+          invoiceNumber: installmentInvoice,
+          purchaseOrder: purchaseOrderInput ? `${purchaseOrderInput} - Parcela ${i}` : undefined,
+          reminderEnabled: reminderEnabledInput,
+          reminderDaysBefore: reminderEnabledInput ? reminderDaysBeforeInput : undefined,
+          supplierId: selectedSupplierId || undefined,
+          supplierName: matchedSupplier ? matchedSupplier.name : undefined
+        });
+      }
+      alert(`Cadastrado(s) com sucesso ${installmentsCount} parcelas/duplicatas consecutivas de R$ ${(totalAmount / installmentsCount).toFixed(2)} cada!`);
+    } else {
+      // Single transaction
+      await addFinanceiro({
+        description: desc,
+        type,
+        amount: totalAmount,
+        dueDate,
+        category,
+        status,
+        invoiceNumber: invoiceNumberInput || undefined,
+        purchaseOrder: purchaseOrderInput || undefined,
+        reminderEnabled: reminderEnabledInput,
+        reminderDaysBefore: reminderEnabledInput ? reminderDaysBeforeInput : undefined,
+        supplierId: selectedSupplierId || undefined,
+        supplierName: matchedSupplier ? matchedSupplier.name : undefined
+      });
+      alert(`Lançamento único registrado com sucesso no DRE!`);
+    }
+
+    // Reset standard, custom & parcelamento states
     setDesc('');
     setAmountStr('');
     setDueDate('');
@@ -225,6 +297,9 @@ export const FinanceiroView: React.FC = () => {
     setReminderEnabledInput(false);
     setReminderDaysBeforeInput(3);
     setSelectedSupplierId('');
+    setIsInstallment(false);
+    setInstallmentsCount(3);
+    setInstallmentsInterval(30);
     setIsAdding(false);
   };
 
@@ -372,7 +447,7 @@ export const FinanceiroView: React.FC = () => {
               </div>
               
               <span className="text-[10px] font-mono font-bold bg-amber-950/40 text-amber-500 border border-amber-900/40 px-2.5 py-1 rounded">
-                Ref. Tempo: 26/05/2026 • {APG_alerts.length} Lembretes
+                Ref. Tempo: {new Date().toLocaleDateString('pt-BR')} • {APG_alerts.length} Lembretes
               </span>
             </div>
 
@@ -807,6 +882,92 @@ export const FinanceiroView: React.FC = () => {
                 </div>
               </div>
 
+              {/* Opção de Parcelamento / Duplicatas */}
+              <div className="bg-[#090e1a] border border-gray-850 rounded-xl p-3 flex flex-col gap-2">
+                <div className="flex justify-between items-center text-xs">
+                  <div>
+                    <span className="text-[10px] text-gray-300 font-bold uppercase flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-cyan-400" /> Cadastrar Duplicatas / Parcelar
+                    </span>
+                    <span className="text-[9px] text-gray-500 font-sans block mt-0.5">Gerar faturas parceladas sequenciais automáticas</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={isInstallment}
+                      onChange={(e) => setIsInstallment(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-gray-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-300 after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-600"></div>
+                  </label>
+                </div>
+
+                {isInstallment && (
+                  <div className="flex flex-col gap-2.5 mt-2 border-t border-gray-800/60 pt-2 font-mono text-[9px] text-gray-400">
+                    <div className="grid grid-cols-2 gap-3 animate-fade-in">
+                      <div className="flex flex-col gap-1 text-left">
+                        <span className="font-bold uppercase text-[9px]">Nº de Parcelas</span>
+                        <select
+                          value={installmentsCount}
+                          onChange={(e) => setInstallmentsCount(Number(e.target.value) || 2)}
+                          className="bg-[#050810] border border-gray-800 rounded px-2 py-1 text-white focus:outline-none focus:border-cyan-500 font-mono text-[10px]"
+                        >
+                          {[2, 3, 4, 5, 6, 8, 10, 12, 18, 24].map(n => (
+                            <option key={n} value={n}>{n}x (Vezes)</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1 text-left">
+                        <span className="font-bold uppercase text-[9px]">Periodicidade</span>
+                        <select
+                          value={installmentsInterval}
+                          onChange={(e) => setInstallmentsInterval(Number(e.target.value) || 30)}
+                          className="bg-[#050810] border border-gray-800 rounded px-2 py-1 text-white focus:outline-none focus:border-cyan-500 font-mono text-[10px]"
+                        >
+                          <option value="30">Mensal (a cada 30 dias)</option>
+                          <option value="15">Quinzenal (a cada 15 dias)</option>
+                          <option value="7">Semanal (a cada 7 dias)</option>
+                          <option value="60">Bimestral (a cada 60 dias)</option>
+                          <option value="90">Trimestral (a cada 90 dias)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Preview do desmembramento */}
+                    {amountStr && dueDate && (
+                      <div className="p-2.5 bg-black/40 border border-gray-900 rounded-lg flex flex-col gap-1 mt-1 font-sans">
+                        <span className="font-bold font-mono text-[9px] text-cyan-400 uppercase">📋 Preview das Duplicatas no DRE:</span>
+                        <div className="max-h-[85px] overflow-y-auto space-y-1.5 mt-1 pr-1 font-mono text-[9.5px]">
+                          {Array.from({ length: Math.min(6, installmentsCount) }).map((_, idx) => {
+                            const i = idx + 1;
+                            const totalAmount = parseFloat(amountStr) || 0;
+                            const installmentAmount = (totalAmount / installmentsCount).toFixed(2);
+                            
+                            // Calculate shifted due date per installment for preview
+                            const [year, month, day] = dueDate.split('-').map(Number);
+                            const installmentDate = new Date(year, month - 1, day, 12, 0, 0);
+                            installmentDate.setDate(installmentDate.getDate() + (i - 1) * installmentsInterval);
+                            const pad = (n: number) => String(n).padStart(2, '0');
+                            const calculatedDueDate = `${pad(installmentDate.getDate())}/${pad(installmentDate.getMonth() + 1)}/${installmentDate.getFullYear()}`;
+
+                            return (
+                              <div key={i} className="flex justify-between text-gray-400 border-b border-gray-900/50 pb-0.5">
+                                <span>Duplicata Parcela {i}/{installmentsCount}</span>
+                                <span className="font-bold text-slate-300">R$ {parseFloat(installmentAmount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} em {calculatedDueDate}</span>
+                              </div>
+                            );
+                          })}
+                          {installmentsCount > 6 && (
+                            <span className="text-[8px] text-gray-500 block text-center pt-0.5">... e mais {installmentsCount - 6} parcelas adicionais</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Row 5: Nota Fiscal & Pedido */}
               <div className="grid grid-cols-2 gap-3 border-t border-gray-850 pt-2">
                 <div className="flex flex-col gap-1">
@@ -913,180 +1074,401 @@ export const FinanceiroView: React.FC = () => {
         </div>
       )}
 
-      {/* DYNAMIC RECEIVABLE PIX QR CODE DIALOG MODAL */}
+      {/* DYNAMIC RECEIVABLE PIX QR CODE DIALOG MODAL & COMPROVANTE SIMULATOR */}
       {pixSelectedReceivable && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="bg-[#0c1223] border border-gray-800 text-white max-w-sm w-full rounded-2xl p-6 shadow-2xl relative text-center flex flex-col items-center gap-4 font-sans focus:outline-none">
+        <div id="pix-billing-screen-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-[#0c1223] border border-gray-800 text-white max-w-sm w-full rounded-2xl p-6 shadow-2xl relative flex flex-col items-center gap-4 font-sans focus:outline-none">
             
             <button 
               type="button"
-              onClick={() => setPixSelectedReceivable(null)}
+              id="btn-close-pix-billing"
+              onClick={() => {
+                setPixSelectedReceivable(null);
+                setPixPaymentReceipt(null);
+              }}
               className="absolute top-4 right-4 p-1 rounded-full bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-center gap-2 text-red-500 font-mono text-[10px] font-bold uppercase tracking-wider self-start border-b border-gray-850 pb-2 w-full text-left">
-              <QrCode className="w-5 h-5 animate-pulse shrink-0" />
-              <span>COBRANÇA DIGITAL AUTOMÁTICA PIX</span>
-            </div>
+            {!pixPaymentReceipt ? (
+              // 1. BILLING & SIMULATOR VIEW (WHEN NOT PAID YET)
+              <div className="flex flex-col gap-4 w-full animate-fade-in">
+                <div className="flex items-center gap-2 text-red-500 font-mono text-[10px] font-bold uppercase tracking-wider self-start border-b border-gray-850 pb-2 w-full text-left">
+                  <QrCode className="w-5 h-5 animate-pulse shrink-0" />
+                  <span>COBRANÇA DIGITAL AUTOMÁTICA PIX</span>
+                </div>
 
-            <div className="flex flex-col gap-1 w-full text-left">
-              <span className="text-[9.5px] text-gray-450 text-gray-400 font-mono uppercase">Lançamento / DRE Fatura:</span>
-              <span className="text-white font-bold text-sm leading-snug">{pixSelectedReceivable.description}</span>
-              <span className="text-amber-500 font-mono text-xs font-semibold mt-1 flex items-center gap-1 bg-amber-950/20 px-2 py-1 rounded border border-amber-900/30 w-fit">
-                <Calendar className="w-3.5 h-3.5 text-amber-500" /> Vencimento: {pixSelectedReceivable.dueDate}
-              </span>
-            </div>
+                <div className="flex flex-col gap-1 w-full text-left">
+                  <span className="text-[9.5px] text-[#94a3b8] font-mono uppercase">Lançamento / DRE Fatura:</span>
+                  <span className="text-white font-bold text-sm leading-snug">{pixSelectedReceivable.description}</span>
+                  <span className="text-amber-500 font-mono text-[10px] font-semibold mt-1 flex items-center gap-1 bg-amber-950/20 px-2 py-0.5 rounded border border-amber-900/30 w-fit">
+                    <Calendar className="w-3 h-3 text-amber-500" /> Vencimento: {pixSelectedReceivable.dueDate}
+                  </span>
+                </div>
 
-            {/* QR Code container */}
-            {financeiroPixQrDataUrl ? (
-              <div className="p-3 bg-white rounded-xl shadow-2xl border border-gray-200 inline-block">
-                <img 
-                  src={financeiroPixQrDataUrl} 
-                  alt="QR Code PIX Fatura" 
-                  className="w-48 h-48 object-contain"
-                  referrerPolicy="no-referrer"
-                />
+                {/* QR Code container */}
+                <div className="text-center w-full my-1">
+                  {financeiroPixQrDataUrl ? (
+                    <div className="p-3 bg-white rounded-xl shadow-2xl border border-gray-200 inline-block">
+                      <img 
+                        src={financeiroPixQrDataUrl} 
+                        alt="QR Code PIX Fatura" 
+                        id="pix-qrcode-image"
+                        className="w-40 h-40 object-contain mx-auto"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-40 h-40 border border-gray-800 rounded-xl flex items-center justify-center text-gray-400 text-xs font-mono mx-auto">
+                      Gerando QR Code...
+                    </div>
+                  )}
+                </div>
+
+                {/* Dynamic details */}
+                <div className="flex flex-col gap-1 w-full text-left font-mono text-xs bg-[#090e1a] border border-gray-850 rounded-xl p-3">
+                  <div className="flex justify-between items-center text-[9.5px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
+                    <span>Beneficiário:</span>
+                    <span className="text-white font-bold shrink-0 truncate max-w-[170px]">{company?.pixBeneficiary || company?.name || 'AutoPrecision Premium'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[9.5px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
+                    <span>Chave PIX:</span>
+                    <span className="text-white font-bold break-all select-all font-mono">{company?.pixKey || 'cleciotecnologia@gmail.com'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-[9.5px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
+                    <span>Cidade:</span>
+                    <span className="text-white font-bold font-mono text-[10px]">{company?.pixCity || 'SAO PAULO'}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs font-extrabold text-white pt-1">
+                    <span>Valor Cobrado:</span>
+                    <span className="text-red-500 text-sm font-bold">R$ {pixSelectedReceivable.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+
+                {/* Simulated payment panel */}
+                <div className="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3.5 flex flex-col gap-3 font-sans">
+                  <span className="text-[9.5px] font-mono text-cyan-400 font-extrabold tracking-wider block uppercase">💻 SIMULADOR DE INTEGRAÇÃO BANCÁRIA (PIX API)</span>
+                  
+                  <div className="flex flex-col gap-1.5 text-left">
+                    <label htmlFor="pix-simulation-value" className="text-[9px] text-gray-400 uppercase font-mono tracking-wider font-semibold">Valor Recebido do Cliente (Confirmável)</label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1.5 text-xs text-slate-500 font-mono">R$</span>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        id="pix-simulation-value"
+                        className="w-full bg-black/60 border border-slate-800 rounded-lg py-1.5 pl-8 pr-3 text-xs text-white font-mono focus:outline-none focus:border-cyan-500"
+                        value={pixAmountToApproveStr}
+                        onChange={(e) => setPixAmountToApproveStr(e.target.value)}
+                        placeholder="Ex: 150.00"
+                      />
+                    </div>
+                    <span className="text-[8px] text-gray-500 block">Modifique este valor se o cliente realizou apenas um repasse de valor parcial.</span>
+                  </div>
+
+                  <div className="flex gap-2 font-mono">
+                    <button
+                      type="button"
+                      id="btn-approve-full-pix"
+                      onClick={async () => {
+                        const original = pixSelectedReceivable.amount;
+                        // Execute transaction complete flow
+                        await editFinanceiro(pixSelectedReceivable.id, { 
+                          status: 'Pago' 
+                        });
+                        
+                        const generatedTx = `E${new Date().toISOString().replace(/\D/g, '')}${Math.floor(Math.random() * 9000000 + 1000000)}`;
+                        setPixPaymentReceipt({
+                          id: `PX-${Math.floor(Math.random() * 1000000 + 100000)}`,
+                          originalAmount: original,
+                          paidAmount: original,
+                          remainingAmount: 0,
+                          date: new Date().toISOString(),
+                          type: 'Integral',
+                          title: pixSelectedReceivable.description,
+                          category: pixSelectedReceivable.category,
+                          txId: generatedTx
+                        });
+                        alert("Pagamento Integral Aprovado! Comprovante emitido com sucesso.");
+                      }}
+                      className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all border-none"
+                    >
+                      <Check className="w-3.5 h-3.5 shrink-0" /> PAGO INTEGRAL
+                    </button>
+
+                    <button
+                      type="button"
+                      id="btn-approve-partial-pix"
+                      onClick={async () => {
+                        const enteredVal = parseFloat(pixAmountToApproveStr) || 0;
+                        if (enteredVal <= 0) {
+                          alert("Digite um valor válido maior que R$ 0,00 para simular.");
+                          return;
+                        }
+
+                        const original = pixSelectedReceivable.amount;
+                        if (enteredVal >= original) {
+                          alert(`Este valor (R$ ${enteredVal}) quita integralmente a fatura. Usando fluxo integral imediato.`);
+                          await editFinanceiro(pixSelectedReceivable.id, { 
+                            status: 'Pago' 
+                          });
+                          const generatedTx = `E${new Date().toISOString().replace(/\D/g, '')}${Math.floor(Math.random() * 9000000 + 1000000)}`;
+                          setPixPaymentReceipt({
+                            id: `PX-${Math.floor(Math.random() * 1000000 + 100000)}`,
+                            originalAmount: original,
+                            paidAmount: original,
+                            remainingAmount: 0,
+                            date: new Date().toISOString(),
+                            type: 'Integral',
+                            title: pixSelectedReceivable.description,
+                            category: pixSelectedReceivable.category,
+                            txId: generatedTx
+                          });
+                          return;
+                        }
+
+                        const remains = original - enteredVal;
+                        // 1. Save original but change amount to partial paid and status to 'Pago'
+                        await editFinanceiro(pixSelectedReceivable.id, {
+                          status: 'Pago',
+                          amount: enteredVal,
+                          description: `${pixSelectedReceivable.description} (Lote Pago Parcial)`
+                        });
+
+                        // 2. Add remaining balance as a new pending entry
+                        await addFinanceiro({
+                          description: `${pixSelectedReceivable.description} (Saldo Remanescente Fatura)`,
+                          type: 'Receita',
+                          amount: Number(remains.toFixed(2)),
+                          dueDate: pixSelectedReceivable.dueDate,
+                          category: pixSelectedReceivable.category,
+                          status: 'Pendente',
+                          invoiceNumber: pixSelectedReceivable.invoiceNumber ? `${pixSelectedReceivable.invoiceNumber}-PARC` : undefined,
+                          purchaseOrder: pixSelectedReceivable.purchaseOrder
+                        });
+
+                        const generatedTx = `E${new Date().toISOString().replace(/\D/g, '')}${Math.floor(Math.random() * 9000000 + 1000000)}`;
+                        setPixPaymentReceipt({
+                          id: `PX-${Math.floor(Math.random() * 1000000 + 100000)}`,
+                          originalAmount: original,
+                          paidAmount: enteredVal,
+                          remainingAmount: Number(remains.toFixed(2)),
+                          date: new Date().toISOString(),
+                          type: 'Parcial',
+                          title: pixSelectedReceivable.description,
+                          category: pixSelectedReceivable.category,
+                          txId: generatedTx
+                        });
+                        alert(`Aprovado Pagamento Parcial de R$ ${enteredVal.toFixed(2)} recebido! O saldo restante de R$ ${remains.toFixed(2)} foi lançado de volta como pendente.`);
+                      }}
+                      className="flex-1 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-750 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all border-none"
+                    >
+                      <Layers className="w-3.5 h-3.5 shrink-0 text-white" /> PAGO PARCIAL
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5 w-full text-left font-mono">
+                  <div className="flex gap-2 w-full">
+                    <input 
+                      type="text" 
+                      readOnly 
+                      value={financeiroPixString} 
+                      className="bg-black/50 border border-gray-800 rounded-lg px-2.5 py-1.5 text-[8.5px] text-gray-400 select-all truncate flex-1 outline-none text-left"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          navigator.clipboard.writeText(financeiroPixString);
+                          setCopiedText(true);
+                          setTimeout(() => setCopiedText(false), 2000);
+                        } catch (err) {
+                          console.error(err);
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-red-650 bg-red-600 hover:bg-red-750 rounded-lg font-bold text-[9.5px] uppercase tracking-wide text-white flex items-center gap-1 cursor-pointer transition-all"
+                    >
+                      <Copy className="w-3.5 h-3.5" /> {copiedText ? "COPIADO!" : "COPIAR"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex gap-2 w-full font-mono mt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.print();
+                    }}
+                    className="flex-1 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-750 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-colors"
+                  >
+                    <Printer className="w-3.5 h-3.5" /> IMPRIMIR QR
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setModalEditPix(!modalEditPix);
+                    }}
+                    className="py-1.5 px-2 rounded-xl border border-gray-888 border-gray-800 text-[10px] hover:bg-slate-900 transition-all font-bold cursor-pointer font-mono text-gray-300"
+                  >
+                     {modalEditPix ? "Fechar" : "⚙️ Dados PIX"}
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setPixSelectedReceivable(null)}
+                    className="px-3 py-1.5 rounded-xl border border-gray-850 text-gray-300 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
+                  >
+                    VOLTAR
+                  </button>
+                </div>
+
+                {modalEditPix && (
+                  <div className="bg-[#080d1a] border border-gray-850 rounded-xl p-3 w-full flex flex-col gap-2.5 text-left font-mono text-[9px] animate-fade-in animate-scale-up">
+                    <span className="text-gray-400 font-bold uppercase text-[8px] block border-b border-gray-800 pb-1">Configurações Chave PIX</span>
+                    
+                    <div className="flex flex-col gap-1">
+                      <span className="text-gray-400">Chave PIX:</span>
+                      <input 
+                        type="text" 
+                        value={tempPixKey} 
+                        onChange={e => setTempPixKey(e.target.value)}
+                        placeholder="E-mail ou CPF"
+                        className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[9px] focus:outline-none focus:border-red-500 font-mono"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-gray-400">Beneficiário:</span>
+                      <input 
+                        type="text" 
+                        value={tempPixBeneficiary} 
+                        onChange={e => setTempPixBeneficiary(e.target.value)}
+                        placeholder="Nome do Titular"
+                        className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[9px] focus:outline-none"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await updateCompany({
+                            pixKey: tempPixKey,
+                            pixBeneficiary: tempPixBeneficiary
+                          });
+                          setModalEditPix(false);
+                        } catch (err) {
+                          console.error("Erro inline:", err);
+                        }
+                      }}
+                      className="w-full mt-1 py-1 bg-red-655 hover:bg-red-700 bg-red-600 text-white font-bold rounded text-[9px]"
+                    >
+                      Confirmar Chave
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="w-48 h-48 border border-gray-800 rounded-xl flex items-center justify-center text-gray-400 text-xs font-mono">
-                Gerando QR Code...
-              </div>
-            )}
-
-            <div className="flex flex-col gap-1 w-full text-left font-mono text-xs bg-[#090e1a] border border-gray-850 rounded-xl p-3">
-              <div className="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
-                <span>Beneficiário:</span>
-                <span className="text-white font-bold shrink-0 truncate max-w-[170px]">{company?.pixBeneficiary || company?.name || 'AutoPrecision Premium'}</span>
-              </div>
-              <div className="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
-                <span>Chave PIX:</span>
-                <span className="text-white font-bold break-all select-all font-mono">{company?.pixKey || 'cleciotecnologia@gmail.com'}</span>
-              </div>
-              <div className="flex justify-between items-center text-[10px] border-b border-gray-800/40 pb-1 mb-1 text-gray-400">
-                <span>Cidade:</span>
-                <span className="text-white font-bold font-mono text-[10px]">{company?.pixCity || 'SAO PAULO'}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-extrabold text-white pt-1">
-                <span>Valor Cobrado:</span>
-                <span className="text-red-550 text-red-500 text-sm font-bold">R$ {pixSelectedReceivable.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setModalEditPix(!modalEditPix)}
-              className="text-[9.5px] font-mono font-bold text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 cursor-pointer bg-red-950/20 px-2.5 py-1 rounded-lg border border-red-900/45 self-end"
-            >
-              <Settings className="w-3.5 h-3.5" /> {modalEditPix ? "[Fechar Alteração]" : "⚙️ Cadastrar/Mudar Chave PIX"}
-            </button>
-
-            {modalEditPix && (
-              <div className="bg-[#080d1a] border border-gray-850 rounded-xl p-3 w-full flex flex-col gap-2.5 text-left font-mono text-[10px] animate-fade-in">
-                <span className="text-gray-400 font-bold uppercase text-[8.5px] block border-b border-gray-800 pb-1">ALTERAR CHAVE PIX IMEDIATA</span>
+              // 2. COMPROVANTE DE PAGAMENTO PIX (RECONCILATION PRINTABLE TICKET)
+              <div id="pix-receipt-container" className="flex flex-col gap-4 w-full text-left font-sans animate-fade-in">
                 
-                <div className="flex flex-col gap-1">
-                  <span className="text-gray-400">Chave PIX:</span>
-                  <input 
-                    type="text" 
-                    value={tempPixKey} 
-                    onChange={e => setTempPixKey(e.target.value)}
-                    placeholder="E-mail ou CPF"
-                    className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[10px] focus:outline-none focus:border-red-500 font-mono"
-                  />
+                <div className="flex flex-col items-center text-center gap-2 pb-3 border-b border-gray-800/80">
+                  <div className="w-11 h-11 rounded-full bg-emerald-950/60 border border-emerald-500 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                    <CheckCircle2 className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-mono font-bold text-emerald-400 tracking-widest block uppercase">COMPROVANTE DE PAGAMENTO PIX</span>
+                    <span className="text-[9px] text-gray-400 block mt-0.5">Banco Central do Brasil - Liquidação Comercial</span>
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <span className="text-gray-400">Beneficiário:</span>
-                  <input 
-                    type="text" 
-                    value={tempPixBeneficiary} 
-                    onChange={e => setTempPixBeneficiary(e.target.value)}
-                    placeholder="Nome do Titular"
-                    className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[10px] focus:outline-none focus:border-red-500"
-                  />
+                <div className="bg-[#050810] border border-slate-900 rounded-xl p-4 flex flex-col gap-3 font-mono text-[10.5px]">
+                  
+                  <div className="flex justify-between items-center text-[10px] border-b border-gray-900/50 pb-1.5">
+                    <span className="text-gray-500">Beneficiário:</span>
+                    <span className="text-white font-bold uppercase truncate max-w-[170px]">{company?.name || 'AutoPrecision'}</span>
+                  </div>
+
+                  <div className="flex justify-between items-start text-[10px] border-b border-gray-950/50 pb-1.5 flex-col gap-0.5">
+                    <span className="text-gray-500">Serviço/Fatura:</span>
+                    <span className="text-white font-bold">{pixPaymentReceipt.title}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[10px] border-b border-gray-900/50 pb-1.5">
+                    <span className="text-gray-500 font-bold uppercase text-[9px] text-emerald-400">Status Quitação:</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase ${pixPaymentReceipt.type === 'Integral' ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-900/40' : 'bg-amber-955 bg-amber-950 text-amber-500 border border-amber-900'}`}>
+                      {pixPaymentReceipt.type === 'Integral' ? 'PAGO' : 'PAGO PARCIAL'}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[10px] border-b border-gray-900/50 pb-1.5">
+                    <span className="text-gray-500">Valor da Fatura:</span>
+                    <span className="text-white font-bold">R$ {pixPaymentReceipt.originalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center py-1 border-b border-gray-900 font-extrabold text-[#10b981]">
+                    <span>VALOR PAGO:</span>
+                    <span className="text-sm">R$ {pixPaymentReceipt.paidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+
+                  {pixPaymentReceipt.type === 'Parcial' && (
+                    <div className="flex justify-between items-center text-[10px] text-amber-500 pt-0.5 border-b border-gray-900/50 pb-1.5">
+                      <span>Restante em Aberto:</span>
+                      <span className="font-extrabold">R$ {pixPaymentReceipt.remainingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1 pt-1 text-[9px] text-gray-500 leading-tight">
+                    <div>
+                      <span>Controle ID Transação:</span>
+                      <span className="text-gray-400 block break-all font-semibold font-mono mt-0.5">{pixPaymentReceipt.txId}</span>
+                    </div>
+                    <div className="mt-1 flex justify-between">
+                      <span>Protocolo:</span>
+                      <span className="text-gray-400 font-bold font-mono">{pixPaymentReceipt.id}</span>
+                    </div>
+                    <div className="flex justify-between mt-0.5">
+                      <span>Data/Hora:</span>
+                      <span className="text-gray-400 font-bold font-mono">{new Date(pixPaymentReceipt.date).toLocaleString('pt-BR')}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-1">
-                  <span className="text-gray-400">Cidade:</span>
-                  <input 
-                    type="text" 
-                    value={tempPixCity} 
-                    onChange={e => setTempPixCity(e.target.value.toUpperCase())}
-                    placeholder="Cidade"
-                    className="bg-black/60 border border-gray-800 rounded px-2 py-1 text-white text-[10px] focus:outline-none focus:border-red-500 uppercase"
-                  />
-                </div>
+                {pixPaymentReceipt.type === 'Parcial' && (
+                  <p className="text-[9px] text-[#f59e0b] leading-tight italic bg-amber-950/20 border border-amber-900/35 p-2 rounded-lg font-sans">
+                    💡 <strong>Desmembrado:</strong> O saldo de <strong>R$ {pixPaymentReceipt.remainingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> foi lançado automaticamente como pendente no DRE para acompanhamento.
+                  </p>
+                )}
 
-                <button
-                  type="button"
-                  onClick={async () => {
-                    try {
-                      await updateCompany({
-                        pixKey: tempPixKey,
-                        pixBeneficiary: tempPixBeneficiary,
-                        pixCity: tempPixCity
-                      });
-                      setModalEditPix(false);
-                    } catch (err) {
-                      console.error("Erro inline:", err);
-                    }
-                  }}
-                  className="w-full mt-1 py-1.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded text-[10px]"
-                >
-                  Confirmar Salvar Dados Bancários
-                </button>
+                <p className="text-[8px] text-slate-500 text-center font-sans tracking-wide">
+                  Lançamento efetuado via AutoPrecision Premium Cloud
+                </p>
+
+                <div className="flex gap-2 w-full font-mono">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.print();
+                    }}
+                    className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-750 text-white text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer border-none"
+                  >
+                    <Printer className="w-3.5 h-3.5 shrink-0 text-white" /> IMPRIMIR COMPROVANTE
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPixSelectedReceivable(null);
+                      setPixPaymentReceipt(null);
+                    }}
+                    className="py-1.5 px-3 rounded-lg border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900 text-[10px] font-bold cursor-pointer transition-colors"
+                  >
+                    CONCLUIR
+                  </button>
+                </div>
               </div>
             )}
-
-            {/* Copia e Cola field */}
-            <div className="flex flex-col gap-1.5 w-full text-left font-mono">
-              <span className="text-[9px] text-gray-500 uppercase tracking-wider font-bold">PIX Copia e Cola</span>
-              <div className="flex gap-2 w-full">
-                <input 
-                  type="text" 
-                  readOnly 
-                  value={financeiroPixString} 
-                  className="bg-black/50 border border-gray-800 rounded-lg px-2.5 py-1.5 text-[8.5px] text-gray-400 select-all truncate flex-1 outline-none text-left"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    try {
-                      navigator.clipboard.writeText(financeiroPixString);
-                      setCopiedText(true);
-                      setTimeout(() => setCopiedText(false), 2000);
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  }}
-                  className="px-3 py-1.5 bg-red-600 hover:bg-red-750 rounded-lg font-bold text-[9.5px] uppercase tracking-wide text-white flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  <Copy className="w-3.5 h-3.5" /> {copiedText ? "COPIADO!" : "COPIAR"}
-                </button>
-              </div>
-            </div>
-
-            {/* Bottom Actions printable */}
-            <div className="flex gap-2 w-full font-mono mt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  window.print();
-                }}
-                className="flex-1 py-2 rounded-xl bg-gray-800 hover:bg-gray-750 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-colors"
-              >
-                <Printer className="w-3.5 h-3.5" /> Imprimir Fatura
-              </button>
-              <button 
-                type="button"
-                onClick={() => setPixSelectedReceivable(null)}
-                className="flex-1 py-2 rounded-xl border border-gray-850 hover:border-gray-750 text-gray-300 hover:text-white text-xs font-bold cursor-pointer transition-colors"
-              >
-                Fechar Painel
-              </button>
-            </div>
 
           </div>
         </div>

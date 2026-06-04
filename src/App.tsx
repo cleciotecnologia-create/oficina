@@ -13,6 +13,7 @@ import { RelatoriosView } from './components/RelatoriosView';
 import { ConfigView } from './components/ConfigView';
 import { SuperAdminView } from './components/SuperAdminView';
 import { ManualView } from './components/ManualView';
+import { CustomerPortal } from './components/CustomerPortal';
 
 import { 
   Wrench, 
@@ -73,6 +74,22 @@ function AppContent() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+
+  // Customer tracking portal state with URL params observer
+  const [customerPortalOpen, setCustomerPortalOpen] = useState(false);
+  const [portalCpf, setPortalCpf] = useState('');
+  const [portalOsId, setPortalOsId] = useState('');
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cpfParam = params.get('cpf');
+    const osIdParam = params.get('osId');
+    if (cpfParam || osIdParam) {
+      setPortalCpf(cpfParam || '');
+      setPortalOsId(osIdParam || '');
+      setCustomerPortalOpen(true);
+    }
+  }, []);
   
   // Email & Password Auth State
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -145,6 +162,22 @@ function AppContent() {
     }
   };
 
+  // 0. Customer Portal override (direct URL param tracking or customer status check)
+  if (customerPortalOpen) {
+    return (
+      <CustomerPortal 
+        initialCpf={portalCpf} 
+        initialOsId={portalOsId} 
+        onClose={() => {
+          setCustomerPortalOpen(false);
+          // Remove query params from browser address bar smoothly
+          const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+          window.history.pushState({ path: cleanUrl }, '', cleanUrl);
+        }} 
+      />
+    );
+  }
+
   // 1. Loading Overlay state
   if (loading) {
     return (
@@ -166,6 +199,7 @@ function AppContent() {
           await loginDemo();
           setActiveRoute('dashboard');
         }} 
+        onTrackOS={() => setCustomerPortalOpen(true)}
       />
     );
   }

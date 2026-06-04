@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { 
   Wrench, 
   Plus, 
@@ -19,7 +20,9 @@ import {
   Sparkles,
   Bell,
   CalendarRange,
-  Trash2
+  Trash2,
+  RefreshCw,
+  Link
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
@@ -43,6 +46,9 @@ export const OSView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'lista' | 'nova'>('lista');
   const [searchPlate, setSearchPlate] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todas');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [reopenOSId, setReopenOSId] = useState<string | null>(null);
+  const [reopenReasonText, setReopenReasonText] = useState('');
 
   // Quick vehicle registration inside new OS creation
   const [showQuickVehicle, setShowQuickVehicle] = useState(false);
@@ -105,16 +111,22 @@ export const OSView: React.FC = () => {
     'Em análise': 'border-yellow-900 bg-yellow-950/20 text-yellow-400',
     'Aguardando peça': 'border-orange-950 bg-orange-950/20 text-orange-400',
     'Em execução': 'border-red-950 bg-red-950/25 text-red-500 font-bold',
-    'Finalizada': 'border-green-900 bg-green-950/20 text-green-400'
+    'Finalizada': 'border-green-900 bg-green-950/20 text-green-400',
+    'Entregue': 'border-emerald-600 bg-emerald-950/20 text-emerald-400',
+    'Garantia Reaberta': 'border-purple-600 bg-purple-950/35 text-purple-400 font-extrabold shadow-[0_0_10px_rgba(168,85,247,0.2)]'
   };
 
-  // Filter OS list
+  // Filter and sort OS list chronologically
   const filteredOS = ordensServico.filter(os => {
     const matchSearch = os.plate.toLowerCase().includes(searchPlate.toLowerCase()) || 
                         os.clienteName.toLowerCase().includes(searchPlate.toLowerCase()) ||
                         os.id.toLowerCase().includes(searchPlate.toLowerCase());
     const matchStatus = statusFilter === 'Todas' || os.status === statusFilter;
     return matchSearch && matchStatus;
+  }).sort((a, b) => {
+    const timeA = new Date(a.createdAt || 0).getTime();
+    const timeB = new Date(b.createdAt || 0).getTime();
+    return sortOrder === 'asc' ? timeA - timeB : timeB - timeA;
   });
 
   // Call Gemini AI Auto Diagnosis
@@ -383,8 +395,8 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
       {activeTab === 'lista' && (
         <>
           {/* List filter tools */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-[#0a0f1d] p-4 rounded-xl border border-gray-905 border-gray-900">
-            <div className="relative md:col-span-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-[#0a0f1d] p-4 rounded-xl border border-gray-900">
+            <div className="relative md:col-span-6">
               <Search className="absolute left-3.5 top-3 w-4 h-4 text-gray-500" />
               <input 
                 type="text" 
@@ -395,7 +407,7 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
               />
             </div>
 
-            <div className="md:col-span-4">
+            <div className="md:col-span-3">
               <select 
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -409,13 +421,45 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                 <option value="Finalizada">Finalizada</option>
               </select>
             </div>
+
+            <div className="md:col-span-3">
+              <select 
+                value={sortOrder}
+                onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+                className="w-full bg-[#080c16] border border-gray-800 py-2.5 px-3 rounded-xl text-xs text-white focus:outline-none focus:border-red-500 font-mono"
+              >
+                <option value="asc">⏱️ Fila (Mais Antigas Primeiro)</option>
+                <option value="desc">⏱️ Recentes (Mais Novas Primeiro)</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Cronograma/Fila indicativo de exemplos */}
+          <div className="bg-[#0b1324] border border-blue-950/40 rounded-xl p-4 text-xs font-sans text-gray-400 flex flex-col gap-2">
+            <span className="font-bold text-[#f87171] flex items-center gap-1.5 uppercase font-mono text-[10px] tracking-wider">
+              📋 FILA DE ATENDIMENTO OPERACIONAL (ORDEM CRONOLÓGICA)
+            </span>
+            <p className="leading-relaxed">
+              As Ordens de Serviço (OS) ativas são priorizadas pelo <strong>tempo de permanência/espera</strong> no pátio. Os veículos com maior tempo desde a entrada de pátio ficam posicionados no topo para evitar atrasos na entrega técnica.
+            </p>
+            <div className="mt-1 pt-2 border-t border-gray-800 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500">
+              <span className="font-extrabold text-gray-400">Exemplos de Fluxo FIFO:</span>
+              <span className="text-red-400 font-mono">1º OS #1005 (Há 3 dias - Prioridade Máxima)</span>
+              <span className="text-gray-600">➔</span>
+              <span className="text-amber-400 font-mono">2º OS #1008 (Há 1 dia - Em Espera)</span>
+              <span className="text-gray-600">➔</span>
+              <span className="text-green-400 font-mono">3º OS #1012 (Há 20 min - Recém-Criada)</span>
+            </div>
           </div>
 
           {/* OS Listing Card Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {filteredOS.map((os) => (
-              <div 
+            {filteredOS.map((os, index) => (
+              <motion.div 
                 key={os.id}
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.25) }}
                 className="p-5 bg-[#0c1223] rounded-2xl border border-gray-800 flex flex-col justify-between hover:border-red-500/20 transition-all text-left relative overflow-hidden"
               >
                 <div className="flex justify-between items-start mb-3">
@@ -427,6 +471,23 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                       </span>
                     </div>
                     <span className="text-xs text-gray-400 block mt-1 font-sans font-semibold">🚙 {os.veiculoInfo}</span>
+                    <span className="text-[10px] text-gray-500 font-mono block mt-1 flex items-center gap-1">
+                      <span>📅 Entrada:</span>
+                      <strong className="text-gray-300">
+                        {new Date(os.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </strong>
+                      <span className="text-red-400/90 font-sans ml-1 text-[9px] font-bold uppercase p-0.5 px-1 bg-red-950/20 rounded border border-red-950/20">
+                        {(() => {
+                          const diffMs = new Date().getTime() - new Date(os.createdAt).getTime();
+                          const diffMin = Math.floor(diffMs / 60000);
+                          const diffHrs = Math.floor(diffMin / 60);
+                          const diffDays = Math.floor(diffHrs / 24);
+                          if (diffMin < 60) return `${diffMin}m atrás`;
+                          if (diffHrs < 24) return `${diffHrs}h atrás`;
+                          return `${diffDays}d atrás`;
+                        })()}
+                      </span>
+                    </span>
                   </div>
 
                   <span className="text-sm font-mono font-extrabold text-white">
@@ -437,6 +498,24 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                 <div className="text-xs text-slate-400 line-clamp-2 my-2.5 italic border-l-2 border-red-500/30 pl-2">
                   "{os.problem}"
                 </div>
+
+                {os.reopenCount !== undefined && os.reopenCount > 0 && (
+                  <div className="my-2.5 p-2 px-3 rounded-xl border border-purple-500/30 bg-purple-950/20 text-purple-300 text-[10.5px] leading-relaxed">
+                    <span className="font-extrabold flex items-center gap-1 uppercase tracking-wide">
+                      🚨 OS Reaberta em Garantia ({os.reopenCount}ª Intervenção)
+                    </span>
+                    {os.reopenReason && (
+                      <p className="mt-0.5 text-[10px] text-purple-400 italic font-medium">
+                        "{os.reopenReason}"
+                      </p>
+                    )}
+                    {os.reopenedAt && (
+                      <span className="text-[9px] text-gray-500 block mt-0.5">
+                        Última reabertura técnica: {new Date(os.reopenedAt).toLocaleString('pt-BR')}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {/* Sub features checklist indicators */}
                 <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-gray-500 my-2">
@@ -464,36 +543,67 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                 )}
 
                 {/* Footer buttons of each card */}
-                <div className="mt-4 pt-3 border-t border-gray-850 flex items-center justify-between gap-3 font-mono text-[10px]">
+                <div className="mt-4 pt-3 border-t border-gray-850 flex items-center justify-between gap-3 flex-wrap font-mono text-[10px]">
                   
                   <div>
                     {os.signature ? (
-                      <span className="text-green-500 font-bold">✓ ASSINADO DIGITALMENTE</span>
+                      <span className="text-green-500 font-bold flex items-center gap-0.5">✓ ASSINADA</span>
                     ) : (
                       <span className="text-yellow-500">⚠ AGUARDANDO ASSINATURA</span>
                     )}
                   </div>
 
-                  <div className="flex gap-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <button 
                       onClick={() => createWhatsAppShare(os)}
-                      className="px-2.5 py-1.5 rounded bg-slate-900 border border-slate-850 hover:bg-slate-800 text-green-400 flex items-center gap-1"
+                      className="px-2 py-1 rounded bg-slate-900 border border-slate-850 hover:bg-slate-800 text-green-400 flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Compartilhar orçamento via WhatsApp"
                     >
-                      <Phone className="w-3.5 h-3.5" /> Enviar Orçamento
+                      <Phone className="w-3 h-3" /> Enviar Orçamento
                     </button>
+
+                    <button 
+                      onClick={() => {
+                        const sampleUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?cpf=${os.clienteCpfCnpj || ''}&osId=${os.id}`;
+                        navigator.clipboard.writeText(sampleUrl);
+                        alert(`🔗 Link de acompanhamento copiado com sucesso!\n\n${sampleUrl}\n\nVocê já pode enviar este link para o cliente no WhatsApp para acompanhar a mão de obra em tempo real.`);
+                      }}
+                      className="px-2 py-1 rounded bg-slate-900 border border-slate-850 hover:bg-slate-800 text-cyan-400 flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Copiar link de acompanhamento com CPF"
+                    >
+                      <Link className="w-3 h-3 text-cyan-400" /> Link de Acompanhamento
+                    </button>
+
+                    {/* Reabrir em Garantia button */}
+                    {(os.status === 'Finalizada' || os.status === 'Entregue') && (
+                      <button
+                        type="button"
+                        id={`btn-reopen-os-${os.id}`}
+                        onClick={() => {
+                          setReopenOSId(os.id);
+                          setReopenReasonText('');
+                        }}
+                        className="px-2.5 py-1 rounded border border-purple-500 bg-purple-950/20 hover:bg-purple-900 hover:text-white text-purple-300 cursor-pointer font-bold transition-all uppercase flex items-center gap-1"
+                        title="Reabrir a mesma mão de obra por garantia técnica"
+                      >
+                        <RefreshCw className="w-3 h-3 text-purple-400 animate-spin-hover" /> Reabrir Garantia
+                      </button>
+                    )}
                     
                     <select 
                       value={os.status}
                       onChange={async (e) => {
                         await editOS(os.id, { status: e.target.value as any });
                       }}
-                      className="bg-black/40 border border-gray-800 rounded px-2 py-1 text-[9px] font-mono text-slate-300"
+                      className="bg-[#050812] border border-gray-800 rounded px-2 py-1 text-[9px] font-mono text-slate-300"
                     >
                       <option value="Aberta">Mudar: Aberta</option>
                       <option value="Em análise">Mudar: Em análise</option>
                       <option value="Aguardando peça">Mudar: Em peça</option>
                       <option value="Em execução">Mudar: Em execução</option>
                       <option value="Finalizada">Mudar: Finalizada</option>
+                      <option value="Entregue">Mudar: Entregue</option>
+                      <option value="Garantia Reaberta">Mudar: Garantia Reaberta</option>
                     </select>
 
                     <button
@@ -507,13 +617,13 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                       className="p-1.5 rounded bg-slate-900 border border-red-950 hover:bg-red-950/20 text-red-500 hover:text-red-400 flex items-center justify-center transition-all cursor-pointer"
                       title="Excluir OS"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
 
                 </div>
 
-              </div>
+              </motion.div>
             ))}
             {filteredOS.length === 0 && (
               <div className="col-span-2 text-center py-20 text-gray-500">
@@ -1239,6 +1349,95 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                   FILMAR CARIMBO
                 </button>
               </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 🚨 REABRIR ORDEM DE SERVIÇO EM GARANTIA DIALOG MODAL */}
+      {reopenOSId && (
+        <div id="warranty-reopen-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-[#0c1223] border border-purple-500/30 text-white max-w-md w-full rounded-2xl p-6 shadow-2xl relative flex flex-col gap-4">
+            
+            <button 
+              type="button"
+              id="btn-close-reopen-modal"
+              onClick={() => {
+                setReopenOSId(null);
+                setReopenReasonText('');
+              }}
+              className="absolute top-4 right-4 p-1 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-400 hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="border-b border-gray-850 pb-3 flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-purple-950/55 border border-purple-800 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.3)]">
+                <RefreshCw className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <span className="font-display font-extrabold text-sm block tracking-widest text-purple-400 uppercase">REABRIR OS (GARANTIA TÉCNICA)</span>
+                <span className="text-[10px] text-gray-400 block mt-0.5">Retornar mão de obra ao pátio para reincidência</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-gray-400 leading-relaxed font-mono">
+              Esta ação colocará a Ordem de Serviço #<strong>{reopenOSId}</strong> de volta ao status de <strong>"Garantia Reaberta"</strong>. A mão de obra e as peças correspondentes ficarão disponíveis para edição, possibilitando novos diagnósticos sem finalizar a ordem de serviço.
+            </p>
+
+            <div className="flex flex-col gap-1.5 font-sans">
+              <label htmlFor="reopen-reason-input" className="text-[10px] text-gray-400 font-mono uppercase font-bold tracking-wider">Descrição Detalhada do Defeito Reincidente</label>
+              <textarea
+                id="reopen-reason-input"
+                rows={3}
+                placeholder="Exemplo: Veículo retornou apresentando o mesmo barulho na pinça de freio dianteira esquerda..."
+                value={reopenReasonText}
+                onChange={(e) => setReopenReasonText(e.target.value)}
+                className="w-full bg-[#080c16] border border-gray-800 rounded-xl p-3 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-purple-500 font-mono"
+              />
+              <span className="text-[9px] text-gray-500 font-sans block leading-normal">
+                Esta justificativa será armazenada de forma permanente no log de auditorias e exibida para acompanhamento no link de pós-venda do cliente.
+              </span>
+            </div>
+
+            <div className="flex gap-2 font-mono mt-2">
+              <button 
+                type="button"
+                id="btn-reopen-confirm"
+                onClick={async () => {
+                  if (!reopenReasonText.trim()) {
+                    alert("Por favor, descreva qual o defeito reincidente apresentado pelo cliente.");
+                    return;
+                  }
+                  const foundOS = ordensServico.find(o => o.id === reopenOSId);
+                  if (foundOS) {
+                    await editOS(reopenOSId, {
+                      status: 'Garantia Reaberta',
+                      reopenCount: (foundOS.reopenCount || 0) + 1,
+                      reopenedAt: new Date().toISOString(),
+                      reopenReason: reopenReasonText
+                    });
+                    setReopenOSId(null);
+                    setReopenReasonText('');
+                    alert("Ordem de Serviço reaberta em Garantia com sucesso! O pátio técnico de mão de obra já foi atualizado.");
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-750 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all border-0"
+              >
+                <RefreshCw className="w-4 h-4 text-white" /> Confirmar Reabertura
+              </button>
+              <button 
+                type="button"
+                id="btn-reopen-cancel"
+                onClick={() => {
+                  setReopenOSId(null);
+                  setReopenReasonText('');
+                }}
+                className="flex-1 py-1.5 px-2.5 rounded-xl border border-neutral-800 hover:bg-slate-900 text-xs text-neutral-300 font-semibold cursor-pointer transition-all text-center bg-transparent"
+              >
+                Cancelar
+              </button>
             </div>
 
           </div>

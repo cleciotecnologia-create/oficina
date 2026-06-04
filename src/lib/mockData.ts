@@ -36,7 +36,8 @@ export const INITIAL_COMPANY = {
   domainStatus: "Ativo" as const,
   pixKey: "cleciotecnologia@gmail.com",
   pixBeneficiary: "AutoPrecision Premium",
-  pixCity: "SAO PAULO"
+  pixCity: "SAO PAULO",
+  defaultMarkup: 50
 };
 
 export const MOCK_CLIENTS: Cliente[] = [

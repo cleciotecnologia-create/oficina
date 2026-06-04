@@ -11,6 +11,7 @@ export interface UserProfile {
   role: UserRole;
   empresaId: string;
   createdAt: string;
+  reversalPassword?: string;
 }
 
 export interface Company {
@@ -33,6 +34,7 @@ export interface Company {
   pixKey?: string;
   pixBeneficiary?: string;
   pixCity?: string;
+  defaultMarkup?: number;
 }
 
 export interface Cliente {
@@ -135,7 +137,7 @@ export interface PartUsed {
   quantity: number;
 }
 
-export type OSStatus = 'Aberta' | 'Em análise' | 'Aguardando peça' | 'Em execução' | 'Finalizada' | 'Entregue';
+export type OSStatus = 'Aberta' | 'Em análise' | 'Aguardando peça' | 'Em execução' | 'Finalizada' | 'Entregue' | 'Garantia Reaberta';
 
 export interface OrdemServico {
   id: string;
@@ -163,6 +165,9 @@ export interface OrdemServico {
   reminderEnabled?: boolean;
   vencimentoDays?: number;
   reminderDays?: number;
+  reopenCount?: number;
+  reopenedAt?: string;
+  reopenReason?: string;
 }
 
 export interface Fornecedor {

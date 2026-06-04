@@ -196,7 +196,7 @@ const SAMPLE_XML_COFAP = `<?xml version="1.0" encoding="UTF-8"?>
   </NFe>
 </nfeProc>`;
 
-const parseNfeXmlContent = (xmlText: string): ParsedXMLDoc | null => {
+const parseNfeXmlContent = (xmlText: string, defaultMarkup: number = 80): ParsedXMLDoc | null => {
   try {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlText, "text/xml");
@@ -245,7 +245,7 @@ const parseNfeXmlContent = (xmlText: string): ParsedXMLDoc | null => {
           brand: xProd.includes("Bosch") ? "Bosch" : xProd.includes("Cofap") ? "Cofap" : xProd.includes("Fram") ? "Fram" : xProd.includes("SKF") ? "SKF" : "Outra",
           qty: qCom,
           costPrice: vUnCom,
-          sellPrice: Math.round(vUnCom * 1.8),
+          sellPrice: Math.round(vUnCom * (1 + defaultMarkup / 100)),
           unit: uCom
         });
       }
@@ -276,7 +276,8 @@ export const EstoqueView: React.FC = () => {
     addFornecedor,
     editFornecedor,
     deleteFornecedor,
-    ordensServico
+    ordensServico,
+    company
   } = useApp();
   
   const [activeTab, setActiveTab ] = useState<'geral' | 'cadastro' | 'fornecedores' | 'movimentacoes' | 'csv' | 'xml'>('geral');
@@ -719,7 +720,8 @@ export const EstoqueView: React.FC = () => {
     setXmlFileSelected(true);
     setXmlFileName(provider === 'bosch' ? 'nota_fiscal_bosch_8592.xml' : 'nota_fiscal_cofap_14902.xml');
     
-    const parsed = parseNfeXmlContent(xmlText);
+    const markup = company?.defaultMarkup !== undefined ? company.defaultMarkup : 50;
+    const parsed = parseNfeXmlContent(xmlText, markup);
     if (parsed) {
       setParsedXml(parsed);
       const duplicateItems = parsed.items.filter(item => 
@@ -758,7 +760,8 @@ export const EstoqueView: React.FC = () => {
     reader.onload = (event) => {
       const text = event.target?.result as string;
       setXmlContent(text);
-      const parsed = parseNfeXmlContent(text);
+      const markup = company?.defaultMarkup !== undefined ? company.defaultMarkup : 50;
+      const parsed = parseNfeXmlContent(text, markup);
       if (parsed) {
         setParsedXml(parsed);
         const duplicateItems = parsed.items.filter(item => 
@@ -1535,13 +1538,19 @@ export const EstoqueView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-850">
-                {filteredProducts.map((p) => {
+                {filteredProducts.map((p, index) => {
                   const isLow = p.quantity <= p.minStock;
                   const supplier = fornecedores.find(sup => sup.id === p.fornecedorId);
                   const pricing = getMarginAndMarkup(p.costPrice, p.sellPrice);
 
                   return (
-                    <tr key={p.id} className="hover:bg-gray-950/20">
+                    <motion.tr 
+                      key={p.id} 
+                      className="hover:bg-gray-950/20"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.2) }}
+                    >
                       
                       <td className="p-4 max-w-[200px]">
                         <div className="flex flex-col gap-0.5">
@@ -1652,7 +1661,7 @@ export const EstoqueView: React.FC = () => {
                         </div>
                       </td>
 
-                    </tr>
+                    </motion.tr>
                   );
                 })}
               </tbody>
@@ -1998,7 +2007,18 @@ export const EstoqueView: React.FC = () => {
                 step="0.01"
                 placeholder="Ex: 120.00"
                 value={newProdCost}
-                onChange={(e) => setNewProdCost(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNewProdCost(val);
+                  const parsedCost = parseFloat(val);
+                  if (!isNaN(parsedCost) && parsedCost >= 0) {
+                    const markup = company?.defaultMarkup !== undefined ? company.defaultMarkup : 50;
+                    const suggestedSell = parsedCost + (parsedCost * markup / 100);
+                    setNewProdSell(suggestedSell.toFixed(2));
+                  } else {
+                    setNewProdSell('');
+                  }
+                }}
                 className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono font-bold"
               />
             </div>
