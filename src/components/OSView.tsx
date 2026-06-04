@@ -29,7 +29,12 @@ import { useApp } from '../context/AppContext';
 import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
 import { AUTO_SUGGESTIONS } from '../lib/autoSuggestions';
 
-export const OSView: React.FC = () => {
+interface OSViewProps {
+  initialSearchPlate?: string;
+  onClearInitialSearch?: () => void;
+}
+
+export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClearInitialSearch }) => {
   const { 
     ordensServico, 
     addOS, 
@@ -57,6 +62,16 @@ export const OSView: React.FC = () => {
       window.removeEventListener('open-new-os', handleOpenNewOS);
     };
   }, []);
+
+  React.useEffect(() => {
+    if (initialSearchPlate) {
+      setSearchPlate(initialSearchPlate);
+      setActiveTab('lista');
+      if (onClearInitialSearch) {
+        onClearInitialSearch();
+      }
+    }
+  }, [initialSearchPlate, onClearInitialSearch]);
   
   // Orçamento Fácil states
   const [easyClientName, setEasyClientName] = useState('');
@@ -83,7 +98,7 @@ export const OSView: React.FC = () => {
   const [easyShareMsg, setEasyShareMsg] = useState('');
   const [easySavedOSId, setEasySavedOSId] = useState<string | null>(null);
 
-  const [searchPlate, setSearchPlate] = useState('');
+  const [searchPlate, setSearchPlate] = useState(initialSearchPlate || '');
   const [statusFilter, setStatusFilter] = useState('Todas');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [reopenOSId, setReopenOSId] = useState<string | null>(null);

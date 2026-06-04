@@ -47,7 +47,9 @@ import {
   Bell,
   AlertCircle,
   Keyboard,
-  Command
+  Command,
+  Search,
+  Car
 } from 'lucide-react';
 
 function AppContent() {
@@ -76,6 +78,11 @@ function AppContent() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+
+  // States for header global/plate quick-search
+  const [globalSearchPlate, setGlobalSearchPlate] = useState('');
+  const [headerSearchPlate, setHeaderSearchPlate] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   // Customer tracking portal state with URL params observer
   const [customerPortalOpen, setCustomerPortalOpen] = useState(false);
@@ -210,7 +217,7 @@ function AppContent() {
       case 'pdv': return <PDVView />;
       case 'stock': return <EstoqueView />;
       case 'services': return <ServicosView />;
-      case 'os': return <OSView />;
+      case 'os': return <OSView initialSearchPlate={globalSearchPlate} onClearInitialSearch={() => setGlobalSearchPlate('')} />;
       case 'crm': return <CRMView />;
       case 'finance': return <FinanceiroView />;
       case 'reports': return <RelatoriosView />;
@@ -534,6 +541,106 @@ function AppContent() {
           <span className="hidden sm:inline-block ml-4 text-[10px] font-mono bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-slate-400">
             🏢 {company.name} / White-Label Ativo
           </span>
+        </div>
+
+        {/* Global Plate Search Bar */}
+        <div className="relative flex-1 max-w-[120px] xs:max-w-[160px] sm:max-w-xs md:max-w-md mx-2 font-mono text-xs z-50">
+          <div className="relative">
+            <Search className="absolute left-3 top-2 w-3.5 h-3.5 text-slate-500" />
+            <input
+              type="text"
+              placeholder="Placa ou veículo... (BRA2E19)"
+              value={headerSearchPlate}
+              onChange={(e) => {
+                setHeaderSearchPlate(e.target.value);
+                setIsSearchFocused(true);
+              }}
+              className="w-full bg-[#0a0f1d] border border-gray-800 rounded-full py-1.5 px-8 text-[11px] text-white placeholder-slate-505 placeholder-slate-500 focus:outline-none focus:border-red-500 transition-all font-mono tracking-wider"
+              onFocus={() => setIsSearchFocused(true)}
+              onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
+            />
+            {headerSearchPlate && (
+              <button
+                type="button"
+                onClick={() => setHeaderSearchPlate('')}
+                className="absolute right-2.5 top-1.5 p-0.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white bg-transparent border-0 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Autocomplete Dropdown */}
+          {isSearchFocused && headerSearchPlate && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0e1628] border border-gray-850 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-60 overflow-y-auto z-55">
+              {(() => {
+                const query = headerSearchPlate.toLowerCase();
+                const matches = ordensServico ? ordensServico.filter(os => 
+                  os.plate.toLowerCase().includes(query) || 
+                  (os.clienteName && os.clienteName.toLowerCase().includes(query)) ||
+                  (os.veiculoInfo && os.veiculoInfo.toLowerCase().includes(query))
+                ) : [];
+
+                if (matches.length === 0) {
+                  return (
+                    <div className="p-4 text-center text-gray-500 text-[10px] font-mono uppercase">
+                      Nenhum veículo com "{headerSearchPlate.toUpperCase()}"
+                    </div>
+                  );
+                }
+
+                return matches.map((os) => {
+                  const statusColors: Record<string, string> = {
+                    'Aberta': 'border-blue-900 bg-blue-950/40 text-blue-400',
+                    'Em análise': 'border-yellow-905 bg-yellow-950/40 text-yellow-500',
+                    'Aguardando peça': 'border-orange-950 bg-orange-950/40 text-orange-400',
+                    'Em execução': 'border-red-955 bg-red-950/20 text-red-500',
+                    'Finalizada': 'border-green-900 bg-green-950/20 text-green-400',
+                    'Entregue': 'border-emerald-600 bg-emerald-950/20 text-emerald-400'
+                  };
+                  const colorClass = statusColors[os.status] || 'border-slate-850 text-slate-400 bg-slate-900/40';
+
+                  return (
+                    <button
+                      key={os.id}
+                      type="button"
+                      onMouseDown={() => {
+                        setGlobalSearchPlate(os.plate);
+                        setActiveRoute('os');
+                        setHeaderSearchPlate('');
+                      }}
+                      className="w-full p-2.5 hover:bg-slate-900/60 transition-colors text-left border-b border-gray-850/50 flex justify-between items-center bg-transparent border-0 cursor-pointer"
+                    >
+                      <div className="flex flex-col gap-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* Brazilian formatted license plate */}
+                          <span className="inline-flex items-center gap-1 border border-blue-500 bg-[#0f172a] text-blue-400 font-bold px-1.5 py-0.5 rounded text-[8.5px] leading-tight font-mono tracking-wider shrink-0">
+                            <span className="w-1 h-1 rounded-full bg-blue-500" />
+                            {os.plate.toUpperCase()}
+                          </span>
+                          <span className="text-white font-bold text-[10px] truncate max-w-[110px]">
+                            {os.clienteName || 'Consumidor Final'}
+                          </span>
+                        </div>
+                        <span className="text-[9px] text-gray-400 font-sans truncate block">
+                          🚗 {os.veiculoInfo || 'Veículo não informado'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+                        <span className={`text-[8px] px-1 py-0.5 rounded border ${colorClass} font-mono uppercase font-black leading-none`}>
+                          {os.status}
+                        </span>
+                        <span className="text-[7.5px] text-gray-500 font-mono">
+                          #{os.id.substring(0, 8)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                });
+              })()}
+            </div>
+          )}
         </div>
 
         {/* Right header shortcuts */}

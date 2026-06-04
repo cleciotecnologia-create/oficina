@@ -32,7 +32,10 @@ import {
   Settings,
   History,
   RotateCcw,
-  FileText
+  FileText,
+  Smartphone,
+  Share2,
+  Send
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Produto, Servico, Cliente, SaleItem } from '../types';
@@ -296,6 +299,10 @@ export const PDVView: React.FC = () => {
   const [reversalError, setReversalError] = useState<string | null>(null);
   const [showReversalReceipt, setShowReversalReceipt] = useState(false);
   const [reversalReceiptSale, setReversalReceiptSale] = useState<any | null>(null);
+
+  // Digital Receipt Card Modal states
+  const [showDigitalReceiptCardModal, setShowDigitalReceiptCardModal] = useState(false);
+  const [selectedReceiptSale, setSelectedReceiptSale] = useState<any | null>(null);
   
   // History search query
   const [historySearchQuery, setHistorySearchQuery] = useState('');
@@ -1858,6 +1865,19 @@ export const PDVView: React.FC = () => {
                               <Printer className="w-3.5 h-3.5 text-cyan-450" /> Re-imprimir
                             </button>
 
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playScannerBeep();
+                                setSelectedReceiptSale(v);
+                                setShowDigitalReceiptCardModal(true);
+                              }}
+                              className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-emerald-900/40 bg-emerald-950/25 hover:bg-emerald-900 hover:text-white text-emerald-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
+                              title="Visualizar Comprovante Digital (Card & WhatsApp)"
+                            >
+                              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Digital
+                            </button>
+
                             {isEstornada && (
                               <button
                                 type="button"
@@ -2525,32 +2545,294 @@ export const PDVView: React.FC = () => {
             </div>
 
             {/* Action buttons inside Ticket receipt popup */}
-            <div className="mt-6 flex gap-2 font-mono">
+            <div className="mt-6 flex flex-col gap-2 font-mono">
               <button 
                 type="button"
                 onClick={() => {
-                  window.print();
+                  playScannerBeep();
+                  setSelectedReceiptSale(lastFinishedSale);
+                  setShowDigitalReceiptCardModal(true);
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-neutral-900 text-white text-xs font-bold hover:bg-neutral-800 flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%]"
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-all transition-all active:scale-[98%] uppercase"
               >
-                <Printer className="w-4 h-4 text-white" /> Imprimir Cupom
+                <Smartphone className="w-4 h-4 text-white animate-pulse" /> Comprovante Digital WhatsApp
               </button>
-              <button 
-                type="button"
-                onClick={() => {
-                  setSaleFinished(false);
-                  setLastFinishedSale(null);
-                }}
-                className="flex-1 py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center"
-              >
-                Fechar Recibo
-              </button>
+              <div className="flex gap-2">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    window.print();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-neutral-900 text-white text-xs font-bold hover:bg-neutral-800 flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%]"
+                >
+                  <Printer className="w-4 h-4 text-white" /> Imprimir Cupom
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setSaleFinished(false);
+                    setLastFinishedSale(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center"
+                >
+                  Fechar Recibo
+                </button>
+              </div>
             </div>
 
           </div>
         </div>
       )}
- 
+
+      {/* 🧾 PREMIUM DIGITAL PAYMENT RECEIPT CARD WITH WHATSAPP DISPATCH */}
+      {showDigitalReceiptCardModal && selectedReceiptSale && (() => {
+        const linkedOS = selectedReceiptSale.linkedOSId 
+          ? ordensServico.find(os => os.id === selectedReceiptSale.linkedOSId)
+          : null;
+        const clientObj = selectedReceiptSale.clienteId
+          ? clientes.find(c => c.id === selectedReceiptSale.clienteId)
+          : null;
+        const displayPhoneFixed = selectedReceiptSale.clientePhone || clientObj?.phone || linkedOS?.clientePhone || 'Não informado';
+        const displayItemsList = selectedReceiptSale.items || [];
+        
+        // Calculate dynamic values
+        const cardPixTxId = selectedReceiptSale.pixTransactionId || ("E" + Math.floor(100000000 + Math.random() * 900000000) + "BACEN");
+
+        const handleSendWhatsApp = () => {
+          const clientName = selectedReceiptSale.clienteName || 'Prezado Cliente';
+          const plainPhone = displayPhoneFixed.replace(/\D/g, "");
+          const messageText = `*COMPROVANTE DE QUITAÇÃO DE ORDEM DE SERVIÇO* 🧾🚗
+--------------------------------------------------
+✅ *PAGAMENTO CONFIRMADO & VALIDADO*
+
+Olá *${clientName}*,
+Seu pagamento via *PIX* foi recebido e processado com sucesso pelo sistema operacional de nossa oficina. Suas chaves e veículo estão liberados para retirada!
+
+⚙️ *DADOS DA ORDEM DE SERVIÇO:*
+• OS ID: *#${selectedReceiptSale.linkedOSId || selectedReceiptSale.id}*
+${linkedOS ? `• Veículo: *${linkedOS.veiculoInfo || 'Não informado'}*` : ''}
+${linkedOS?.plate ? `• Placa: *${linkedOS.plate.toUpperCase()}*` : ''}
+
+💰 *RESUMO FINANCEIRO:*
+• Valor Total Pago: *R$ ${selectedReceiptSale.total.toFixed(2)}*
+• Método de Quitação: *PIX Integrado SESP/SAT*
+• Chave Destinatária: *${company?.pixKey || 'cleciotecnologia@gmail.com'}*
+• Autenticação BC: *${cardPixTxId}*
+
+📅 *DATA/HORA DO PROCESSAMENTO:*
+• ${new Date(selectedReceiptSale.date).toLocaleString('pt-BR')}
+
+--------------------------------------------------
+Obrigado pela preferência!
+*${(company?.name || 'AutoPrecision Premium').toUpperCase()}*
+Telefone: ${company?.phone || '(11) 98765-4321'}`;
+
+          const whatsappUrl = `https://api.whatsapp.com/send?phone=55${plainPhone}&text=${encodeURIComponent(messageText)}`;
+          window.open(whatsappUrl, '_blank');
+        };
+
+        const handleCopyText = () => {
+          const clientName = selectedReceiptSale.clienteName || 'Prezado Cliente';
+          const messageText = `*COMPROVANTE DE QUITAÇÃO DE ORDEM DE SERVIÇO* 🧾🚗
+--------------------------------------------------
+✅ *PAGAMENTO CONFIRMADO & VALIDADO*
+
+Olá *${clientName}*,
+Seu pagamento via *PIX* foi recebido e processado com sucesso pelo sistema operacional de nossa oficina. Suas chaves e veículo estão liberados para retirada!
+
+⚙️ *DADOS DA ORDEM DE SERVIÇO:*
+• OS ID: *#${selectedReceiptSale.linkedOSId || selectedReceiptSale.id}*
+${linkedOS ? `• Veículo: *${linkedOS.veiculoInfo || 'Não informado'}*` : ''}
+${linkedOS?.plate ? `• Placa: *${linkedOS.plate.toUpperCase()}*` : ''}
+
+💰 *RESUMO FINANCEIRO:*
+• Valor Total Pago: *R$ ${selectedReceiptSale.total.toFixed(2)}*
+• Método de Quitação: *PIX Integrado SESP/SAT*
+• Chave Destinatária: *${company?.pixKey || 'cleciotecnologia@gmail.com'}*
+• Autenticação BC: *${cardPixTxId}*
+
+📅 *DATA/HORA DO PROCESSAMENTO:*
+• ${new Date(selectedReceiptSale.date).toLocaleString('pt-BR')}
+
+--------------------------------------------------
+Obrigado pela preferência!
+*${(company?.name || 'AutoPrecision Premium').toUpperCase()}*
+Telefone: ${company?.phone || '(11) 98765-4321'}`;
+
+          try {
+            navigator.clipboard.writeText(messageText);
+            alert("Comprovante formatado de WhatsApp copiado para a área de transferência!");
+          } catch (err) {
+            console.error(err);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-[110] bg-slate-950/85 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
+            <div className="bg-[#0b1220] border border-gray-800 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl relative text-left my-8 animate-fade-in">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDigitalReceiptCardModal(false);
+                  setSelectedReceiptSale(null);
+                }}
+                className="absolute top-4 right-4 z-20 p-2 rounded-full bg-slate-900 border border-gray-800 hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="p-6 border-b border-gray-900 bg-[#080c16]">
+                <span className="text-[10px] bg-emerald-950/50 border border-emerald-900 text-emerald-400 font-mono py-1 px-2.5 rounded font-bold uppercase tracking-wider inline-block">
+                  SESP / SAT DIGITAL
+                </span>
+                <h3 className="text-base font-display font-extrabold text-white mt-1.5 flex items-center gap-1.5">
+                  <Smartphone className="w-5 h-5 text-emerald-400 animate-pulse" /> Comprovante de Quitação
+                </h3>
+                <p className="text-[10px] text-gray-400 font-mono leading-tight mt-0.5">
+                  Gere de forma dinâmica o card em alta resolução do comprovante de pagamento para transmissão ao WhatsApp.
+                </p>
+              </div>
+
+              {/* CARD CONTAINER WITH METALLIC GLOW EFFECT */}
+              <div className="p-6 flex flex-col gap-5">
+                <div 
+                  id="digital-payment-card" 
+                  className="bg-gradient-to-br from-[#1e293b] via-[#0f172a] to-[#020617] border-2 border-emerald-500/60 rounded-3xl p-5 shadow-[0_4px_30px_rgba(16,185,129,0.15)] text-white font-sans flex flex-col justify-between gap-4 relative overflow-hidden"
+                >
+                  {/* Subtle carbon grid & hologram backdrop overlay pattern */}
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full filter blur-xl select-none" />
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-cyan-500/5 rounded-full filter blur-xl select-none" />
+
+                  {/* Header: Brand and System status */}
+                  <div className="flex justify-between items-start z-10 font-mono">
+                    <div className="flex flex-col">
+                      <span className="text-[10px] tracking-widest font-mono text-emerald-400 uppercase font-bold leading-none">
+                        {(company?.name || 'AutoPrecision Premium').toUpperCase()}
+                      </span>
+                      <span className="text-[7.5px] font-mono text-gray-500 uppercase mt-0.5">
+                        CNPJ: {company?.cnpj || "12.345.678/0001-90"}
+                      </span>
+                    </div>
+                    {/* Glowing LED Status badge */}
+                    <div className="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-800/60 px-2 py-0.5 rounded-full select-none">
+                      <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping shrink-0" />
+                      <span className="text-[8px] font-mono font-bold tracking-widest text-emerald-400 uppercase leading-none">QUITADO/PIX</span>
+                    </div>
+                  </div>
+
+                  {/* Amount / Value showcase area */}
+                  <div className="z-10 bg-slate-950/40 border border-slate-800/40 p-4 rounded-2xl text-center self-center w-full shadow-inner">
+                    <span className="text-[9px] text-gray-400 uppercase font-mono block">VALOR LIQUIDADO INTEGRALMENTE</span>
+                    <h2 className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-emerald-400 leading-tight">
+                      R$ {selectedReceiptSale.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </h2>
+                    <span className="text-[8.5px] text-slate-500 font-mono block mt-1 uppercase">
+                      Chave Destino: <strong className="text-gray-300 font-semibold">{company?.pixKey || 'cleciotecnologia@gmail.com'}</strong>
+                    </span>
+                  </div>
+
+                  {/* Operational and customer variables */}
+                  <div className="grid grid-cols-2 gap-3.5 text-left border-t border-slate-800/50 pt-3 z-10">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[7.5px] text-gray-500 uppercase font-mono tracking-wide">CLIENTE DEPOSITANTE</span>
+                      <span className="text-[10.5px] font-bold text-gray-200 truncate">{selectedReceiptSale.clienteName || 'Consumidor Final'}</span>
+                      <span className="text-[8px] text-gray-400 font-mono">{displayPhoneFixed}</span>
+                    </div>
+
+                    <div className="flex flex-col gap-0.5 text-right font-mono">
+                      <span className="text-[7.5px] text-gray-500 uppercase font-mono tracking-wide">ORDEM DE SERVIÇO / OS</span>
+                      <span className="text-[10.5px] font-bold text-red-450 text-red-500 uppercase tracking-widest font-mono truncate">
+                        #{selectedReceiptSale.linkedOSId || 'Venda Balcão'}
+                      </span>
+                      {linkedOS?.veiculoInfo && (
+                        <span className="text-[8.5px] text-gray-300 font-sans font-medium leading-none block truncate" title={linkedOS.veiculoInfo}>
+                          🚗 {linkedOS.veiculoInfo}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Barcode/Auth block */}
+                  <div className="border-t border-dashed border-slate-800 pt-3 flex items-center justify-between z-10">
+                    <div className="flex flex-col">
+                      <span className="text-[7.5px] text-gray-500 uppercase font-mono">AUTENTICAÇÃO BACEN / SICOOB</span>
+                      <span className="text-[8.5px] text-gray-400 font-mono font-bold leading-none truncate max-w-[200px] block text-emerald-400" title={cardPixTxId}>
+                        {cardPixTxId}
+                      </span>
+                      <span className="text-[7.5px] text-gray-500 font-mono mt-0.5">
+                        Liquidado em {new Date(selectedReceiptSale.date).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    {/* Simulated hologram barcode stamp */}
+                    <div className="flex flex-col items-center select-none opacity-80">
+                      <div className="flex gap-0.5 items-center bg-white p-1 rounded">
+                        <div className="w-[1px] h-3.5 bg-black" />
+                        <div className="w-[0.5px] h-3.5 bg-black" />
+                        <div className="w-[2px] h-3.5 bg-black" />
+                        <div className="w-[1.5px] h-3.5 bg-black" />
+                        <div className="w-[0.5px] h-3.5 bg-black" />
+                        <div className="w-[2.5px] h-3.5 bg-black" />
+                        <div className="w-[1px] h-3.5 bg-black" />
+                        <div className="w-[0.5px] h-3.5 bg-black" />
+                      </div>
+                      <span className="text-[6.5px] font-mono text-gray-500 mt-0.5">SESP-V1</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items Breakdown inside Card Modal for transparency */}
+                <div className="border-t border-gray-850 pt-2 flex flex-col gap-1.5 text-xs font-mono text-left text-gray-400">
+                  <span className="text-[9px] uppercase font-black tracking-wider text-gray-500">ITENS DETALHADOS NO COMPROVANTE:</span>
+                  <div className="max-h-[85px] overflow-y-auto flex flex-col gap-1 bg-[#080d16] p-2 rounded-xl border border-gray-900">
+                    {displayItemsList.map((item: any, idx: number) => (
+                      <div key={idx} className="flex justify-between items-center text-[9.5px]">
+                        <span className="truncate w-3/4 text-gray-300">
+                          {item.quantity}x {item.name}
+                        </span>
+                        <span className="text-white font-bold whitespace-nowrap">
+                          R$ {item.subtotal.toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Dispatch Controls */}
+                <div className="flex flex-col gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={handleSendWhatsApp}
+                    className="w-full py-3.5 bg-green-600 hover:bg-green-700 text-white font-extrabold rounded-xl text-xs tracking-wider font-mono cursor-pointer shadow-lg shadow-green-950/40 text-center active:scale-98 transition-all uppercase flex items-center justify-center gap-2 border-0"
+                  >
+                    <Share2 className="w-4 h-4 text-white animate-pulse" /> Disparar p/ WhatsApp do Cliente
+                  </button>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyText}
+                      className="flex-1 py-2.5 bg-[#080c16] border border-gray-800 text-gray-300 hover:text-white rounded-xl text-[10.5px] font-mono uppercase font-bold flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-900 transition-all text-center"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-gray-400" /> Copiar Texto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDigitalReceiptCardModal(false);
+                        setSelectedReceiptSale(null);
+                      }}
+                      className="flex-1 py-2.5 bg-transparent border border-gray-800 hover:bg-slate-900 text-gray-400 hover:text-white rounded-xl text-[10.5px] font-mono uppercase font-bold transition-all text-center cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* 🔮 GLOBAL SCAN SUCCESS FLOATING TOAST POPUP */}
       {scanToast.show && (
         <div className="fixed bottom-6 right-6 z-50 bg-[#061e14] border-2 border-emerald-500 rounded-xl p-4 shadow-[0_4px_25px_rgba(16,185,129,0.3)] flex items-center gap-3 max-w-sm animate-bounce text-left">
