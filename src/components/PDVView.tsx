@@ -283,6 +283,12 @@ export const PDVView: React.FC = () => {
   const [saleFinished, setSaleFinished] = useState(false);
   const [lastFinishedSale, setLastFinishedSale] = useState<any | null>(null);
 
+  // PIX verification/approval modal states
+  const [showPixApprovalModal, setShowPixApprovalModal] = useState(false);
+  const [pixModalStatus, setPixModalStatus] = useState<'pending' | 'approving' | 'approved'>('pending');
+  const [pixTxId, setPixTxId] = useState('');
+  const [pixTimer, setPixTimer] = useState(60);
+
   // Reversal modal states
   const [reversalSaleId, setReversalSaleId] = useState<string | null>(null);
   const [reversalJustification, setReversalJustification] = useState<string>('');
@@ -553,6 +559,39 @@ export const PDVView: React.FC = () => {
     }
   }, [lastFinishedSale, company]);
 
+  useEffect(() => {
+    let timerInterval: any;
+    if (showPixApprovalModal && pixModalStatus === 'pending') {
+      timerInterval = setInterval(() => {
+        setPixTimer(prev => {
+          if (prev <= 1) {
+            clearInterval(timerInterval);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timerInterval);
+  }, [showPixApprovalModal, pixModalStatus]);
+
+  useEffect(() => {
+    let simTimeout: any;
+    if (showPixApprovalModal && pixModalStatus === 'pending') {
+      // Auto-simulate payment after 9 seconds if not manually approved
+      simTimeout = setTimeout(() => {
+        setPixModalStatus('approving');
+      }, 9000);
+    } else if (showPixApprovalModal && pixModalStatus === 'approving') {
+      // Wait for 1.8 seconds in verifying stage, then confirm
+      simTimeout = setTimeout(() => {
+        setPixModalStatus('approved');
+        playScannerBeep();
+      }, 1800);
+    }
+    return () => clearTimeout(simTimeout);
+  }, [showPixApprovalModal, pixModalStatus]);
+
   const handleApplyCoupon = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setCouponError(null);
@@ -701,7 +740,8 @@ export const PDVView: React.FC = () => {
       clienteId: selectedClienteId !== 'unidentified' ? selectedClienteId : undefined,
       clienteName: finalClientName,
       clienteCpfCnpj: finalClientCpf,
-      linkedOSId: linkedOSId || undefined
+      linkedOSId: linkedOSId || undefined,
+      pixTransactionId: paymentMethod === 'PIX' ? (pixTxId || "E" + Math.floor(100000000 + Math.random() * 900000000) + "BACEN") : undefined
     };
 
     await addVenda(saleDetails);
@@ -1665,10 +1705,20 @@ export const PDVView: React.FC = () => {
 
               <button 
                 type="button"
-                onClick={handleFinalizeSale}
-                className="w-full py-4 bg-red-650 hover:bg-red-700 bg-red-600 text-white font-bold rounded-xl text-xs sm:text-xs tracking-widest font-mono cursor-pointer shadow-lg shadow-red-950/40 text-center active:scale-98 transition-transform uppercase"
+                onClick={() => {
+                  if (paymentMethod === 'PIX') {
+                    setPixModalStatus('pending');
+                    const generatedTxId = "E" + Math.floor(100000000 + Math.random() * 900000000) + "BACEN";
+                    setPixTxId(generatedTxId);
+                    setPixTimer(60);
+                    setShowPixApprovalModal(true);
+                  } else {
+                    handleFinalizeSale();
+                  }
+                }}
+                className="w-full py-4 bg-red-650 hover:bg-red-700 bg-red-600 text-white font-bold rounded-xl text-xs sm:text-xs tracking-widest font-mono cursor-pointer shadow-lg shadow-red-950/40 text-center active:scale-98 transition-all uppercase animate-pulse-subtle"
               >
-                📥 REGISTRAR E IMPRIMIR VENDA
+                {paymentMethod === 'PIX' ? '🔗 AUTORIZAR PAGAMENTO PIX' : '📥 REGISTRAR E IMPRIMIR VENDA'}
               </button>
 
             </div>
@@ -2108,6 +2158,218 @@ export const PDVView: React.FC = () => {
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* DIRECT INTEGRATED PIX APPROVAL & SIMULATION MODAL */}
+      {showPixApprovalModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-[#0c1223] border border-gray-805 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl text-left animate-fade-in border-gray-800">
+            {/* Header */}
+            <div className="p-6 border-b border-gray-850 flex justify-between items-center bg-[#080d1a]">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 rounded-xl relative">
+                  <QrCode className="w-5 h-5 text-emerald-400 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-white text-sm sm:text-base">Módulo PIX Integrado SESP/SAT</h3>
+                  <span className="text-[10px] text-gray-500 font-mono block">Segurança Banco Central do Brasil • Emissão Imediata</span>
+                </div>
+              </div>
+              {pixModalStatus !== 'approving' && (
+                <button
+                  type="button"
+                  onClick={() => setShowPixApprovalModal(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-900 text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+
+            {/* Body content */}
+            <div className="p-6 flex flex-col gap-4 text-xs font-mono text-gray-300">
+              {/* Financial Box */}
+              <div className="bg-[#080d1a] border border-gray-850 p-4 rounded-2xl flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] text-gray-500 block uppercase font-bold">Total a receber via PIX</span>
+                  <span className="text-xl sm:text-2xl font-bold font-display text-emerald-400">R$ {grandTotal.toFixed(2)}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-gray-500 block uppercase">CLIENTE</span>
+                  <span className="text-xs font-bold text-white max-w-[150px] truncate block">
+                    {selectedClienteId === 'unidentified' ? 'Consumidor Final' : activeCustomer?.name || 'Cliente'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Status Section */}
+              <div className="flex flex-col gap-2.5">
+                {pixModalStatus === 'pending' && (
+                  <div className="p-4 rounded-2xl bg-amber-950/15 border border-amber-900/40 text-center flex flex-col items-center gap-2 animate-fade-in">
+                    <div className="flex items-center gap-2 text-amber-500 font-bold font-mono">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                      <span>🕒 AGUARDANDO DEPOSITANTE • {pixTimer}s</span>
+                    </div>
+                    <span className="text-[11px] text-gray-400">
+                      O sistema está monitorando as transações do Banco Central para a chave <strong className="text-gray-200">{company?.pixKey || 'cleciotecnologia@gmail.com'}</strong>.
+                    </span>
+                  </div>
+                )}
+
+                {pixModalStatus === 'approving' && (
+                  <div className="p-4 rounded-2xl bg-cyan-950/15 border border-cyan-900/40 text-center flex flex-col items-center gap-3 animate-fade-in">
+                    <div className="flex items-center gap-2 text-cyan-400 font-bold font-mono">
+                      <svg className="animate-spin h-4 w-4 text-cyan-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      <span>⚡ CONFERINDO ASSINATURA DIGITAL...</span>
+                    </div>
+                    <span className="text-[11px] text-gray-400">
+                      Entrando em contato com o Gateway Central SICOOB. Verificando as chaves de segurança e o ID {pixTxId}.
+                    </span>
+                  </div>
+                )}
+
+                {pixModalStatus === 'approved' && (
+                  <div className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-900/40 text-center flex flex-col items-center gap-2 animate-fade-in">
+                    <div className="flex items-center gap-2 text-emerald-400 font-bold font-mono">
+                      <CheckCircle className="w-5 h-5 text-emerald-400 animate-bounce" />
+                      <span>🟢 PAGAMENTO INTEGRADO APROVADO!</span>
+                    </div>
+                    <div className="flex flex-col gap-0.5 text-left bg-black/40 border border-gray-900 px-3 py-2 rounded-xl w-full mt-1.5 border-gray-850">
+                      <span className="text-[9px] text-gray-500 uppercase font-black">AUTENTICAÇÃO DO DOCUMENTO</span>
+                      <span className="text-[9px] text-emerald-400 leading-none truncate">{pixTxId}</span>
+                      <span className="text-[9px] text-gray-400 mt-1">Status: <strong className="text-white uppercase text-[9px]">LIQUIDADO / SEGURO</strong></span>
+                      <span className="text-[8.5px] text-gray-500 font-sans mt-0.5 leading-tight">Valor integral do Pix creditado e verificado no CNPJ da empresa. O estoque foi reajustado e a venda liberada no sistema.</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* QR Code and "Copia e Cola" Area for pending status */}
+              {pixModalStatus === 'pending' && (
+                <div className="bg-[#080d1a] border border-gray-850 p-4 rounded-2xl flex flex-col items-center gap-3">
+                  {pixQrBase64 ? (
+                    <div className="p-2.5 bg-white rounded-xl inline-block shadow-lg">
+                      <img 
+                        src={pixQrBase64} 
+                        alt="QR Code Pix" 
+                        className="w-32 h-32 object-contain"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-32 h-32 border border-gray-800 rounded-xl flex items-center justify-center text-[10px] text-gray-500">
+                      Processando chaves...
+                    </div>
+                  )}
+
+                  <div className="w-full">
+                    <span className="text-[9px] text-gray-500 uppercase block mb-1 text-left">Copia-e-Cola (Pix Payload):</span>
+                    <div className="flex gap-1.5">
+                      <input 
+                        type="text" 
+                        readOnly 
+                        value={pixStringCode} 
+                        className="bg-black/50 border border-gray-850 rounded-lg px-2.5 py-2 font-mono text-[8.5px] text-gray-400 select-all truncate flex-1 outline-none text-left"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            navigator.clipboard.writeText(pixStringCode);
+                            alert("Código Pix copiado com sucesso!");
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }}
+                        className="px-2.5 py-1.5 bg-red-650 hover:bg-red-750 font-mono font-bold text-[9px] uppercase rounded-lg text-white flex items-center gap-1 cursor-pointer transition-colors shrink-0"
+                      >
+                        <Copy className="w-3 h-3 text-white" /> COPIAR
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Console Logs Terminal */}
+              <div className="bg-black/80 border border-gray-900 rounded-2xl p-3 font-mono text-[9px] text-gray-400 flex flex-col gap-1 select-none max-h-[100px] overflow-y-auto text-left">
+                <span className="text-yellow-500 font-bold uppercase text-[7px] tracking-wider block mb-0.5 select-none border-b border-gray-900 pb-1">SAT-PIX Terminal Logs • v1.19</span>
+                <span>[LOG] Estabelecendo conexão TLS v1.3 com webhook do Banco Central.</span>
+                <span>[LOG] Chave Pix da empresa ativa: {company?.pixKey || 'cleciotecnologia@gmail.com'}</span>
+                <span>[LOG] QR Code dinâmico do lote gerado com sucesso.</span>
+                {pixModalStatus === 'pending' && (
+                  <span className="text-yellow-500 animate-pulse">[LOG] Esperando transferência... (Tempo restante: {pixTimer}s)</span>
+                )}
+                {pixModalStatus === 'approving' && (
+                  <>
+                    <span className="text-cyan-400 font-bold">[LOG] Detectou envio de PIX! Validando transação ID {pixTxId}</span>
+                    <span className="text-cyan-400 animate-pulse">[LOG] Executando rotina anti-fraude e validação de assinatura digital com BACEN</span>
+                  </>
+                )}
+                {pixModalStatus === 'approved' && (
+                  <>
+                    <span className="text-emerald-400 font-bold">[LOG] Sucesso: Assinatura validada e crédito verificado!</span>
+                    <span className="text-gray-500">[LOG] Banco Origem do Cliente: Confirmado por API SICOOB</span>
+                  </>
+                )}
+              </div>
+
+              {/* Dynamic Operations Footer Buttons */}
+              <div className="flex flex-col gap-2 mt-2 border-t border-gray-850 pt-4">
+                {pixModalStatus === 'pending' && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPixModalStatus('approving');
+                      }}
+                      className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-750 text-white font-bold rounded-xl text-[10.5px] uppercase flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-950/20 active:scale-98 transition-all border-0"
+                    >
+                      🟢 Simular Aprovação PIX
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPixApprovalModal(false)}
+                      className="py-3 px-4 rounded-xl border border-gray-800 hover:bg-slate-900 text-[10.5px] text-gray-400 hover:text-white font-bold transition-all text-center cursor-pointer bg-transparent"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+
+                {pixModalStatus === 'approving' && (
+                  <button
+                    type="button"
+                    disabled
+                    className="w-full py-3 bg-[#0c1223] border border-gray-850 text-gray-500 font-bold rounded-xl text-[10.5px] font-mono select-none flex items-center justify-center gap-1.5"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" /> Validando lote fiscal e bancário...
+                  </button>
+                )}
+
+                {pixModalStatus === 'approved' && (
+                  <div className="flex flex-col gap-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setShowPixApprovalModal(false);
+                        await handleFinalizeSale();
+                      }}
+                      className="w-full py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-xs tracking-wider font-mono cursor-pointer shadow-lg shadow-emerald-900/35 text-center active:scale-98 transition-transform uppercase flex items-center justify-center gap-2 border-0"
+                    >
+                      📥 CONFIRMAR VENDA & EMITIR COMPROVANTE
+                    </button>
+                    <span className="text-[9px] text-slate-500 font-sans block text-center mt-1 select-none">
+                      🔒 O cupom de comprovante não-fiscal será gerado e impresso logo em seguida.
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

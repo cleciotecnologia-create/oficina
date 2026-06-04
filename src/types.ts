@@ -108,6 +108,7 @@ export interface Venda {
   linkedOSId?: string;
   status?: 'paga' | 'estornada';
   justification?: string;
+  pixTransactionId?: string;
 }
 
 export interface ChecklistItem {
