@@ -40,10 +40,12 @@ export const OSView: React.FC = () => {
     produtos, 
     servicos,
     getSmartDiagnosis, 
-    aiLoading 
+    aiLoading,
+    company
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'lista' | 'nova'>('lista');
+  const [pdfOSSelected, setPdfOSSelected] = useState<OrdemServico | null>(null);
   const [searchPlate, setSearchPlate] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todas');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
@@ -560,6 +562,14 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
                       title="Compartilhar orçamento via WhatsApp"
                     >
                       <Phone className="w-3 h-3" /> Enviar Orçamento
+                    </button>
+
+                    <button 
+                      onClick={() => setPdfOSSelected(os)}
+                      className="px-2 py-1 rounded bg-slate-900 border border-slate-850 hover:bg-slate-800 text-amber-400 flex items-center gap-1.5 cursor-pointer transition-colors font-bold"
+                      title="Visualizar e Exportar PDF Simplificado"
+                    >
+                      <Printer className="w-3 h-3 text-amber-400 animate-pulse" /> Exportar PDF
                     </button>
 
                     <button 
@@ -1355,7 +1365,285 @@ Por gentileza, acesse este canal ou responda essa mensagem para aprovar a execu�
         </div>
       )}
 
-      {/* 🚨 REABRIR ORDEM DE SERVIÇO EM GARANTIA DIALOG MODAL */}
+      {/* 🧾 OUTLINE PDF DOCUMENT EXPORT VIEW COMPONENT MODAL */}
+      {pdfOSSelected && (
+        <div id="pdf-os-export-overlay" className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-start overflow-y-auto p-4 md:p-6 backdrop-blur-sm no-print">
+          
+          {/* Print/Exit Toolbar (HIDDEN during window.print()) */}
+          <div className="bg-[#0b1222] border border-gray-800 text-white max-w-4xl w-full rounded-2xl p-4 shadow-2xl mb-4 flex flex-col sm:flex-row items-center justify-between gap-4 font-sans no-print">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                <Printer className="w-5 h-5 animate-pulse" />
+              </span>
+              <div>
+                <span className="font-extrabold text-sm block tracking-wide uppercase">Exportação de Ordem de Serviço</span>
+                <span className="text-[10px] text-gray-400 block font-mono">Visualize e salve o relatório PDF estruturado</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 mt-2 sm:mt-0">
+              <button
+                type="button"
+                onClick={() => {
+                  window.print();
+                }}
+                className="py-2 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all hover:scale-[1.02]"
+              >
+                <Printer className="w-4 h-4 text-white" /> Imprimir / Salvar PDF
+              </button>
+              <button
+                type="button"
+                onClick={() => setPdfOSSelected(null)}
+                className="py-2 px-3 rounded-xl border border-gray-800 text-gray-400 hover:text-white hover:bg-slate-900 font-bold text-xs cursor-pointer transition-colors"
+              >
+                Voltar
+              </button>
+            </div>
+          </div>
+
+          {/* PRINTABLE AREA CONTAINER SHEET */}
+          <div 
+            id="print-os-document-sheet" 
+            className="print-container-target bg-white text-black max-w-4xl w-full rounded-2xl p-8 md:p-10 shadow-2xl relative text-left flex flex-col font-sans"
+            style={{ minHeight: '297mm' }}
+          >
+            
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-start border-b-2 border-black pb-5 gap-4">
+              <div className="flex flex-col gap-1 max-w-[70%] text-left">
+                <h1 className="font-display font-extrabold text-lg sm:text-xl text-black leading-tight uppercase font-mono tracking-wide">
+                  {company?.name || 'AutoPrecision Premium'}
+                </h1>
+                <p className="text-[10.5px] text-gray-700 leading-normal font-mono max-w-md">
+                  {company?.address || "Avenida das Nações Unidas, 1040 - São Paulo, SP"}
+                </p>
+                <p className="text-[10px] text-gray-500 font-mono">
+                  CNPJ: {company?.cnpj || "12.345.678/0001-90"} • Fone: {company?.phone || "(11) 98765-4321"}
+                </p>
+                {company?.email && (
+                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                    E-mail: {company.email}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-col md:items-end text-left md:text-right font-mono text-[10px] bg-gray-100 border border-gray-200 rounded-xl p-3 max-w-[280px] w-full md:w-auto">
+                <span className="font-sans font-extrabold text-xs block text-red-600 tracking-widest uppercase mb-1">
+                  ORDEM DE SERVIÇO
+                </span>
+                <div>
+                  <span className="text-gray-500 font-bold block uppercase text-[8px]">Protocolo ID:</span>
+                  <strong className="text-black text-sm block mb-1">#{pdfOSSelected.id}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500 font-bold block uppercase text-[8px]">Status Atual:</span>
+                  <span className="bg-red-100 text-red-800 text-[9px] font-extrabold px-1.5 py-0.5 rounded border border-red-200 inline-block uppercase mb-1">
+                    {pdfOSSelected.status}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500 font-bold block uppercase text-[8px]">Data de Entrada:</span>
+                  <span className="text-black font-semibold">
+                    {new Date(pdfOSSelected.createdAt).toLocaleString('pt-BR')}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Identification Area */}
+            <div className="mt-6">
+              <h2 className="text-[11px] font-bold font-mono tracking-wider text-black bg-gray-100 px-3 py-1 text-left border-l-4 border-black uppercase mb-3">
+                1. DADOS DOS PARTICIPANTES E VEÍCULO
+              </h2>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 font-mono text-xs border border-gray-200 rounded-xl p-4 bg-gray-50/50">
+                <div>
+                  <span className="text-gray-500 font-bold uppercase text-[9px] block">CLIENTE/PROPRIETÁRIO:</span>
+                  <strong className="text-black text-[13px]">{pdfOSSelected.clienteName}</strong>
+                </div>
+                <div>
+                  <span className="text-gray-500 font-bold uppercase text-[9px] block">CPF / CNPJ:</span>
+                  <span className="text-black font-semibold">{pdfOSSelected.clienteCpfCnpj || 'Não informado'}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500 font-bold uppercase text-[9px] block">TELEFONE CONTATO:</span>
+                  <span className="text-black font-semibold">{pdfOSSelected.clientePhone}</span>
+                </div>
+                <div>
+                  <span className="text-gray-500 font-bold uppercase text-[9px] block">MECÂNICO OPERADOR RESPONSÁVEL:</span>
+                  <strong className="text-black">{pdfOSSelected.mechanicName}</strong>
+                </div>
+                <div className="col-span-2 border-t border-gray-200 pt-2 mt-1">
+                  <span className="text-gray-500 font-bold uppercase text-[9px] block">VEÍCULO / COR / DETALHAMENTO:</span>
+                  <strong className="text-black text-[12px]">{pdfOSSelected.veiculoInfo}</strong>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-gray-500 font-bold uppercase text-[9px] block font-mono">PLACA DO CARRO:</span>
+                  <span className="text-xs font-bold font-mono bg-blue-100 text-blue-900 border border-blue-200 rounded px-1.5 py-0.5 inline-block uppercase mt-1">
+                    {pdfOSSelected.plate.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Problem Area */}
+            <div className="mt-6">
+              <h2 className="text-[11px] font-bold font-mono tracking-wider text-black bg-gray-100 px-3 py-1 border-l-4 border-black uppercase mb-3 text-left">
+                2. SINTOMÁTICA RECOLHIDA E DIAGNÓSTICO
+              </h2>
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/20 font-mono text-xs">
+                <div className="mb-3">
+                  <strong className="text-gray-500 block text-[9.5px] uppercase font-bold mb-1">🚨 SINAIS E RECLAMAÇÕES INICIAIS:</strong>
+                  <p className="text-black italic pl-3 border-l-2 border-red-500 leading-relaxed font-sans font-medium">
+                    "{pdfOSSelected.problem}"
+                  </p>
+                </div>
+                {pdfOSSelected.diagnosis && (
+                  <div className="pt-3 border-t border-gray-100">
+                    <strong className="text-red-650 block text-[9.5px] uppercase font-bold mb-1">🔧 RESPALDO DA AVALIAÇÃO MECÂNICA:</strong>
+                    <p className="text-black pl-3 border-l-2 border-black leading-relaxed font-sans">
+                      {pdfOSSelected.diagnosis}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Services Table */}
+            <div className="mt-6">
+              <h2 className="text-[11px] font-bold font-mono tracking-wider text-black bg-gray-100 px-3 py-1 border-l-4 border-black uppercase mb-3 text-left">
+                3. DEMONSTRATIVO DE SERVIÇOS EFETUADOS
+              </h2>
+
+              {pdfOSSelected.services && pdfOSSelected.services.length > 0 ? (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full font-mono text-[11px]">
+                    <thead>
+                      <tr className="bg-gray-100 border-b border-gray-200 text-gray-600 text-left">
+                        <th className="p-3">Descrição do Serviço / Mão de Obra</th>
+                        <th className="p-3 text-right w-[155px]">Preço Líquido (R$)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {pdfOSSelected.services.map((srv, sIdx) => (
+                        <tr key={srv.id || sIdx} className="text-black hover:bg-gray-50">
+                          <td className="p-3 font-semibold text-left">{srv.description}</td>
+                          <td className="p-3 text-right font-extrabold text-black">
+                            R$ {srv.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 italic pl-3 font-mono">Nenhum serviço manual ou de catálogo anexado.</p>
+              )}
+            </div>
+
+            {/* Parts Table */}
+            <div className="mt-6">
+              <h2 className="text-[11px] font-bold font-mono tracking-wider text-black bg-gray-100 px-3 py-1 border-l-4 border-black uppercase mb-3 text-left">
+                4. SUPRIMENTO DE PEÇAS E MATERIAIS
+              </h2>
+
+              {pdfOSSelected.parts && pdfOSSelected.parts.length > 0 ? (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full font-mono text-[11px]">
+                    <thead>
+                      <tr className="bg-gray-100 border-b border-gray-200 text-gray-600 text-left">
+                        <th className="p-3">Componente Aplicado</th>
+                        <th className="p-3 text-center w-[80px]">Quant.</th>
+                        <th className="p-3 text-right w-[140px]">Unitário (R$)</th>
+                        <th className="p-3 text-right w-[140px]">Subtotal (R$)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {pdfOSSelected.parts.map((part, pIdx) => (
+                        <tr key={part.id || pIdx} className="text-black hover:bg-gray-50">
+                          <td className="p-3 font-semibold text-left">{part.name}</td>
+                          <td className="p-3 text-center font-bold">{part.quantity}</td>
+                          <td className="p-3 text-right">R$ {part.sellPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-3 text-right font-extrabold text-black">
+                            R$ {(part.sellPrice * part.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-500 italic pl-3 font-mono">Nenhuma peça do almoxarifado foi aplicada.</p>
+              )}
+            </div>
+
+            {/* Total Balance */}
+            <div className="mt-6 p-4 border-2 border-black bg-gray-50 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4 font-mono text-xs">
+              <div className="flex gap-4 flex-wrap text-gray-600 text-[11px] text-left">
+                <div>
+                  <span>Total Mão de Obra:</span>
+                  <strong className="text-black block text-sm">
+                    R$ {pdfOSSelected.services.reduce((acc, s) => acc + s.price, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+                <div className="border-l border-gray-300 pl-4">
+                  <span>Total Sobressalentes:</span>
+                  <strong className="text-black block text-sm">
+                    R$ {pdfOSSelected.parts.reduce((acc, p) => acc + (p.sellPrice * p.quantity), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="text-center sm:text-right bg-black text-white p-2 px-4 rounded-lg">
+                <span className="text-[9px] uppercase tracking-wider block text-gray-400">VALOR TOTAL CONSOLIDADO:</span>
+                <strong className="text-lg text-red-500 font-extrabold block">
+                  R$ {pdfOSSelected.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </strong>
+              </div>
+            </div>
+
+            {/* Signature Stamps */}
+            <div className="mt-12">
+              {pdfOSSelected.signature ? (
+                <div className="border-t border-dashed border-gray-300 pt-6 flex flex-col items-center text-center gap-2">
+                  <div className="w-10 h-10 rounded-full bg-emerald-100 border border-emerald-500 flex items-center justify-center text-emerald-600">
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold font-mono text-emerald-600 tracking-wider block uppercase">AUTORIZAÇÃO DIGITAL CONFIRMADA</span>
+                    <p className="text-[10px] text-gray-600 leading-normal max-w-lg font-mono">
+                      {pdfOSSelected.signature}
+                    </p>
+                    {pdfOSSelected.signedAt && (
+                      <span className="text-[8.5px] text-gray-500 block mt-0.5 font-mono">
+                        Armazenado e validado via token em {new Date(pdfOSSelected.signedAt).toLocaleString('pt-BR')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="border-t border-dashed border-gray-300 pt-12 grid grid-cols-1 md:grid-cols-2 gap-10 font-mono text-[10px] text-center text-gray-600">
+                  <div className="flex flex-col items-center">
+                    <div className="w-full max-w-[280px] border-b border-black mb-1.5 h-[1px]"></div>
+                    <span>Responsável Técnico / Oficina Autotech</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <div className="w-full max-w-[280px] border-b border-black mb-1.5 h-[1px]"></div>
+                    <span>Assinatura de Aprovação do Cliente</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Rules */}
+            <p className="text-[8px] text-gray-400 text-center font-mono mt-12 border-t border-gray-100 pt-3 self-center">
+              Este relatório é gerado em conformidade com as regras de orçamento técnico preventivo. A garantia legal para novos componentes aplicados é de 90 dias.
+            </p>
+
+          </div>
+        </div>
+      )}
+
       {reopenOSId && (
         <div id="warranty-reopen-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
           <div className="bg-[#0c1223] border border-purple-500/30 text-white max-w-md w-full rounded-2xl p-6 shadow-2xl relative flex flex-col gap-4">

@@ -54,3 +54,45 @@ body {
 .glow-btn:hover {
   box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
 }
+
+/* Printing styling helpers for PDF & Document Exports */
+@media print {
+  body, html {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  
+  .no-print,
+  #app-root-sidebar,
+  button,
+  header,
+  nav,
+  input,
+  select,
+  textarea {
+    display: none !important;
+  }
+
+  /* Make sure our custom printable element covers the entire print page */
+  .print-container-target {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 24px !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border: none !important;
+    z-index: 999999 !important;
+  }
+
+  /* Hide other elements if we are printing a target container */
+  body > div:not(.print-container-target) {
+    display: none !important;
+  }
+}
+
