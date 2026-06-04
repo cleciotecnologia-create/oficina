@@ -45,7 +45,9 @@ import {
   User,
   BookOpen,
   Bell,
-  AlertCircle
+  AlertCircle,
+  Keyboard,
+  Command
 } from 'lucide-react';
 
 function AppContent() {
@@ -84,12 +86,110 @@ function AppContent() {
     const params = new URLSearchParams(window.location.search);
     const cpfParam = params.get('cpf');
     const osIdParam = params.get('osId');
-    if (cpfParam || osIdParam) {
+    const oficinaIdParam = params.get('oficinaId');
+    if (cpfParam || osIdParam || oficinaIdParam) {
       setPortalCpf(cpfParam || '');
       setPortalOsId(osIdParam || '');
       setCustomerPortalOpen(true);
     }
   }, []);
+
+  const [isShortcutModalOpen, setIsShortcutModalOpen] = useState(false);
+
+  React.useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in text inputs or textareas to prevent interfering
+      const activeEl = document.activeElement;
+      if (activeEl && (
+        activeEl.tagName === 'INPUT' || 
+        activeEl.tagName === 'TEXTAREA' || 
+        activeEl.getAttribute('contenteditable') === 'true' ||
+        activeEl.tagName === 'SELECT'
+      )) {
+        if (e.key === 'Escape') {
+          (activeEl as HTMLElement).blur();
+        }
+        return;
+      }
+
+      // Block normal action if not logged in
+      if (!user) return;
+
+      const isCtrl = e.ctrlKey || e.metaKey;
+      const isAlt = e.altKey;
+
+      // 1. Nova O.S.: Ctrl + N or Alt + N
+      if ((isCtrl && e.key.toLowerCase() === 'n') || (isAlt && e.key.toLowerCase() === 'n')) {
+        e.preventDefault();
+        setActiveRoute('os');
+        setMobileSidebarOpen(false);
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('open-new-os'));
+        }, 80);
+        return;
+      }
+
+      // 2. Estoque (Stock): Ctrl + S or Alt + S or Alt + E
+      if ((isCtrl && e.key.toLowerCase() === 's') || (isAlt && e.key.toLowerCase() === 's') || (isAlt && e.key.toLowerCase() === 'e')) {
+        e.preventDefault();
+        setActiveRoute('stock');
+        setMobileSidebarOpen(false);
+        return;
+      }
+
+      // 3. Dashboard: Ctrl + D or Alt + D
+      if ((isCtrl && e.key.toLowerCase() === 'd') || (isAlt && e.key.toLowerCase() === 'd')) {
+        e.preventDefault();
+        setActiveRoute('dashboard');
+        setMobileSidebarOpen(false);
+        return;
+      }
+
+      // 4. PDV: Ctrl + P or Alt + P
+      if ((isCtrl && e.key.toLowerCase() === 'p') || (isAlt && e.key.toLowerCase() === 'p')) {
+        e.preventDefault();
+        setActiveRoute('pdv');
+        setMobileSidebarOpen(false);
+        return;
+      }
+
+      // 5. Financeiro: Ctrl + F or Alt + F
+      if ((isCtrl && e.key.toLowerCase() === 'f') || (isAlt && e.key.toLowerCase() === 'f')) {
+        e.preventDefault();
+        setActiveRoute('finance');
+        setMobileSidebarOpen(false);
+        return;
+      }
+
+      // 6. CRM (Clientes): Ctrl + C or Alt + C
+      if ((isCtrl && e.key.toLowerCase() === 'c') || (isAlt && e.key.toLowerCase() === 'c')) {
+        e.preventDefault();
+        setActiveRoute('crm');
+        setMobileSidebarOpen(false);
+        return;
+      }
+
+      // 7. Configurações: Ctrl + G or Alt + G
+      if ((isCtrl && e.key.toLowerCase() === 'g') || (isAlt && e.key.toLowerCase() === 'g')) {
+        e.preventDefault();
+        setActiveRoute('settings');
+        setMobileSidebarOpen(false);
+        return;
+      }
+
+      // 8. Cheat Sheet / Quick Help Modal toggle: Alt + K or Ctrl + M or just ?
+      if ((isAlt && e.key.toLowerCase() === 'k') || (isCtrl && e.key.toLowerCase() === 'm') || e.key === '?') {
+        e.preventDefault();
+        setIsShortcutModalOpen(prev => !prev);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown);
+    };
+  }, [user]);
   
   // Email & Password Auth State
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -574,6 +674,15 @@ function AppContent() {
             );
           })()}
 
+          {/* Keyboard Shortcuts Trigger Button */}
+          <button 
+            onClick={() => setIsShortcutModalOpen(true)}
+            title="Atalhos do Teclado (Alt+K ou ?)"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-emerald-900/60 text-[10px] font-bold font-mono text-emerald-400 cursor-pointer shadow-inner transition-all hover:scale-[102%]"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-emerald-500" /> ATALHOS
+          </button>
+
           {/* AI CoPilot Toggle Button */}
           <button 
             onClick={() => setIsAiDrawerOpen(!isAiDrawerOpen)}
@@ -831,6 +940,149 @@ function AppContent() {
         )}
 
       </div>
+
+      {/* GLOBAL KEYBOARD SHORTCUTS CHEAT SHEET MODAL */}
+      <AnimatePresence>
+        {isShortcutModalOpen && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#0c1223] border border-gray-800 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl text-left"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-gray-850 flex justify-between items-center bg-[#080d1a]">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 rounded-xl">
+                    <Keyboard className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-white text-sm sm:text-base">Atalhos Globais do Teclado</h3>
+                    <span className="text-[10px] text-gray-500 font-mono block">Navegação rápida sem tocar no mouse</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsShortcutModalOpen(false)}
+                  className="p-1.5 rounded-lg hover:bg-slate-900 text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Shortcuts Grid List */}
+              <div className="p-6 flex flex-col gap-4 max-h-[70vh] overflow-y-auto font-mono text-xs text-gray-300">
+                <div className="grid grid-cols-1 gap-2.5">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <LayoutDashboard className="w-4 h-4 text-cyan-400" />
+                      <span className="text-gray-200">Dashboard de Indicadores</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">Ctrl</kbd>
+                      <span className="text-gray-500 self-center">+</span>
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">D</kbd>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <Wrench className="w-4 h-4 text-red-500" />
+                      <div>
+                        <span className="text-gray-200 block">Abrir Nova OS / Ordem</span>
+                        <span className="text-[9px] text-gray-500 block">Monta o formulário de cadastro direto</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">Ctrl</kbd>
+                      <span className="text-gray-500 self-center">+</span>
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">N</kbd>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <Package className="w-4 h-4 text-amber-500" />
+                      <span className="text-gray-200">Estoque de Alerta / Peças</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">Ctrl</kbd>
+                      <span className="text-gray-500 self-center">+</span>
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">S</kbd>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <ShoppingBag className="w-4 h-4 text-emerald-400" />
+                      <span className="text-gray-200">PDV Loja & Caixa</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">Ctrl</kbd>
+                      <span className="text-gray-500 self-center">+</span>
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">P</kbd>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <DollarSign className="w-4 h-4 text-green-400" />
+                      <span className="text-gray-200">Fluxo Financeiro DRE</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">Ctrl</kbd>
+                      <span className="text-gray-500 self-center">+</span>
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">F</kbd>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <Users className="w-4 h-4 text-blue-400" />
+                      <span className="text-gray-200">CRM Clientes & Autos</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">Ctrl</kbd>
+                      <span className="text-gray-500 self-center">+</span>
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">C</kbd>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <Settings className="w-4 h-4 text-slate-400" />
+                      <span className="text-gray-200">Painel de Configurações</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">Ctrl</kbd>
+                      <span className="text-gray-500 self-center">+</span>
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">G</kbd>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                    <div className="flex items-center gap-2.5">
+                      <Command className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      <span className="text-gray-200">Alternar Guia de Atalho</span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">Alt</kbd>
+                      <span className="text-gray-500 self-center">+</span>
+                      <kbd className="px-2 py-1 bg-slate-900 border border-slate-750 rounded text-[10px] font-bold text-white shadow-sm">K</kbd>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="text-[10px] text-gray-500 leading-normal border-t border-gray-850 pt-3 flex flex-col gap-1 select-none font-sans mt-2">
+                  <span>💡 <strong>Dica dos Desenvolvedores:</strong> Segurar <kbd className="px-1 py-0.5 border border-gray-800 bg-gray-950 font-mono font-bold rounded text-[9px]">Alt</kbd> em vez de <kbd className="px-1 py-0.5 border border-gray-800 bg-gray-950 font-mono font-bold rounded text-[9px]">Ctrl</kbd> funciona da mesma forma para todos os comandos! </span>
+                  <span>💡 Pressione <kbd className="px-1 py-0.5 border border-gray-800 bg-gray-950 font-mono font-bold rounded text-[9px]">Esc</kbd> em qualquer momento para sair de campos de digitação.</span>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

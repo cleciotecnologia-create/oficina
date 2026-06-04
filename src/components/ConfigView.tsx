@@ -30,7 +30,8 @@ import {
   RefreshCw,
   Upload,
   AlertTriangle,
-  Trash2
+  Trash2,
+  Link2
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Company } from '../types';
@@ -97,6 +98,7 @@ export const ConfigView: React.FC = () => {
       setPixBeneficiaryStr(company.pixBeneficiary || 'AutoPrecision Premium');
       setPixCityStr(company.pixCity || 'SAO PAULO');
       setDefaultMarkupVal(company.defaultMarkup !== undefined ? company.defaultMarkup : 50);
+      setCustomPortalSlugStr(company.customPortalSlug || company.id);
     }
   }, [company]);
 
@@ -147,6 +149,7 @@ export const ConfigView: React.FC = () => {
   const [customDomainStr, setCustomDomainStr] = useState(company.customDomain || '');
   const [subdomainStr, setSubdomainStr] = useState(company.subdomain || '');
   const [domainStatusVal, setDomainStatusVal] = useState<'Pendente' | 'Verificando' | 'Ativo' | 'Falhado'>(company.domainStatus || 'Pendente');
+  const [customPortalSlugStr, setCustomPortalSlugStr] = useState(company.customPortalSlug || company.id);
   const [dnsTestLogs, setDnsTestLogs] = useState<string[]>([]);
   const [isTestingDns, setIsTestingDns] = useState(false);
   
@@ -486,7 +489,8 @@ export const ConfigView: React.FC = () => {
         pixKey: pixKeyStr,
         pixBeneficiary: pixBeneficiaryStr,
         pixCity: pixCityStr,
-        defaultMarkup: defaultMarkupVal
+        defaultMarkup: defaultMarkupVal,
+        customPortalSlug: customPortalSlugStr
       });
       if (user && user.role === 'Administrador' && userReversalPassword) {
         await updateUserProfile({
@@ -916,6 +920,90 @@ export const ConfigView: React.FC = () => {
                 <span className="text-[9px] text-gray-400 font-sans block mt-1">
                   💡 <strong>Domínio Profissional:</strong> Vincule seu domínio próprio para substituir o link provisório da Vercel.
                 </span>
+              </div>
+            </div>
+
+            {/* Custom Client Portal Link Generator Section */}
+            <div className="border-t border-gray-850 pt-5 flex items-center gap-2">
+              <Link2 className="w-5 h-5 text-emerald-400" />
+              <div>
+                <h3 className="font-display font-bold text-white text-sm">Portal de O.S. & Links de Acesso do Cliente</h3>
+                <span className="text-[10px] text-gray-500 font-mono block">Gere URLs personalizadas para que seus clientes acompanhem ordens de serviço em tempo real.</span>
+              </div>
+            </div>
+
+            <div className="bg-[#050912]/90 border border-gray-850 rounded-xl p-4 flex flex-col gap-4 font-mono text-xs">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Identificador Exclusivo do Portal (ID / Slug)</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="ex: autoclinic"
+                    className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-emerald-500 flex-1 font-mono"
+                    value={customPortalSlugStr}
+                    onChange={(e) => {
+                      const cleanSlug = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+                      setCustomPortalSlugStr(cleanSlug);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCustomPortalSlugStr(company.id)}
+                    className="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:border-emerald-950 rounded-lg text-[10px] text-slate-300 hover:text-emerald-400 transition-all cursor-pointer font-bold shrink-0"
+                  >
+                    Usar ID Padrão
+                  </button>
+                </div>
+                <span className="text-[9px] text-gray-400 font-sans block mt-1">
+                  💡 Este identificador é usado para gerar links curtos e exclusivos que conectam seus clientes cadastrados diretamente ao portal de consulta da sua oficina.
+                </span>
+              </div>
+
+              {/* Generated Links showcase and single click copy buttons */}
+              <div className="flex flex-col gap-3 pt-2">
+                <span className="text-[10.5px] text-gray-400 uppercase font-bold tracking-wider">Links de portal gerados prontos para divulgação:</span>
+                
+                {/* 1. Styled shortened marketing link */}
+                <div className="bg-[#0b1816] border border-emerald-900/30 p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px]">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] text-emerald-400 font-bold tracking-wider uppercase">🔗 URL Personalizada (Para mídias e cartões de visita)</span>
+                    <span className="text-[#f8fafc] font-bold select-all break-all">
+                      {customDomainStr || (subdomainStr ? `${subdomainStr}.autoprecision.com.br` : 'oficina.app/link')}/{customPortalSlugStr || 'portal'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(`${customDomainStr || (subdomainStr ? `${subdomainStr}.autoprecision.com.br` : 'oficina.app')}/link/${customPortalSlugStr || 'portal'}`, "URL Curta")}
+                    className="px-3.5 py-1.5 bg-emerald-950/20 hover:bg-emerald-900/40 text-emerald-400 border border-emerald-900/40 rounded font-bold font-mono text-[10px] flex items-center gap-1.5 cursor-pointer transition-all shrink-0 self-start sm:self-center"
+                  >
+                    {copiedTemplateText === "URL Curta" ? (
+                      <>✓ Copiado!</>
+                    ) : (
+                      <><Copy className="w-3 h-3" /> Copiar Link Curto</>
+                    )}
+                  </button>
+                </div>
+
+                {/* 2. Standard server tracking redirect url */}
+                <div className="bg-[#121c33]/40 border border-gray-800 p-3 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[11px]">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[9px] text-cyan-400 font-bold tracking-wider uppercase font-mono">📈 Link Direto do Portal Integrado (Para envio rápido por WhatsApp/E-mail)</span>
+                    <span className="text-gray-400 select-all break-all">
+                      {window.location.protocol}//{window.location.host}{window.location.pathname}?oficinaId={customPortalSlugStr || company.id}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyText(`${window.location.protocol}//${window.location.host}${window.location.pathname}?oficinaId=${customPortalSlugStr || company.id}`, "Link Direto")}
+                    className="px-3.5 py-1.5 bg-cyan-950/20 hover:bg-cyan-900/40 text-cyan-400 border border-cyan-900/40 rounded font-bold font-mono text-[10px] flex items-center gap-1.5 cursor-pointer transition-all shrink-0 self-start sm:self-center"
+                  >
+                    {copiedTemplateText === "Link Direto" ? (
+                      <>✓ Copiado!</>
+                    ) : (
+                      <><Copy className="w-3 h-3" /> Copiar Link Direto</>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 

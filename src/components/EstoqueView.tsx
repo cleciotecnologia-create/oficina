@@ -1546,18 +1546,21 @@ export const EstoqueView: React.FC = () => {
                   return (
                     <motion.tr 
                       key={p.id} 
-                      className="hover:bg-gray-950/20"
+                      className={`hover:bg-gray-950/20 transition-colors ${isLow ? 'bg-red-950/10' : ''}`}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.2) }}
                     >
                       
-                      <td className="p-4 max-w-[200px]">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-sans text-xs font-semibold text-white flex items-center gap-1.5">
+                      <td className={`p-4 max-w-[200px] transition-all ${isLow ? 'border-l-[3px] border-l-red-600 bg-red-950/20 pl-3' : ''}`}>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-sans text-xs font-semibold text-white flex items-center gap-1.5 flex-wrap">
                             {p.name}
                             {isLow && (
-                              <span className="shrink-0 w-2 h-2 rounded-full bg-red-500 animate-ping" title="Abaixo do estoque de segurança!"></span>
+                              <span className="shrink-0 px-2 py-0.5 rounded-lg bg-red-500/10 text-red-400 border border-red-500/25 text-[8.5px] font-bold font-mono tracking-wider flex items-center gap-1 uppercase animate-pulse select-none" title={`Abaixo do estoque mínimo (${p.minStock})`}>
+                                <AlertCircle className="w-3 h-3 text-red-500 shrink-0" />
+                                ESTOQUE MÍNIMO
+                              </span>
                             )}
                           </span>
                           <span className="text-[10px] text-gray-500">SKU: {p.internalSku} • EAN: {p.barcode}</span>

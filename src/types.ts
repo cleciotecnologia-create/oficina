@@ -35,6 +35,7 @@ export interface Company {
   pixBeneficiary?: string;
   pixCity?: string;
   defaultMarkup?: number;
+  customPortalSlug?: string;
 }
 
 export interface Cliente {
@@ -139,6 +140,13 @@ export interface PartUsed {
 
 export type OSStatus = 'Aberta' | 'Em análise' | 'Aguardando peça' | 'Em execução' | 'Finalizada' | 'Entregue' | 'Garantia Reaberta';
 
+export interface OSHistoryEntry {
+  status: OSStatus;
+  user: string;
+  timestamp: string;
+  notes?: string;
+}
+
 export interface OrdemServico {
   id: string;
   empresaId: string;
@@ -168,6 +176,7 @@ export interface OrdemServico {
   reopenCount?: number;
   reopenedAt?: string;
   reopenReason?: string;
+  statusHistory?: OSHistoryEntry[];
 }
 
 export interface Fornecedor {

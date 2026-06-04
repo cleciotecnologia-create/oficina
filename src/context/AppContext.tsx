@@ -883,7 +883,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...os,
       id,
       empresaId: company.id,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      statusHistory: [
+        {
+          status: os.status || 'Aberta',
+          user: user?.name || 'Sistema',
+          timestamp: new Date().toISOString(),
+          notes: 'Abertura da Ordem de Serviço'
+        }
+      ]
     };
 
     addLocalAuditLog("Abertura de OS", `Nova Ordem de Serviço criada: ${id} para veículo placa ${os.plate}`);
@@ -905,15 +913,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const editOS = async (id: string, fields: Partial<OrdemServico>) => {
     const currentOS = ordensServico.find(o => o.id === id);
+    let updatedHistory = currentOS?.statusHistory || [];
+
+    if (currentOS && updatedHistory.length === 0) {
+      updatedHistory = [
+        {
+          status: 'Aberta',
+          user: 'Sistema',
+          timestamp: currentOS.createdAt || new Date().toISOString(),
+          notes: 'Abertura da Ordem de Serviço'
+        }
+      ];
+    }
+
     if (currentOS && fields.status && fields.status !== currentOS.status) {
       addLocalAuditLog("Alteração de Status de OS", `OS #${id} (Placa ${currentOS.plate}) alterada de '${currentOS.status}' para '${fields.status}'`);
+      updatedHistory = [
+        ...updatedHistory,
+        {
+          status: fields.status,
+          user: user?.name || 'Mecânico / Gestor',
+          timestamp: new Date().toISOString(),
+          notes: fields.reopenReason || 'Alteração de status'
+        }
+      ];
     } else {
       addLocalAuditLog("Edição de OS", `Dados da Ordem de Serviço #${id} atualizados.`);
     }
 
     const updatedWithTime = {
       ...fields,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      ...(currentOS && (fields.status && fields.status !== currentOS.status || currentOS.statusHistory === undefined) ? { statusHistory: updatedHistory } : {})
     };
 
     setOrdensServico(prev => prev.map(item => item.id === id ? { ...item, ...updatedWithTime } : item));

@@ -22,7 +22,8 @@ import {
   CalendarRange,
   Trash2,
   RefreshCw,
-  Link
+  Link,
+  History
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
@@ -46,6 +47,16 @@ export const OSView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'lista' | 'nova' | 'orcamento'>('lista');
   const [pdfOSSelected, setPdfOSSelected] = useState<OrdemServico | null>(null);
+
+  React.useEffect(() => {
+    const handleOpenNewOS = () => {
+      setActiveTab('nova');
+    };
+    window.addEventListener('open-new-os', handleOpenNewOS);
+    return () => {
+      window.removeEventListener('open-new-os', handleOpenNewOS);
+    };
+  }, []);
   
   // Orçamento Fácil states
   const [easyClientName, setEasyClientName] = useState('');
@@ -750,6 +761,40 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                   <span>Clientes: <strong className="text-gray-300">{os.clienteName}</strong></span>
                   <span>Trocas/Peças: <strong className="text-gray-300">{os.parts.length} itens</strong></span>
                   <span>Serviços: <strong className="text-gray-300">{os.services.length}</strong></span>
+                </div>
+
+                {/* Status History Log */}
+                <div className="mt-3 border border-gray-850 bg-slate-950/20 rounded-xl overflow-hidden p-2.5">
+                  <span className="text-[9.5px] font-mono uppercase tracking-wider text-slate-400 font-extrabold flex items-center gap-1.5 select-none">
+                    <History className="w-3.5 h-3.5 text-red-500" />
+                    Histórico de Alterações de Status
+                  </span>
+                  
+                  <div className="mt-2 pl-1.5 flex flex-col gap-2 max-h-[120px] overflow-y-auto font-mono text-[9.5px] border-l border-gray-800">
+                    {os.statusHistory && os.statusHistory.length > 0 ? (
+                      os.statusHistory.map((h, hIdx) => (
+                        <div key={hIdx} className="relative flex flex-col gap-0.5">
+                          <span className="absolute -left-[10px] top-[4px] w-1.5 h-1.5 rounded-full bg-red-500/85 border border-slate-950" />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-gray-500 text-[8.5px] font-semibold">{new Date(h.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                            <span className="px-1 py-[1px] bg-slate-900 text-slate-300 font-bold rounded uppercase border border-slate-800 text-[8px]">{h.status}</span>
+                            <span className="text-gray-400">por {h.user}</span>
+                          </div>
+                          {h.notes && <span className="text-gray-500 italic text-[8.5px] mt-0.5">"{h.notes}"</span>}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="relative flex flex-col gap-0.5">
+                        <span className="absolute -left-[10px] top-[4px] w-1.5 h-1.5 rounded-full bg-red-500/85 border border-slate-950" />
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-gray-500 text-[8.5px] font-semibold">{new Date(os.createdAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="px-1 py-[1px] bg-slate-900 text-slate-300 font-bold rounded uppercase border border-slate-800 text-[8px]">Aberta</span>
+                          <span className="text-gray-400">por {os.mechanicName || 'Sistema'}</span>
+                        </div>
+                        <span className="text-gray-500 italic text-[8.5px] mt-0.5">"Abertura da Ordem de Serviço"</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* WhatsApp Reminder configuration details */}
