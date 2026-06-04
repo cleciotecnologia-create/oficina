@@ -362,6 +362,87 @@ export const CRMView: React.FC = () => {
     }
   }, [scheduledReminders]);
 
+  // Scheduled Revisions by KM Module
+  const [scheduledRevisions, setScheduledRevisions] = useState<{
+    id: string;
+    clientId: string;
+    clientName: string;
+    vehicleId: string;
+    vehicleName: string;
+    plate: string;
+    targetKm: number;
+    currentVehicleKm: number;
+    estimatedDate: string;
+    description: string;
+    status: 'Agendado' | 'Pendente' | 'Concluído' | 'Cancelado';
+  }[]>(() => {
+    try {
+      const saved = localStorage.getItem('autotech_scheduled_revisions');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [
+      {
+        id: "rev_1",
+        clientId: "cli_1",
+        clientName: "Alexandre Pires",
+        vehicleId: "veh_1",
+        vehicleName: "Honda Civic 2.0 LXR",
+        plate: "CVX-4591",
+        targetKm: 60000,
+        currentVehicleKm: 51200,
+        estimatedDate: "2026-06-12",
+        description: "Revisão Geral e troca da Correia Dentada",
+        status: "Agendado"
+      },
+      {
+        id: "rev_2",
+        clientId: "cli_2",
+        clientName: "Mariana Souza Santos",
+        vehicleId: "veh_2",
+        vehicleName: "Toyota Corolla GLi",
+        plate: "BRA-2C99",
+        targetKm: 100000,
+        currentVehicleKm: 94500,
+        estimatedDate: "2026-06-08",
+        description: "Troca do fluído do câmbio e pastilhas de freio traseiras",
+        status: "Agendado"
+      },
+      {
+        id: "rev_3",
+        clientId: "cli_3",
+        clientName: "Roberto Carlos",
+        vehicleId: "veh_3",
+        vehicleName: "Volvo XC60 T5",
+        plate: "VOL-6060",
+        targetKm: 80000,
+        currentVehicleKm: 79200,
+        estimatedDate: "2026-05-20",
+        description: "Alinhamento, balanceamento e rodízio de pneus",
+        status: "Concluído"
+      }
+    ];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('autotech_scheduled_revisions', JSON.stringify(scheduledRevisions));
+    } catch (e) {
+      console.error(e);
+    }
+  }, [scheduledRevisions]);
+
+  const [reminderSubTab, setReminderSubTab] = useState<'oleo' | 'revisoes'>('oleo');
+  const [selectedRevisionVehicleId, setSelectedRevisionVehicleId] = useState('');
+  const [newRevisionTargetKm, setNewRevisionTargetKm] = useState('');
+  const [newRevisionEstimatedDate, setNewRevisionEstimatedDate] = useState('');
+  const [newRevisionDescription, setNewRevisionDescription] = useState('');
+  const [revisionSearchQuery, setRevisionSearchQuery] = useState('');
+  const [filterRevisionStatus, setFilterRevisionStatus] = useState<'Todos' | 'Agendado' | 'Pendente' | 'Concluído' | 'Cancelado'>('Todos');
+
   const [filterReminderStatus, setFilterReminderStatus] = useState<'Todos' | 'Agendado' | 'Enviado' | 'Cancelado'>('Todos');
   const [newReminderScheduledDate, setNewReminderScheduledDate] = useState('2026-06-01');
   const [newReminderScheduledTime, setNewReminderScheduledTime] = useState('10:00');
@@ -1590,6 +1671,32 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
       {activeTab === 'lembretes' && (
         <div className="flex flex-col gap-6 w-full text-left font-mono">
           
+          {/* Sub-tab Navigation Switcher */}
+          <div className="flex border-b border-gray-800 pb-px gap-4 mb-2">
+            <button
+              type="button"
+              onClick={() => setReminderSubTab('oleo')}
+              className={`pb-3 px-2 text-xs font-bold uppercase tracking-wider relative transition-all bg-transparent border-t-0 border-l-0 border-r-0 cursor-pointer ${
+                reminderSubTab === 'oleo' 
+                  ? 'text-red-500 font-extrabold border-b-2 border-red-550' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              💧 Lembretes de Óleo (KM Excedido)
+            </button>
+            <button
+              type="button"
+              onClick={() => setReminderSubTab('revisoes')}
+              className={`pb-3 px-2 text-xs font-bold uppercase tracking-wider relative transition-all bg-transparent border-t-0 border-l-0 border-r-0 cursor-pointer ${
+                reminderSubTab === 'revisoes' 
+                  ? 'text-red-500 font-extrabold border-b-2 border-red-550' 
+                  : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              🚗 Revisões Programadas por KM
+            </button>
+          </div>
+
           {/* TOAST ON SAVING RULES */}
           {showAutoReminderSavedToast && (
             <div className="p-4 bg-green-950/80 border border-green-500 rounded-xl text-xs text-green-400 font-bold mb-2 flex items-center justify-between animate-pulse">
@@ -1597,6 +1704,9 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
               <button type="button" onClick={() => setShowAutoReminderSavedToast(false)} className="text-white hover:text-green-300">✕</button>
             </div>
           )}
+
+          {reminderSubTab === 'oleo' && (
+            <>
 
           {/* TWO PANEL TOP CONFIG: RULE CONFIG AND PREVIEW */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -2179,6 +2289,397 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
             </div>
 
           </div>
+
+        </>
+      )}
+
+      {reminderSubTab === 'revisoes' && (
+        <div className="flex flex-col gap-6 w-full text-left font-mono">
+          
+          {/* Form and List Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            {/* Form to schedule a new revision */}
+            <div className="lg:col-span-4 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4">
+              <div className="border-b border-gray-850 pb-3 text-left">
+                <span className="font-sans font-extrabold text-white text-sm uppercase flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-red-500" /> Agendar Nova Revisão por KM
+                </span>
+                <p className="text-[10px] text-gray-400 leading-normal mt-0.5 font-sans">
+                  Programe uma revisão para um veículo com base no KM ou no prazo operacional de garantia.
+                </p>
+              </div>
+
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!selectedRevisionVehicleId || !newRevisionTargetKm || !newRevisionEstimatedDate) return;
+                  
+                  const targetVehObj = veiculos.find(v => v.id === selectedRevisionVehicleId);
+                  if (!targetVehObj) return;
+
+                  const clientObj = clientes.find(c => c.id === targetVehObj.clienteId);
+                  const clientName = clientObj ? clientObj.name : 'Cliente Avulso';
+
+                  const newRev = {
+                    id: `rev_${Date.now()}`,
+                    clientId: targetVehObj.clienteId,
+                    clientName,
+                    vehicleId: targetVehObj.id,
+                    vehicleName: `${targetVehObj.brand} ${targetVehObj.model}`,
+                    plate: targetVehObj.plate,
+                    targetKm: parseInt(newRevisionTargetKm, 10),
+                    currentVehicleKm: targetVehObj.km || 0,
+                    estimatedDate: newRevisionEstimatedDate,
+                    description: newRevisionDescription || 'Revisão diagnóstica geral por KM',
+                    status: 'Agendado' as const
+                  };
+
+                  setScheduledRevisions([newRev, ...scheduledRevisions]);
+                  setSelectedRevisionVehicleId('');
+                  setNewRevisionTargetKm('');
+                  setNewRevisionEstimatedDate('');
+                  setNewRevisionDescription('');
+                  
+                  setShowAutoReminderSavedToast(true);
+                  setTimeout(() => setShowAutoReminderSavedToast(false), 3000);
+                }}
+                className="flex flex-col gap-4 text-xs font-mono"
+              >
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase">Selecione o Veículo</label>
+                  <select
+                    value={selectedRevisionVehicleId}
+                    onChange={(e) => {
+                      const vehId = e.target.value;
+                      setSelectedRevisionVehicleId(vehId);
+                      const veh = veiculos.find(v => v.id === vehId);
+                      if (veh) {
+                        const futureDate = new Date();
+                        futureDate.setMonth(futureDate.getMonth() + 6);
+                        setNewRevisionEstimatedDate(futureDate.toISOString().split('T')[0]);
+                        setNewRevisionTargetKm(String((veh.km || 0) + 10000));
+                      }
+                    }}
+                    className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-white focus:outline-none focus:border-red-500 font-mono w-full"
+                    required
+                  >
+                    <option value="">-- Escolha um Veículo --</option>
+                    {(veiculos || []).map(v => {
+                      const client = clientes.find(c => c.id === v.clienteId);
+                      const text = `${v.brand} ${v.model} (${v.plate}) • ${client ? client.name : 'Cliente avulso'}`;
+                      return (
+                        <option key={v.id} value={v.id}>{text}</option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5 text-left">
+                    <label className="text-[10px] text-gray-400 font-extrabold uppercase">KM da Revisão</label>
+                    <input 
+                      type="number"
+                      placeholder="Ex: 60000"
+                      value={newRevisionTargetKm}
+                      onChange={(e) => setNewRevisionTargetKm(e.target.value)}
+                      className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-white font-mono focus:outline-none w-full"
+                      required
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 text-left">
+                    <label className="text-[10px] text-gray-400 font-extrabold uppercase">Previsão Data</label>
+                    <input 
+                      type="date"
+                      value={newRevisionEstimatedDate}
+                      onChange={(e) => setNewRevisionEstimatedDate(e.target.value)}
+                      className="bg-[#080c16] border border-gray-850 rounded-xl py-2.5 px-3 text-white font-mono focus:outline-none w-full"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5 text-left">
+                  <label className="text-[10px] text-gray-400 font-extrabold uppercase">Planejamento / Itens da Revisão</label>
+                  <textarea 
+                    rows={3}
+                    placeholder="Ex: Troca de velas, filtros de ar e combustível, pastilhas de freio e óleo."
+                    value={newRevisionDescription}
+                    onChange={(e) => setNewRevisionDescription(e.target.value)}
+                    className="bg-[#080c16] border border-gray-850 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-red-500 font-sans leading-relaxed w-full"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!selectedRevisionVehicleId}
+                  className={`w-full py-3 rounded-xl font-bold font-sans text-xs uppercase shadow transition-all ${
+                    selectedRevisionVehicleId 
+                      ? 'bg-red-650 bg-red-600 hover:bg-red-700 text-white cursor-pointer' 
+                      : 'bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-850'
+                  }`}
+                >
+                  Confirmar Agendamento de Revisão
+                </button>
+              </form>
+            </div>
+
+            {/* List and Status checking of active scheduled revs */}
+            <div className="lg:col-span-8 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-5 text-left">
+              <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b border-gray-850 pb-4">
+                <div>
+                  <h3 className="font-display font-bold text-white text-base">Fila de Revisões Programadas por KM</h3>
+                  <p className="text-[10pt] text-[10px] text-gray-400 font-mono">Monitore revisões marcadas e a distância restante do odômetro físico.</p>
+                </div>
+
+                {/* Filtering block */}
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-gray-400 uppercase font-bold shrink-0">Filtrar Status:</span>
+                  <div className="flex bg-[#080d19] p-0.5 rounded-lg border border-gray-850 text-[10px] [&>button]:px-2.5 [&>button]:py-1">
+                    {(['Todos', 'Agendado', 'Pendente', 'Concluído', 'Cancelado'] as const).map(st => (
+                      <button 
+                        key={st}
+                        type="button"
+                        onClick={() => setFilterRevisionStatus(st)}
+                        className={`font-mono font-bold rounded ${
+                          filterRevisionStatus === st 
+                            ? 'bg-red-600 text-white' 
+                            : 'text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {st}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Searching Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
+                <input 
+                  type="text" 
+                  placeholder="Filtrar por nome de cliente, veículo, placa..."
+                  value={revisionSearchQuery}
+                  onChange={(e) => setRevisionSearchQuery(e.target.value)}
+                  className="w-full bg-[#080c16] border border-gray-800 rounded-xl py-2 px-4 pl-10 text-xs text-white focus:outline-none focus:border-red-500 font-sans"
+                />
+              </div>
+
+              {/* Table representation */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left font-mono text-xs">
+                  <thead className="bg-[#080d19] border-b border-gray-850 text-gray-400 uppercase text-[10px]">
+                    <tr>
+                      <th className="p-4">Veículo / Placa</th>
+                      <th className="p-4">Cliente / Contato</th>
+                      <th className="p-4 text-center font-bold">KM Alvo (Atual)</th>
+                      <th className="p-4 text-center">Data Alvo</th>
+                      <th className="p-4">Itens ou Notas</th>
+                      <th className="p-4 text-center">Status</th>
+                      <th className="p-4 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-850">
+                    {(() => {
+                      const filtered = (scheduledRevisions || []).filter(rev => {
+                        const matchSt = filterRevisionStatus === 'Todos' || rev.status === filterRevisionStatus;
+                        const qLower = revisionSearchQuery.toLowerCase();
+                        const matchQu = !revisionSearchQuery || 
+                                        rev.clientName.toLowerCase().includes(qLower) || 
+                                        rev.vehicleName.toLowerCase().includes(qLower) || 
+                                        rev.description.toLowerCase().includes(qLower) || 
+                                        rev.plate.toLowerCase().includes(qLower);
+                        return matchSt && matchQu;
+                      });
+
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={7} className="p-12 text-center text-gray-500 font-bold font-sans">
+                              Nenhuma revisão programada localizada.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filtered.map(rev => {
+                        const vehicleObj = veiculos.find(v => v.id === rev.vehicleId);
+                        const currentKm = vehicleObj ? (vehicleObj.km || 0) : rev.currentVehicleKm;
+                        const kmRemaining = rev.targetKm - currentKm;
+                        const clientInfo = clientes.find(c => c.id === rev.clientId);
+                        const phone = clientInfo ? clientInfo.phone : '';
+
+                        // Format estimated date
+                        const targetDate = new Date(rev.estimatedDate);
+                        const now = new Date();
+                        const diffTime = targetDate.getTime() - now.getTime();
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                        let dateStatusBadge = '';
+                        if (rev.status === 'Agendado' || rev.status === 'Pendente') {
+                          if (diffDays < 0) {
+                            dateStatusBadge = 'text-red-500 font-bold bg-red-950/20 border border-red-900/30 px-1.5 py-0.5 rounded text-[9px] animate-pulse';
+                          } else if (diffDays <= 7) {
+                            dateStatusBadge = 'text-amber-500 font-bold bg-amber-950/25 border border-amber-900/30 px-1.5 py-0.5 rounded text-[9px] animate-pulse';
+                          } else {
+                            dateStatusBadge = 'text-gray-400';
+                          }
+                        } else {
+                          dateStatusBadge = 'text-gray-500';
+                        }
+
+                        let kmStatusText = '';
+                        if (rev.status === 'Agendado' || rev.status === 'Pendente') {
+                          if (kmRemaining <= 0) {
+                            kmStatusText = '🔴 MARGEM EXCESSIVA';
+                          } else if (kmRemaining <= 1000) {
+                            kmStatusText = '🟡 KM PRÓXIMA';
+                          } else {
+                            kmStatusText = `Restam ${kmRemaining.toLocaleString()} KM`;
+                          }
+                        } else {
+                          kmStatusText = 'Inativo/Finalizado';
+                        }
+
+                        return (
+                          <tr key={rev.id} className="hover:bg-gray-950/25">
+                            <td className="p-4">
+                              <div className="flex flex-col text-left">
+                                <span className="text-gray-100 font-bold">{rev.vehicleName}</span>
+                                <span className="inline-flex items-center gap-1 border border-blue-500 bg-[#0f172a] text-blue-400 font-bold px-1.5 py-0.5 rounded text-[9px] leading-tight font-mono tracking-wider w-fit mt-1">
+                                  <span className="w-1 h-1 rounded-full bg-blue-500" />
+                                  {rev.plate.toUpperCase()}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="p-4 font-sans font-medium">
+                              <div className="flex flex-col text-left">
+                                <span className="font-semibold text-white">{rev.clientName}</span>
+                                <span className="text-[10px] text-gray-500 font-mono mt-0.5">{phone || 'Sem contato'}</span>
+                              </div>
+                            </td>
+
+                            <td className="p-4 text-center font-mono">
+                              <div className="flex flex-col items-center">
+                                <strong className="text-red-400 text-xs">{rev.targetKm.toLocaleString()} KM</strong>
+                                <span className="text-[10px] text-gray-500 mt-0.5">Atual: {currentKm.toLocaleString()} KM</span>
+                                <span className="text-[9.5px] text-cyan-400 font-semibold block mt-1 bg-cyan-950/20 px-1.5 py-0.5 rounded border border-cyan-900/10">
+                                  {kmStatusText}
+                                </span>
+                              </div>
+                            </td>
+
+                            <td className="p-4 text-center font-mono">
+                              <div className="flex flex-col items-center">
+                                <span className="text-white">{new Date(rev.estimatedDate).toLocaleDateString('pt-BR')}</span>
+                                {rev.status === 'Agendado' && (
+                                  <span className={`block mt-1 uppercase tracking-tight text-[9px] ${dateStatusBadge}`}>
+                                    {diffDays < 0 ? `🚨 VENCIDO (${Math.abs(diffDays)}d)` : diffDays <= 7 ? `🕒 EM ${diffDays} DIAS` : `Em dia (${diffDays}d)`}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="p-4 max-w-[150px]">
+                              <p className="text-gray-400 text-xs font-sans leading-relaxed truncate" title={rev.description}>
+                                {rev.description}
+                              </p>
+                            </td>
+
+                            <td className="p-4 text-center">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${
+                                rev.status === 'Agendado' 
+                                  ? 'bg-amber-900/40 text-amber-500 border border-amber-900/60' 
+                                  : rev.status === 'Pendente'
+                                  ? 'bg-red-950/40 text-red-500 border border-red-900/45'
+                                  : rev.status === 'Concluído' 
+                                  ? 'bg-green-900/40 text-green-400 border border-green-900/60' 
+                                  : 'bg-gray-800 text-gray-500 border border-gray-850'
+                              }`}>
+                                {rev.status}
+                              </span>
+                            </td>
+
+                            <td className="p-4 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {(rev.status === 'Agendado' || rev.status === 'Pendente') && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const cleanPhone = phone.replace(/\D/g, '');
+                                        const textMessage = `Olá, ${rev.clientName}! Passando para lembrar sobre a Revisão Programada do seu ${rev.vehicleName} (${rev.plate.toUpperCase()}) recomendada para ${rev.targetKm.toLocaleString()} KM.\nO veículo está atualmente com ${currentKm.toLocaleString()} KM registrados.\n*Itens Planejados:* ${rev.description}\nData Estimada: ${new Date(rev.estimatedDate).toLocaleDateString('pt-BR')}.`;
+                                        const url = `https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${encodeURIComponent(textMessage)}`;
+                                        window.open(url, '_blank');
+                                        
+                                        setScheduledRevisions(scheduledRevisions.map(r => r.id === rev.id ? { ...r, status: 'Pendente' } : r));
+                                      }}
+                                      className="px-2 py-1 bg-green-600 hover:bg-green-755 text-white rounded font-mono text-[9.5px] cursor-pointer font-bold uppercase transition-colors"
+                                      title="Notificar cliente por WhatsApp"
+                                    >
+                                      WhatsApp
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setScheduledRevisions(scheduledRevisions.map(r => r.id === rev.id ? { ...r, status: 'Concluído' } : r));
+                                        if (vehicleObj) {
+                                          const prevSaved = localStorage.getItem('saas_veiculos');
+                                          if (prevSaved) {
+                                            const list = JSON.parse(prevSaved);
+                                            const updatedVehList = list.map((v: any) => v.id === rev.vehicleId ? { ...v, km: rev.targetKm } : v);
+                                            localStorage.setItem('saas_veiculos', JSON.stringify(updatedVehList));
+                                          }
+                                        }
+                                      }}
+                                      className="px-2 py-1 bg-red-655 bg-red-600 hover:bg-red-700 text-white rounded font-mono text-[9.5px] cursor-pointer font-black uppercase transition-colors"
+                                    >
+                                      Concluir
+                                    </button>
+                                  </>
+                                )}
+
+                                {rev.status !== 'Concluído' && rev.status !== 'Cancelado' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setScheduledRevisions(scheduledRevisions.map(r => r.id === rev.id ? { ...r, status: 'Cancelado' } : r));
+                                    }}
+                                    className="p-1 text-gray-400 hover:text-red-500 font-bold cursor-pointer font-mono text-[10px]"
+                                  >
+                                    Cancelar
+                                  </button>
+                                )}
+
+                                {(rev.status === 'Concluído' || rev.status === 'Cancelado') && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setScheduledRevisions(scheduledRevisions.filter(r => r.id !== rev.id));
+                                    }}
+                                    className="p-1 text-gray-500 hover:text-red-500 cursor-pointer font-mono text-[10px]"
+                                  >
+                                    Excluir
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
 
         </div>
       )}

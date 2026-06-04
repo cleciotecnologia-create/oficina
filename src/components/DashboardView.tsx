@@ -135,6 +135,39 @@ export const DashboardView: React.FC = () => {
     }
   };
 
+  // Load scheduled revisions to check for upcoming maintenance alerts
+  const [revisionAlerts, setRevisionAlerts] = React.useState<any[]>([]);
+
+  React.useEffect(() => {
+    const listSaved = localStorage.getItem('autotech_scheduled_revisions');
+    if (listSaved) {
+      try {
+        const parsed = JSON.parse(listSaved);
+        if (Array.isArray(parsed)) {
+          const now = new Date();
+          const filteredAlerts = parsed.filter((rev: any) => {
+            if (rev.status !== 'Agendado' && rev.status !== 'Pendente') return false;
+            
+            const veh = veiculos.find((v: any) => v.id === rev.vehicleId);
+            const currentKm = veh ? (veh.km || 0) : rev.currentVehicleKm;
+            const kmRemaining = rev.targetKm - currentKm;
+            const isKmCritical = kmRemaining <= 1000;
+
+            const targetDate = new Date(rev.estimatedDate);
+            const diffTime = targetDate.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const isDateNear = diffDays <= 7;
+
+            return isKmCritical || isDateNear;
+          });
+          setRevisionAlerts(filteredAlerts);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [veiculos]);
+
   // 1. KPI Calculations
   const dailyEarnings = () => {
     const todayStr = new Date().toISOString().split('T')[0];
@@ -823,6 +856,101 @@ export const DashboardView: React.FC = () => {
         </motion.div>
 
       </div>
+
+      {/* 🚗 SEÇÃO DE ALERTAS DE REVISÕES PROGRAMADAS POR QUILOMETRAGEM */}
+      {revisionAlerts.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 bg-gradient-to-r from-red-950/40 to-slate-900 border border-red-500/30 rounded-2xl p-6 text-left shadow-lg font-mono"
+        >
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-850 pb-4 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-650 bg-red-600 rounded-xl text-white animate-pulse">
+                <Wrench className="w-5 h-5 animate-spin-slow" />
+              </div>
+              <div>
+                <h3 className="font-display font-extrabold text-white text-base">Alerta de Revisões Programadas por Quilometragem</h3>
+                <p className="text-[10px] text-red-400">
+                  Atenção! Há veículos com limite de odômetro próximo ou prazo estimado expirando.
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-mono bg-red-600 text-white font-bold px-3 py-1 rounded-full animate-bounce">
+              {revisionAlerts.length} alertas urgentes
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {revisionAlerts.map((rev) => {
+              const veh = veiculos.find((v: any) => v.id === rev.vehicleId);
+              const currentKm = veh ? (veh.km || 0) : rev.currentVehicleKm;
+              const kmRemaining = rev.targetKm - currentKm;
+              
+              const targetDate = new Date(rev.estimatedDate);
+              const now = new Date();
+              const diffTime = targetDate.getTime() - now.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+              let isKmViolated = kmRemaining <= 0;
+              let isDateViolated = diffDays < 0;
+
+              return (
+                <div 
+                  key={rev.id}
+                  className="bg-[#080d19] border border-red-900/15 hover:border-red-500/30 rounded-xl p-4 flex flex-col gap-3 transition-all font-mono"
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex flex-col text-left">
+                      <span className="text-white font-bold text-xs uppercase tracking-tight">{rev.vehicleName}</span>
+                      <span className="text-[10px] text-gray-400 mt-0.5">Cliente: {rev.clientName}</span>
+                    </div>
+                    <span className="text-[10px] font-bold border border-blue-500 bg-[#0f172a] text-blue-400 px-1.5 py-0.5 rounded leading-none shrink-0 uppercase">
+                      {rev.plate}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[10px] bg-black/25 p-2.5 rounded border border-gray-900">
+                    <div>
+                      <span className="text-gray-505 text-gray-500 uppercase block">KM Atual</span>
+                      <span className="text-white font-bold">{currentKm.toLocaleString()} KM</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-505 text-gray-500 uppercase block">KM Alvo</span>
+                      <span className="text-red-400 font-bold">{rev.targetKm.toLocaleString()} KM</span>
+                    </div>
+                    <div className="col-span-2 pt-1.5 border-t border-gray-900 flex justify-between">
+                      <span className="text-gray-400 font-sans">
+                        {isKmViolated ? (
+                          <span className="text-red-500 font-bold">🔴 EXCEDIDO EM {Math.abs(kmRemaining).toLocaleString()} KM</span>
+                        ) : (
+                          <span className="text-amber-500">🟡 Restam {kmRemaining.toLocaleString()} KM</span>
+                        )}
+                      </span>
+                      <span className="text-gray-400 text-right">
+                        {isDateViolated ? (
+                          <span className="text-red-505 text-red-500 font-bold">Atraso ({Math.abs(diffDays)}d)</span>
+                        ) : (
+                          <span className="text-gray-300">Em {diffDays} dias</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center text-[10px] pt-1">
+                    <span className="text-gray-400 text-[10px] font-sans truncate pr-2 text-left" title={rev.description}>
+                      {rev.description}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[8.5px] uppercase bg-amber-950 text-amber-400 border border-amber-900/40 text-right leading-none shrink-0 font-bold">
+                      {rev.status}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </motion.div>
+      )}
 
       {/* LOW STOCK & RECENT SERVICES ROW */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
