@@ -2043,7 +2043,7 @@ export const PDVView: React.FC = () => {
       {/* 🚨 COMPROVANTE DE ESTORNO DE VENDA DIALOG MODAL */}
       {showReversalReceipt && reversalReceiptSale && (
         <div id="reversal-receipt-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
-          <div className="bg-white text-black max-w-sm w-full rounded-2xl p-6 shadow-2xl relative">
+          <div className="print-container-target bg-white text-black max-w-sm w-full rounded-2xl p-6 shadow-2xl relative">
             
             <button 
               type="button"
@@ -2396,8 +2396,8 @@ export const PDVView: React.FC = () => {
 
       {/* DYNAMIC THERMAL PRINTER RECEIPT DIALOG MODAL */}
       {saleFinished && lastFinishedSale && (
-        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white text-black max-w-sm w-full rounded-2xl p-6 shadow-2xl relative text-left">
+        <div id="sale-finished-receipt-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
+          <div className="print-container-target bg-white text-black max-w-sm w-full rounded-2xl p-6 shadow-2xl relative text-left">
             
             <button 
               type="button"

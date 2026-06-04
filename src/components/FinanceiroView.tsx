@@ -1371,7 +1371,7 @@ export const FinanceiroView: React.FC = () => {
               </div>
             ) : (
               // 2. COMPROVANTE DE PAGAMENTO PIX (RECONCILATION PRINTABLE TICKET)
-              <div id="pix-receipt-container" className="flex flex-col gap-4 w-full text-left font-sans animate-fade-in">
+              <div id="pix-receipt-container" className="print-container-target flex flex-col gap-4 w-full text-left font-sans animate-fade-in">
                 
                 <div className="flex flex-col items-center text-center gap-2 pb-3 border-b border-gray-800/80">
                   <div className="w-11 h-11 rounded-full bg-emerald-950/60 border border-emerald-500 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">

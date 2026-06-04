@@ -2097,7 +2097,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
 
       {/* 🧾 OUTLINE PDF DOCUMENT EXPORT VIEW COMPONENT MODAL */}
       {pdfOSSelected && (
-        <div id="pdf-os-export-overlay" className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-start overflow-y-auto p-4 md:p-6 backdrop-blur-sm no-print">
+        <div id="pdf-os-export-overlay" className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-start overflow-y-auto p-4 md:p-6 backdrop-blur-sm">
           
           {/* Print/Exit Toolbar (HIDDEN during window.print()) */}
           <div className="bg-[#0b1222] border border-gray-800 text-white max-w-4xl w-full rounded-2xl p-4 shadow-2xl mb-4 flex flex-col sm:flex-row items-center justify-between gap-4 font-sans no-print">
