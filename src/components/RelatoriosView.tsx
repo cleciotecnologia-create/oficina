@@ -19,7 +19,8 @@ export const RelatoriosView: React.FC = () => {
     financeiro, 
     produtos, 
     ordensServico, 
-    clientes 
+    clientes,
+    company
   } = useApp();
 
   const [activeReport, setActiveReport] = useState<'financial' | 'inventory' | 'mechanics'>('financial');
@@ -84,7 +85,65 @@ export const RelatoriosView: React.FC = () => {
   ];
 
   const handlePrint = () => {
+    const printStyle = document.createElement('style');
+    printStyle.innerHTML = `
+      @media print {
+        body, html {
+          background: white !important;
+          color: black !important;
+        }
+        #root, header, nav, aside, footer, button, .no-print, [id^="btn-"], .lucide {
+          display: none !important;
+        }
+        #print-area {
+          background: white !important;
+          color: black !important;
+          border: none !important;
+          box-shadow: none !important;
+          padding: 0 !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          display: block !important;
+        }
+        #print-area * {
+          background: transparent !important;
+          color: black !important;
+          border-color: #cbd5e1 !important;
+          box-shadow: none !important;
+          text-shadow: none !important;
+        }
+        .text-white, .text-slate-300, .text-gray-400, .text-gray-500 {
+          color: #1e293b !important;
+        }
+        .text-green-500, .text-green-400 {
+          color: #15803d !important;
+          font-weight: bold !important;
+        }
+        .text-red-500, .text-red-400 {
+          color: #b91c1c !important;
+          font-weight: bold !important;
+        }
+        .text-cyan-400 {
+          color: #0369a1 !important;
+          font-weight: bold !important;
+        }
+        .bg-gradient-to-r, .bg-slate-950/40, .bg-[#070c17], .bg-black/40 {
+          background-color: #f8fafc !important;
+          border: 1px solid #cbd5e1 !important;
+        }
+        .border-gray-800, .border-gray-855, .border-gray-850, .border-gray-900 {
+          border-color: #cbd5e1 !important;
+        }
+      }
+    `;
+    document.head.appendChild(printStyle);
     window.print();
+    setTimeout(() => {
+      if (document.head.contains(printStyle)) {
+        document.head.removeChild(printStyle);
+      }
+    }, 1000);
   };
 
   return (
@@ -141,6 +200,33 @@ export const RelatoriosView: React.FC = () => {
       {/* CURRENT ACTIVE SPREADSHEEET SHELL AREA */}
       <div id="print-area" className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6 text-left">
         
+        {/* Printable-only Corporate Header */}
+        <div className="hidden print:flex flex-col gap-2 border-b-2 border-slate-300 pb-4 mb-2 w-full text-black">
+          <div className="flex justify-between items-start">
+            <div>
+              <h2 className="text-lg font-bold uppercase tracking-tight text-slate-900">
+                {company?.name || 'AUTOPRECISION PREMIUM CUSTOMS'}
+              </h2>
+              <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                {company?.address ? `Endereço: ${company.address}` : 'Matriz AutoPrecision Cloud System'}
+                {company?.cnpj ? ` • CNPJ: ${company.cnpj}` : ''}
+              </p>
+              <p className="text-[10px] text-slate-500 font-mono">
+                {company?.phone ? `Telefone: ${company.phone}` : ''}
+                {company?.email ? ` • E-mail: ${company.email}` : ''}
+              </p>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] font-bold font-mono px-2 py-0.5 bg-slate-900 text-white rounded uppercase">
+                {activeReport === 'financial' ? 'RELATÓRIO DRE FINANCEIRO' : activeReport === 'inventory' ? 'RELATÓRIO DO ESTOQUE' : 'PRODUTIVIDADE E COMANDAS'}
+              </span>
+              <p className="text-[9px] text-slate-500 font-mono mt-2">
+                Gerado em: {new Date().toLocaleString('pt-BR')}
+              </p>
+            </div>
+          </div>
+        </div>
+
         {activeReport === 'financial' && (
           <div className="flex flex-col gap-5">
             <div className="border-b border-gray-850 pb-4">
@@ -274,6 +360,24 @@ export const RelatoriosView: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* Printable-only Corporate Footer & Signatures */}
+        <div className="hidden print:flex flex-col gap-8 mt-12 text-black w-full border-t border-slate-300 pt-5">
+          <div className="flex justify-between items-center px-10 text-xs font-mono font-bold">
+            <div className="flex flex-col items-center">
+              <div className="w-40 border-b border-slate-900 mb-1"></div>
+              <span className="text-[10px] text-slate-600 font-normal">Diretoria Administrativa</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <span className="font-bold">{company?.name || 'AutoPrecision Premium'}</span>
+              <span className="text-[9px] text-slate-400 font-normal font-mono">Mapeamento ERP Integrado • Auditoria de Ativos</span>
+            </div>
+            <div className="flex flex-col items-center">
+              <div className="w-40 border-b border-slate-900 mb-1"></div>
+              <span className="text-[10px] text-slate-600 font-normal">Assinatura do Autorizado</span>
+            </div>
+          </div>
+        </div>
 
       </div>
 

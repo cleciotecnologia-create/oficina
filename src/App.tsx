@@ -14,6 +14,7 @@ import { ConfigView } from './components/ConfigView';
 import { SuperAdminView } from './components/SuperAdminView';
 import { ManualView } from './components/ManualView';
 import { CustomerPortal } from './components/CustomerPortal';
+import EngenhariaView from './components/EngenhariaView';
 
 import { 
   Wrench, 
@@ -74,7 +75,7 @@ function AppContent() {
     ordensServico
   } = useApp();
 
-  const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual'>('landing');
+  const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering'>('landing');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -222,6 +223,7 @@ function AppContent() {
       case 'finance': return <FinanceiroView />;
       case 'reports': return <RelatoriosView />;
       case 'manual': return <ManualView />;
+      case 'engineering': return <EngenhariaView />;
       case 'settings': return <ConfigView />;
       case 'superadmin': return <SuperAdminView />;
       default: return <DashboardView />;
@@ -921,6 +923,13 @@ function AppContent() {
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'reports' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
             >
               <TrendingUp className="w-4 h-4 shrink-0" /> Relatórios / PDFs
+            </button>
+
+            <button 
+              onClick={() => { setActiveRoute('engineering'); setMobileSidebarOpen(false); }}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'engineering' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Cpu className="w-4 h-4 shrink-0 text-red-400" /> Engenharia Assistida IA
             </button>
 
             <button 
