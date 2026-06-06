@@ -35,7 +35,9 @@ import {
   Company, 
   Venda,
   AutoBackupItem,
-  LocalAuditLog
+  LocalAuditLog,
+  Notificacao,
+  PixLog
 } from '../types';
 import { 
   INITIAL_COMPANY, 
@@ -62,6 +64,8 @@ interface AppContextType {
   fornecedores: Fornecedor[];
   caixaStatus: Caixa | null;
   vendas: Venda[];
+  notificacoes: Notificacao[];
+  pixLogs: PixLog[];
   loading: boolean;
   aiLoading: boolean;
   loginError: string | null;
@@ -157,6 +161,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     openedAt: ""
   });
   const [vendas, setVendas] = useState<Venda[]>([]);
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [pixLogs, setPixLogs] = useState<PixLog[]>([]);
   const [autoBackups, setAutoBackups] = useState<AutoBackupItem[]>([]);
   const [localAuditLogs, setLocalAuditLogs] = useState<LocalAuditLog[]>([]);
 
@@ -559,6 +565,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (err) => handleFirestoreError(err, OperationType.LIST, "fornecedores")
       );
       activeUnsubs.push(unsubFornecedores);
+
+      const unsubNotif = onSnapshot(
+        query(collection(db, 'notificacoes'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Notificacao[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Notificacao));
+          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setNotificacoes(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "notificacoes")
+      );
+      activeUnsubs.push(unsubNotif);
+
+      const unsubPixLogs = onSnapshot(
+        query(collection(db, 'pix_logs'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: PixLog[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as PixLog));
+          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setPixLogs(list);
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "pix_logs")
+      );
+      activeUnsubs.push(unsubPixLogs);
 
     } catch (e) {
       console.error("Firestore loading subscription error: ", e);
@@ -1483,6 +1513,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fornecedores,
       caixaStatus,
       vendas,
+      notificacoes,
+      pixLogs,
       loading,
       aiLoading,
       loginError,

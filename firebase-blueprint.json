@@ -123,7 +123,9 @@
         "parts": { "type": "array" },
         "signature": { "type": "string" },
         "total": { "type": "number" },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string" },
+        "statusPagamento": { "type": "string", "enum": ["PENDENTE", "PAGO"] },
+        "financeiroId": { "type": "string" }
       },
       "required": ["id", "empresaId", "clienteId", "veiculoId", "status"]
     },
@@ -134,13 +136,22 @@
       "properties": {
         "id": { "type": "string" },
         "empresaId": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "ordemServicoId": { "type": "string" },
         "description": { "type": "string" },
         "type": { "type": "string", "enum": ["Receita", "Despesa"] },
         "amount": { "type": "number" },
         "dueDate": { "type": "string" },
-        "status": { "type": "string", "enum": ["Pago", "Pendente"] },
+        "status": { "type": "string", "enum": ["Pago", "Pendente", "Cancelado", "PENDENTE", "PAGO", "CANCELADO"] },
         "category": { "type": "string" },
-        "createdAt": { "type": "string" }
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "pixTxid": { "type": "string" },
+        "qrCode": { "type": "string" },
+        "copiaECola": { "type": "string" },
+        "valorPago": { "type": "number" },
+        "webhookRecebido": { "type": "boolean" },
+        "dataPagamento": { "type": "string" }
       },
       "required": ["id", "empresaId", "type", "amount", "status"]
     },
@@ -158,6 +169,34 @@
         "closedAt": { "type": "string" }
       },
       "required": ["id", "empresaId", "status", "initialAmount"]
+    },
+    "Notificacao": {
+      "title": "Notificacao",
+      "description": "Real-time alerts and financial signals",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "empresaId": { "type": "string" },
+        "titulo": { "type": "string" },
+        "mensagem": { "type": "string" },
+        "tipo": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "empresaId", "titulo", "createdAt"]
+    },
+    "PixLog": {
+      "title": "PixLog",
+      "description": "Ledger of PIX webhook payload logs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "empresaId": { "type": "string" },
+        "txid": { "type": "string" },
+        "evento": { "type": "string" },
+        "payload": { "type": "object" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "empresaId", "txid", "evento"]
     }
   },
   "firestore": {
@@ -196,6 +235,14 @@
     "/caixa/{caixaId}": {
       "schema": "Caixa",
       "description": "Cash register sessions"
+    },
+    "/notificacoes/{notifId}": {
+      "schema": "Notificacao",
+      "description": "Real-time alerts and signals for active terminal sessions"
+    },
+    "/pix_logs/{logId}": {
+      "schema": "PixLog",
+      "description": "Secure logs of incoming banking PIX webhooks"
     }
   }
 }

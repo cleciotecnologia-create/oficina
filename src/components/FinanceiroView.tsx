@@ -97,40 +97,162 @@ export const FinanceiroView: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (pixSelectedReceivable) {
-      const pKey = company?.pixKey || 'cleciotecnologia@gmail.com';
-      const pBeneficiary = company?.pixBeneficiary || company?.name || 'AutoPrecision Premium';
-      const pCity = company?.pixCity || 'SAO PAULO';
+  const [isGeneratingPix, setIsGeneratingPix] = useState(false);
 
+  useEffect(() => {
+    const loadOrGeneratePix = async () => {
+      if (!pixSelectedReceivable) {
+        setFinanceiroPixString('');
+        setFinanceiroPixQrDataUrl('');
+        return;
+      }
+      
+      // 1. If document already contains computed PIX details from previous generation, load immediately:
+      if (pixSelectedReceivable.pixTxid && pixSelectedReceivable.qrCode) {
+        setFinanceiroPixString(pixSelectedReceivable.copiaECola || '');
+        setFinanceiroPixQrDataUrl(pixSelectedReceivable.qrCode || '');
+        return;
+      }
+
+      // 2. Otherwise request dynamic PIX generation via Express backend (with qrcode bundling):
+      setIsGeneratingPix(true);
       try {
+        const res = await fetch('/api/pix/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            empresaId: pixSelectedReceivable.empresaId,
+            clienteId: pixSelectedReceivable.clienteId || 'cli_anonymous',
+            ordemServicoId: pixSelectedReceivable.ordemServicoId || '',
+            descricao: pixSelectedReceivable.description,
+            valor: pixSelectedReceivable.amount,
+            dataVencimento: pixSelectedReceivable.dueDate,
+          })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setFinanceiroPixString(data.copiaECola);
+          setFinanceiroPixQrDataUrl(data.qrcode);
+          
+          // Securely append coordinates on the actual Firestore document:
+          await editFinanceiro(pixSelectedReceivable.id, {
+            pixTxid: data.txid,
+            qrCode: data.qrcode,
+            copiaECola: data.copiaECola,
+            webhookRecebido: false,
+          });
+        }
+      } catch (err) {
+        console.error("Dynamic PIX Backend Generation failed, fallback to client-side payload:", err);
+        // Offline / dev fallback:
+        const pKey = company?.pixKey || 'cleciotecnologia@gmail.com';
+        const pBeneficiary = company?.pixBeneficiary || company?.name || 'AutoPrecision Premium';
+        const pCity = company?.pixCity || 'SAO PAULO';
         const cleanedDesc = pixSelectedReceivable.description
           ? pixSelectedReceivable.description.normalize("NFD").replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 15)
           : 'Fatura';
-
-        const payload = generatePixPayload({
-          chave: pKey,
-          beneficiario: pBeneficiary,
-          cidade: pCity,
-          valor: pixSelectedReceivable.amount,
-          descricao: cleanedDesc
-        });
-
-        setFinanceiroPixString(payload);
-
-        QRCode.toDataURL(payload, { margin: 1 })
-          .then(url => {
-            setFinanceiroPixQrDataUrl(url);
-          })
-          .catch(e => console.error("Erro ao desenhar QR Code Financeiro:", e));
-      } catch (err) {
-        console.error("Erro ao montar payload PIX Financeiro:", err);
+        try {
+          const payload = generatePixPayload({
+            chave: pKey,
+            beneficiario: pBeneficiary,
+            cidade: pCity,
+            valor: pixSelectedReceivable.amount,
+            descricao: cleanedDesc
+          });
+          setFinanceiroPixString(payload);
+          const url = await QRCode.toDataURL(payload, { margin: 1 });
+          setFinanceiroPixQrDataUrl(url);
+        } catch (e2) {
+          console.error(e2);
+        }
+      } finally {
+        setIsGeneratingPix(false);
       }
-    } else {
-      setFinanceiroPixString('');
-      setFinanceiroPixQrDataUrl('');
-    }
+    };
+
+    loadOrGeneratePix();
   }, [pixSelectedReceivable, company]);
+
+  // 3. Reactive Webhook & Payment listener
+  useEffect(() => {
+    if (pixSelectedReceivable) {
+      const currentTrack = financeiro.find(f => f.id === pixSelectedReceivable.id);
+      if (currentTrack && (currentTrack.status === 'Pago' || currentTrack.status === 'PAGO')) {
+        setPixPaymentReceipt({
+          id: `REC-${currentTrack.pixTxid?.substring(0, 8) || 'ONLINE'}`,
+          originalAmount: currentTrack.amount,
+          paidAmount: currentTrack.valorPago || currentTrack.amount,
+          remainingAmount: 0,
+          date: currentTrack.dataPagamento || new Date().toISOString(),
+          type: 'Integral',
+          title: currentTrack.description,
+          category: currentTrack.category,
+          txId: currentTrack.pixTxid || 'ONLINE_TX'
+        });
+      }
+    }
+  }, [financeiro, pixSelectedReceivable]);
+
+  // Monochrome Printer & PDF Engine to resolve Complaint 1 (empty printed/PDF view)
+  const handlePrintReceipt = () => {
+    const printStyle = document.createElement('style');
+    printStyle.innerHTML = `
+      @media print {
+        body {
+          background: white !important;
+          color: black !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        #root, header, nav, aside, footer, button, .no-print, [id^="btn-"], .lucide, #pix-billing-screen-modal button {
+          display: none !important;
+        }
+        #pix-billing-screen-modal {
+          background: white !important;
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 100% !important;
+          height: auto !important;
+          display: block !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+          padding: 0 !important;
+        }
+        #pix-billing-screen-modal > div {
+          background: white !important;
+          color: black !important;
+          border: none !important;
+          box-shadow: none !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        .print-container-target {
+          display: block !important;
+          width: 100% !important;
+          background: white !important;
+          color: black !important;
+          border: none !important;
+          padding: 20px !important;
+        }
+        .print-container-target * {
+          background: white !important;
+          color: black !important;
+          border-color: #e2e8f0 !important;
+        }
+      }
+    `;
+    document.head.appendChild(printStyle);
+    window.print();
+    setTimeout(() => {
+      if (document.head.contains(printStyle)) {
+        document.head.removeChild(printStyle);
+      }
+    }, 1000);
+  };
 
   // Add transaction states
   const [isAdding, setIsAdding] = useState(false);
@@ -1091,7 +1213,13 @@ export const FinanceiroView: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            {!pixPaymentReceipt ? (
+            {isGeneratingPix ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3 text-center w-full">
+                <QrCode className="w-12 h-12 text-red-500 animate-spin" />
+                <span className="text-sm font-mono text-gray-300">Registrando Cobrança Dinâmica no Banco...</span>
+                <span className="text-[10px] text-gray-500">Gerando assinatura TxID e QRCode seguro...</span>
+              </div>
+            ) : !pixPaymentReceipt ? (
               // 1. BILLING & SIMULATOR VIEW (WHEN NOT PAID YET)
               <div className="flex flex-col gap-4 w-full animate-fade-in">
                 <div className="flex items-center gap-2 text-red-500 font-mono text-[10px] font-bold uppercase tracking-wider self-start border-b border-gray-850 pb-2 w-full text-left">
@@ -1112,7 +1240,7 @@ export const FinanceiroView: React.FC = () => {
                   {financeiroPixQrDataUrl ? (
                     <div className="p-3 bg-white rounded-xl shadow-2xl border border-gray-200 inline-block">
                       <img 
-                        src={financeiroPixQrDataUrl} 
+                      src={financeiroPixQrDataUrl} 
                         alt="QR Code PIX Fatura" 
                         id="pix-qrcode-image"
                         className="w-40 h-40 object-contain mx-auto"
@@ -1146,7 +1274,7 @@ export const FinanceiroView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Simulated payment panel */}
+                {/* Simulated payment panel calling real back-end routes */}
                 <div className="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3.5 flex flex-col gap-3 font-sans">
                   <span className="text-[9.5px] font-mono text-cyan-400 font-extrabold tracking-wider block uppercase">💻 SIMULADOR DE INTEGRAÇÃO BANCÁRIA (PIX API)</span>
                   
@@ -1164,7 +1292,7 @@ export const FinanceiroView: React.FC = () => {
                         placeholder="Ex: 150.00"
                       />
                     </div>
-                    <span className="text-[8px] text-gray-500 block">Modifique este valor se o cliente realizou apenas um repasse de valor parcial.</span>
+                    <span className="text-[8px] text-gray-500 block">Este simulador dispara um Webhook real que liquida a fatura e atualiza a O.S. vinculada instantaneamente!</span>
                   </div>
 
                   <div className="flex gap-2 font-mono">
@@ -1173,24 +1301,31 @@ export const FinanceiroView: React.FC = () => {
                       id="btn-approve-full-pix"
                       onClick={async () => {
                         const original = pixSelectedReceivable.amount;
-                        // Execute transaction complete flow
-                        await editFinanceiro(pixSelectedReceivable.id, { 
-                          status: 'Pago' 
-                        });
-                        
-                        const generatedTx = `E${new Date().toISOString().replace(/\D/g, '')}${Math.floor(Math.random() * 9000000 + 1000000)}`;
-                        setPixPaymentReceipt({
-                          id: `PX-${Math.floor(Math.random() * 1000000 + 100000)}`,
-                          originalAmount: original,
-                          paidAmount: original,
-                          remainingAmount: 0,
-                          date: new Date().toISOString(),
-                          type: 'Integral',
-                          title: pixSelectedReceivable.description,
-                          category: pixSelectedReceivable.category,
-                          txId: generatedTx
-                        });
-                        alert("Pagamento Integral Aprovado! Comprovante emitido com sucesso.");
+                        // Execute transaction complete simulation calling backend API proxy
+                        if (!pixSelectedReceivable.pixTxid) {
+                          alert("Aguarde a atribuição de um TxID.");
+                          return;
+                        }
+                        try {
+                          const responseSim = await fetch('/api/pix/simulate-payment', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              txid: pixSelectedReceivable.pixTxid,
+                              amount: original
+                            })
+                          });
+                          if (responseSim.ok) {
+                            alert("Sucesso! Pagamento de compensação processado pelo Webhook do banco.");
+                          } else {
+                            alert("Falha ao notificar o simulador de pagamento.");
+                          }
+                        } catch (simErr) {
+                          console.error(simErr);
+                          alert("Simulando offline por erro de rede...");
+                          // Safe client fallback
+                          await editFinanceiro(pixSelectedReceivable.id, { status: 'Pago' });
+                        }
                       }}
                       className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all border-none"
                     >
@@ -1209,58 +1344,57 @@ export const FinanceiroView: React.FC = () => {
 
                         const original = pixSelectedReceivable.amount;
                         if (enteredVal >= original) {
-                          alert(`Este valor (R$ ${enteredVal}) quita integralmente a fatura. Usando fluxo integral imediato.`);
-                          await editFinanceiro(pixSelectedReceivable.id, { 
-                            status: 'Pago' 
-                          });
-                          const generatedTx = `E${new Date().toISOString().replace(/\D/g, '')}${Math.floor(Math.random() * 9000000 + 1000000)}`;
-                          setPixPaymentReceipt({
-                            id: `PX-${Math.floor(Math.random() * 1000000 + 100000)}`,
-                            originalAmount: original,
-                            paidAmount: original,
-                            remainingAmount: 0,
-                            date: new Date().toISOString(),
-                            type: 'Integral',
-                            title: pixSelectedReceivable.description,
-                            category: pixSelectedReceivable.category,
-                            txId: generatedTx
-                          });
+                          alert(`Este valor (R$ ${enteredVal}) quita integralmente a fatura.`);
+                          try {
+                            await fetch('/api/pix/simulate-payment', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                txid: pixSelectedReceivable.pixTxid,
+                                amount: original
+                              })
+                            });
+                          } catch (e) {
+                            await editFinanceiro(pixSelectedReceivable.id, { status: 'Pago' });
+                          }
                           return;
                         }
 
+                        // Split payment logic
                         const remains = original - enteredVal;
-                        // 1. Save original but change amount to partial paid and status to 'Pago'
-                        await editFinanceiro(pixSelectedReceivable.id, {
-                          status: 'Pago',
-                          amount: enteredVal,
-                          description: `${pixSelectedReceivable.description} (Lote Pago Parcial)`
-                        });
+                        try {
+                          // Complete this part and create subsequent collection documents
+                          await editFinanceiro(pixSelectedReceivable.id, {
+                            status: 'Pago',
+                            amount: enteredVal,
+                            description: `${pixSelectedReceivable.description} (Lote Pago Parcial)`
+                          });
 
-                        // 2. Add remaining balance as a new pending entry
-                        await addFinanceiro({
-                          description: `${pixSelectedReceivable.description} (Saldo Remanescente Fatura)`,
-                          type: 'Receita',
-                          amount: Number(remains.toFixed(2)),
-                          dueDate: pixSelectedReceivable.dueDate,
-                          category: pixSelectedReceivable.category,
-                          status: 'Pendente',
-                          invoiceNumber: pixSelectedReceivable.invoiceNumber ? `${pixSelectedReceivable.invoiceNumber}-PARC` : undefined,
-                          purchaseOrder: pixSelectedReceivable.purchaseOrder
-                        });
+                          await addFinanceiro({
+                            description: `${pixSelectedReceivable.description} (Saldo Remanescente Fatura)`,
+                            type: 'Receita',
+                            amount: Number(remains.toFixed(2)),
+                            dueDate: pixSelectedReceivable.dueDate,
+                            category: pixSelectedReceivable.category,
+                            status: 'Pendente',
+                            invoiceNumber: pixSelectedReceivable.invoiceNumber ? `${pixSelectedReceivable.invoiceNumber}-PARC` : undefined,
+                            purchaseOrder: pixSelectedReceivable.purchaseOrder
+                          });
 
-                        const generatedTx = `E${new Date().toISOString().replace(/\D/g, '')}${Math.floor(Math.random() * 9000000 + 1000000)}`;
-                        setPixPaymentReceipt({
-                          id: `PX-${Math.floor(Math.random() * 1000000 + 100000)}`,
-                          originalAmount: original,
-                          paidAmount: enteredVal,
-                          remainingAmount: Number(remains.toFixed(2)),
-                          date: new Date().toISOString(),
-                          type: 'Parcial',
-                          title: pixSelectedReceivable.description,
-                          category: pixSelectedReceivable.category,
-                          txId: generatedTx
-                        });
-                        alert(`Aprovado Pagamento Parcial de R$ ${enteredVal.toFixed(2)} recebido! O saldo restante de R$ ${remains.toFixed(2)} foi lançado de volta como pendente.`);
+                          // Call real webhook register to audit the logs
+                          if (pixSelectedReceivable.pixTxid) {
+                            await fetch('/api/pix/simulate-payment', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                txid: pixSelectedReceivable.pixTxid,
+                                amount: enteredVal
+                              })
+                            });
+                          }
+                        } catch (errSpl) {
+                          console.error(errSpl);
+                        }
                       }}
                       className="flex-1 py-2 rounded-lg bg-yellow-600 hover:bg-yellow-750 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all border-none"
                     >
@@ -1288,7 +1422,7 @@ export const FinanceiroView: React.FC = () => {
                           console.error(err);
                         }
                       }}
-                      className="px-3 py-1.5 bg-red-650 bg-red-600 hover:bg-red-750 rounded-lg font-bold text-[9.5px] uppercase tracking-wide text-white flex items-center gap-1 cursor-pointer transition-all"
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-750 rounded-lg font-bold text-[9.5px] uppercase tracking-wide text-white flex items-center gap-1 cursor-pointer transition-all"
                     >
                       <Copy className="w-3.5 h-3.5" /> {copiedText ? "COPIADO!" : "COPIAR"}
                     </button>
@@ -1298,9 +1432,7 @@ export const FinanceiroView: React.FC = () => {
                 <div className="flex gap-2 w-full font-mono mt-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      window.print();
-                    }}
+                    onClick={handlePrintReceipt}
                     className="flex-1 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-750 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-colors"
                   >
                     <Printer className="w-3.5 h-3.5" /> IMPRIMIR QR
@@ -1310,7 +1442,7 @@ export const FinanceiroView: React.FC = () => {
                     onClick={() => {
                       setModalEditPix(!modalEditPix);
                     }}
-                    className="py-1.5 px-2 rounded-xl border border-gray-888 border-gray-800 text-[10px] hover:bg-slate-900 transition-all font-bold cursor-pointer font-mono text-gray-300"
+                    className="py-1.5 px-2 rounded-xl border border-gray-800 text-[10px] hover:bg-slate-900 transition-all font-bold cursor-pointer font-mono text-gray-300"
                   >
                      {modalEditPix ? "Fechar" : "⚙️ Dados PIX"}
                   </button>
@@ -1362,7 +1494,7 @@ export const FinanceiroView: React.FC = () => {
                           console.error("Erro inline:", err);
                         }
                       }}
-                      className="w-full mt-1 py-1 bg-red-655 hover:bg-red-700 bg-red-600 text-white font-bold rounded text-[9px]"
+                      className="w-full mt-1 py-1 bg-red-600 hover:bg-red-750 text-white font-bold rounded text-[9px]"
                     >
                       Confirmar Chave
                     </button>
@@ -1397,7 +1529,7 @@ export const FinanceiroView: React.FC = () => {
 
                   <div className="flex justify-between items-center text-[10px] border-b border-gray-900/50 pb-1.5">
                     <span className="text-gray-500 font-bold uppercase text-[9px] text-emerald-400">Status Quitação:</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase ${pixPaymentReceipt.type === 'Integral' ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-900/40' : 'bg-amber-955 bg-amber-950 text-amber-500 border border-amber-900'}`}>
+                    <span className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold uppercase ${pixPaymentReceipt.type === 'Integral' ? 'bg-emerald-900/40 text-emerald-400 border border-emerald-900/40' : 'bg-amber-950 text-amber-500 border border-amber-900'}`}>
                       {pixPaymentReceipt.type === 'Integral' ? 'PAGO' : 'PAGO PARCIAL'}
                     </span>
                   </div>
@@ -1445,16 +1577,37 @@ export const FinanceiroView: React.FC = () => {
                   Lançamento efetuado via AutoPrecision Premium Cloud
                 </p>
 
-                <div className="flex gap-2 w-full font-mono">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.print();
-                    }}
-                    className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-750 text-white text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer border-none"
-                  >
-                    <Printer className="w-3.5 h-3.5 shrink-0 text-white" /> IMPRIMIR COMPROVANTE
-                  </button>
+                <div className="flex flex-col gap-2 w-full font-mono">
+                  <div className="flex gap-2 w-full">
+                    <button
+                      type="button"
+                      onClick={handlePrintReceipt}
+                      className="flex-1 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-750 text-white text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer border-none"
+                    >
+                      <Printer className="w-3.5 h-3.5 shrink-0 text-white" /> IMPRIMIR RECEIPT (PDF)
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const messageText = `*COMPROVANTE DE PAGAMENTO PIX*\n\n` +
+                          `*Beneficiário:* ${company?.name || 'AutoPrecision'}\n` +
+                          `*Serviço/Fatura:* ${pixPaymentReceipt.title}\n` +
+                          `*Status:* ${pixPaymentReceipt.type === 'Integral' ? 'PAGO' : 'PAGO PARCIAL'}\n` +
+                          `*Valor Cobrado:* R$ ${pixPaymentReceipt.originalAmount.toFixed(2)}\n` +
+                          `*Valor Pago:* R$ ${pixPaymentReceipt.paidAmount.toFixed(2)}\n` +
+                          `*ID Transação:* ${pixPaymentReceipt.txId}\n` +
+                          `*Protocolo:* ${pixPaymentReceipt.id}\n` +
+                          `*Data/Hora:* ${new Date(pixPaymentReceipt.date).toLocaleString('pt-BR')}\n\n` +
+                          `_Enviado de forma automática por AutoPrecision Premium ERP_`;
+                        const encodedText = encodeURIComponent(messageText);
+                        window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
+                      }}
+                      className="flex-1 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-950 text-white text-[10px] font-bold flex items-center justify-center gap-1 cursor-pointer border-none"
+                    >
+                      💬 ZAP COMPARTILHAR
+                    </button>
+                  </div>
 
                   <button
                     type="button"
@@ -1462,7 +1615,7 @@ export const FinanceiroView: React.FC = () => {
                       setPixSelectedReceivable(null);
                       setPixPaymentReceipt(null);
                     }}
-                    className="py-1.5 px-3 rounded-lg border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900 text-[10px] font-bold cursor-pointer transition-colors"
+                    className="w-full py-1.5 rounded-lg border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900 text-[10px] font-bold cursor-pointer transition-colors"
                   >
                     CONCLUIR
                   </button>

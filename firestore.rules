@@ -100,7 +100,7 @@ service cloud.firestore {
         && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128
         && data.type is string && (data.type == "Receita" || data.type == "Despesa")
         && data.amount is number && data.amount >= 0.0
-        && data.status is string && (data.status == "Pago" || data.status == "Pendente");
+        && data.status is string && (data.status == "Pago" || data.status == "Pendente" || data.status == "Cancelado" || data.status == "PENDENTE" || data.status == "PAGO" || data.status == "CANCELADO");
     }
 
     function isValidCaixa(data) {
@@ -109,6 +109,21 @@ service cloud.firestore {
         && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128
         && data.status is string && (data.status == "Aberto" || data.status == "Fechado")
         && data.initialAmount is number && data.initialAmount >= 0.0;
+    }
+
+    function isValidNotificacao(data) {
+      return data.keys().hasAll(['id', 'empresaId', 'titulo', 'createdAt'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128
+        && data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 200;
+    }
+
+    function isValidPixLog(data) {
+      return data.keys().hasAll(['id', 'empresaId', 'txid', 'evento'])
+        && data.id is string && data.id.size() > 0 && data.id.size() <= 128
+        && data.empresaId is string && data.empresaId.size() > 0 && data.empresaId.size() <= 128
+        && data.txid is string && data.txid.size() > 0 && data.txid.size() <= 128
+        && data.evento is string && data.evento.size() > 0 && data.evento.size() <= 100;
     }
 
     // ==========================================
@@ -197,6 +212,21 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(caixaId) && isValidCaixa(incoming()) && belongsToTenant(incoming().empresaId);
       allow update: if isSignedIn() && isValidId(caixaId) && isValidCaixa(incoming()) && belongsToTenant(existing().empresaId) && belongsToTenant(incoming().empresaId);
       allow delete: if isSignedIn() && isValidId(caixaId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+
+    // Real-Time Notifications Match Policies
+    match /notificacoes/{notifId} {
+      allow read: if isSignedIn() && isValidId(notifId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(notifId) && isValidNotificacao(incoming()) && belongsToTenant(incoming().empresaId);
+      allow delete: if isSignedIn() && isValidId(notifId) && belongsToTenant(existing().empresaId) && getUserData().role == "Administrador";
+    }
+
+    // PIX Webhook Event logs Match Policies
+    match /pix_logs/{logId} {
+      allow read: if isSignedIn() && isValidId(logId) && belongsToTenant(existing().empresaId);
+      allow list: if isSignedIn() && belongsToTenant(resource.data.empresaId);
+      allow create: if isSignedIn() && isValidId(logId) && isValidPixLog(incoming()) && belongsToTenant(incoming().empresaId);
     }
   }
 }

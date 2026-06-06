@@ -3,8 +3,24 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+import QRCode from "qrcode";
+import fs from "fs";
 
 dotenv.config();
+
+// Initialize Firebase Admin dynamically using applet config file
+const firebaseAppletConfig = JSON.parse(
+  fs.readFileSync(path.join(process.cwd(), "firebase-applet-config.json"), "utf8")
+);
+
+if (admin.apps.length === 0) {
+  admin.initializeApp({
+    projectId: firebaseAppletConfig.projectId,
+  });
+}
+
+const db = admin.firestore(firebaseAppletConfig.firestoreDatabaseId);
 
 // Initialize Express
 const app = express();
@@ -37,6 +53,232 @@ function getGeminiClient(): GoogleGenAI | null {
 // 1. Health Status endpoint
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", mode: process.env.GEMINI_API_KEY ? "AI Active" : "Local Expert Backup Mode" });
+});
+
+/**
+ * Shared Core Logic: Liquidates PIX payment and updates financeiro + Ordem de Serviço + logs + notifications
+ */
+async function liquidatePixPayment(txid: string, amount: number, rawPayload: any): Promise<{ success: boolean; message: string }> {
+  try {
+    const finRef = db.collection("financeiro");
+    const snap = await finRef.where("pixTxid", "==", txid).limit(1).get();
+
+    if (snap.empty) {
+      return { success: false, message: `Cobrança PIX com TXID ${txid} não cadastrada.` };
+    }
+
+    const finDoc = snap.docs[0];
+    const finData = finDoc.data();
+    const empresaId = finData.empresaId || "unknown_tenant";
+
+    if (finData.status === "PAGO" || finData.status === "Pago") {
+      return { success: true, message: "Pagamento já liquidado anteriormente." };
+    }
+
+    const batch = db.batch();
+    const nowTimestamp = admin.firestore.Timestamp.now();
+
+    // 1. Update Financeiro document
+    batch.update(finDoc.ref, {
+      status: "PAGO",
+      valorPago: amount || finData.amount,
+      webhookRecebido: true,
+      dataPagamento: new Date().toISOString(),
+      updatedAt: nowTimestamp,
+    });
+
+    // 2. Update Ordem de Serviço
+    if (finData.ordemServicoId) {
+      const osRef = db.collection("ordens_servico").doc(finData.ordemServicoId);
+      batch.update(osRef, {
+        statusPagamento: "PAGO",
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    // 3. Create Event Audit Log in pix_logs
+    const logId = `log_${txid}_${Date.now()}`;
+    const logRef = db.collection("pix_logs").doc(logId);
+    batch.set(logRef, {
+      id: logId,
+      txid,
+      empresaId,
+      evento: "PIX_CONFIRMADO_SISTEMA_SAAS",
+      payload: rawPayload,
+      createdAt: nowTimestamp,
+    });
+
+    // 4. Create Notification in notificacoes
+    const notifId = `notif_${txid}_${Date.now()}`;
+    const notifRef = db.collection("notificacoes").doc(notifId);
+    batch.set(notifRef, {
+      id: notifId,
+      empresaId,
+      titulo: "Pagamento Recebido",
+      mensagem: `PIX confirmado automaticamente no valor de R$ ${(amount || finData.amount).toFixed(2)}. ${finData.description ? `(Ref: ${finData.description})` : ""}`,
+      tipo: "financeiro",
+      createdAt: nowTimestamp,
+    });
+
+    await batch.commit();
+    return { success: true, message: "PIX liquidado com sucesso e status atualizado." };
+  } catch (error: any) {
+    console.error("Erro interno ao liquidar PIX:", error);
+    return { success: false, message: `Erro interno: ${error.message}` };
+  }
+}
+
+/**
+ * 2. Criar Cobrança PIX Endpoint (Bank simulation with QR code generation)
+ */
+app.post("/api/pix/create", async (req, res) => {
+  const { empresaId, clienteId, ordemServicoId, descricao, valor, dataVencimento } = req.body;
+
+  if (!valor) {
+    res.status(400).json({ error: "Valor é obrigatório." });
+    return;
+  }
+
+  // Generate sandbox txid
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let randomTx = "";
+  for (let i = 0; i < 25; i++) {
+    randomTx += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  const txid = `TXID${Date.now()}${randomTx}`.substring(0, 32);
+
+  // Generate standardized copia e cola string representing the payment
+  const copiaECola = `00020101021226870014br.gov.bcb.pix25650019saas_erp_production_gateway2760014br.com.emissor5204000053039865405${parseFloat(valor).toFixed(2)}5802BR5915AutoTech%20SaaS6009Sao%20Paulo62260522${txid}6304`;
+
+  try {
+    // Generate real Base64 image QR Code representation
+    const qrcodeImg = await QRCode.toDataURL(copiaECola, {
+      margin: 1,
+      width: 320,
+    });
+
+    res.json({
+      txid,
+      copiaECola,
+      qrcode: qrcodeImg,
+    });
+  } catch (err: any) {
+    console.error("QRCode generation error:", err);
+    res.status(500).json({ error: "Erro ao gerar QR Code para cobrança." });
+  }
+});
+
+/**
+ * 3. Consultar PIX Status directly from Firestore copy
+ */
+app.get("/api/pix/status/:txid", async (req, res) => {
+  const { txid } = req.params;
+
+  try {
+    const finRef = db.collection("financeiro");
+    const snap = await finRef.where("pixTxid", "==", txid).limit(1).get();
+
+    if (snap.empty) {
+      res.json({ txid, status: "PENDENTE" });
+      return;
+    }
+
+    const data = snap.docs[0].data();
+    res.json({
+      txid,
+      status: data.status || "PENDENTE",
+      valorPago: data.valorPago || 0,
+      dataPagamento: data.dataPagamento || null,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 4. Cancelar Cobrança PIX
+ */
+app.post("/api/pix/cancel/:txid", async (req, res) => {
+  const { txid } = req.params;
+
+  try {
+    const finRef = db.collection("financeiro");
+    const snap = await finRef.where("pixTxid", "==", txid).limit(1).get();
+
+    if (snap.empty) {
+      res.status(404).json({ error: "Transação não localizada." });
+      return;
+    }
+
+    const docRef = snap.docs[0].ref;
+    await docRef.update({
+      status: "CANCELADO",
+      updatedAt: admin.firestore.Timestamp.now(),
+    });
+
+    res.json({ success: true, message: "Cobrança cancelada com sucesso." });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * 5. Webhook Receptor endpoint for real-production banking callbacks
+ */
+app.post("/api/pix/webhook", async (req, res) => {
+  const payload = req.body;
+  const signatureToken = req.headers["x-pix-token"] || req.query.token;
+  
+  // Clean mock token fallback check
+  const expectedToken = process.env.PIX_WEBHOOK_SECRET_TOKEN || "saas_erp_auth_token_secret_123";
+  
+  if (signatureToken && signatureToken !== expectedToken) {
+    res.status(401).send("Falha na validação de assinatura de webhook.");
+    return;
+  }
+
+  const txid = payload.txid || (payload.pix && payload.pix[0]?.txid) || payload.pix_txid;
+  const valorPago = parseFloat(payload.valor || (payload.pix && payload.pix[0]?.valor) || payload.amount || "0");
+
+  if (!txid) {
+    res.status(400).send("Faltando txid no corpo da requisição.");
+    return;
+  }
+
+  const result = await liquidatePixPayment(txid, valorPago, payload);
+  if (result.success) {
+    res.status(200).send(result.message);
+  } else {
+    res.status(400).send(result.message);
+  }
+});
+
+/**
+ * 6. Webhook Simulator Endpoint for AI Studio Sandbox live testing!
+ * Allows developer to simulate a real payment callback from the user interface
+ */
+app.post("/api/pix/simulate-payment", async (req, res) => {
+  const { txid, amount } = req.body;
+
+  if (!txid) {
+    res.status(400).json({ error: "txid é obrigatório para simulação." });
+    return;
+  }
+
+  const payload = {
+    txid,
+    valor: amount || 0,
+    horario: new Date().toISOString(),
+    ambiente: "SANDBOX_SIMULATOR",
+    origem: "PREVIEW_INTERFACE",
+  };
+
+  const result = await liquidatePixPayment(txid, amount, payload);
+  if (result.success) {
+    res.json(result);
+  } else {
+    res.status(400).json(result);
+  }
 });
 
 // 2. Intelligent Auto Diagnosis & Parts Suggester

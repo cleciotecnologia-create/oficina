@@ -178,6 +178,8 @@ export interface OrdemServico {
   reopenedAt?: string;
   reopenReason?: string;
   statusHistory?: OSHistoryEntry[];
+  statusPagamento?: 'PENDENTE' | 'PAGO';
+  financeiroId?: string;
 }
 
 export interface Fornecedor {
@@ -192,19 +194,46 @@ export interface Fornecedor {
 export interface Financeiro {
   id: string;
   empresaId: string;
+  clienteId?: string;
+  ordemServicoId?: string;
   description: string;
   type: 'Receita' | 'Despesa';
   amount: number;
   dueDate: string;
-  status: 'Pago' | 'Pendente';
+  status: 'Pago' | 'Pendente' | 'Cancelado' | 'PENDENTE' | 'PAGO' | 'CANCELADO';
   category: string;
   createdAt: string;
+  updatedAt?: string;
   invoiceNumber?: string;       // Número da Nota Fiscal (NF-e)
   purchaseOrder?: string;       // Número do Pedido de Compra / Venda
   reminderEnabled?: boolean;    // Lembrete de vencimento ativo
   reminderDaysBefore?: number;  // Dias para alertar antes do vencimento
   supplierId?: string;          // Fornecedor vinculado (se houver)
   supplierName?: string;        // Nome amigável do Fornecedor vinculado
+  pixTxid?: string;
+  qrCode?: string;
+  copiaECola?: string;
+  valorPago?: number;
+  webhookRecebido?: boolean;
+  dataPagamento?: string;
+}
+
+export interface Notificacao {
+  id: string;
+  empresaId: string;
+  titulo: string;
+  mensagem: string;
+  tipo: string;
+  createdAt: string;
+}
+
+export interface PixLog {
+  id: string;
+  empresaId: string;
+  txid: string;
+  evento: string;
+  payload: any;
+  createdAt: string;
 }
 
 export interface Caixa {
