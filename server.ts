@@ -410,7 +410,6 @@ app.post("/api/gemini/chat", async (req, res) => {
   }
 });
 
-// Serve frontend assets
 app.post("/api/gemini/specs", async (req, res) => {
   const { model, year, motor } = req.body;
 
@@ -419,18 +418,16 @@ app.post("/api/gemini/specs", async (req, res) => {
     return;
   }
 
-  const client = getGeminiClient();
-
-  if (!client) {
-    // Elegant local expert mode response
-    const searchModel = model.toLowerCase();
+  // Define fallback simulated data function to avoid duplicate code
+  const getSimulatedSpecs = (vehModel: string, vehYear: string, vehMotor: string) => {
+    const searchModel = vehModel.toLowerCase();
     
     let simulatedResponse = {
       oilViscosity: "5W-30",
-      oilSpecification: "API SP / ACEA A5/B5 / Sintético",
+      oilSpecification: "API SP / ACEA A5/B5 / Sintético de Alta Performance",
       oilCapacity: "4.0L (com troca de filtro)",
       oilType: "100% Sintético",
-      oilAdditionalNotes: "Lubrificante de alta performance indicado para motores modernos de alta eficiência. Troca recomendada a cada 10.000 km ou 12 meses.",
+      oilAdditionalNotes: "Lubrificante de alta performance de padrão internacional. Troca recomendada a cada 10.000 km ou 12 meses.",
       commonParts: [
         { name: "Filtro de Óleo", category: "Filtros", oemReference: "Fram PH8A ou similar", shortDescription: "Substituir em toda troca de óleo lubrificante de motor" },
         { name: "Filtro de Ar do Motor", category: "Filtros", oemReference: "Tecfil ARL5097", shortDescription: "Inspecionar a cada 10.000 km, trocar se saturado" },
@@ -438,7 +435,7 @@ app.post("/api/gemini/specs", async (req, res) => {
         { name: "Pastilha de Freio Dianteira", category: "Frenagem", oemReference: "Peça Cobreq / Fras-le", shortDescription: "Monitore a espessura. Substituição imediata caso abaixo de 3mm" },
         { name: "Jogo de Velas de Ignição", category: "Ignição", oemReference: "NGK Standard ou Iridium", shortDescription: "Substituir a cada 40.000 km em média" }
       ],
-      technicalNotes: `Ficha geral para ${model} (Ano ${year}). Pressão de pneus sugerida de 32 PSI em condições de carga padrão. Inspecione coxins de motor e buchas de bandeja preventivamente diante de ruídos em vias oscilantes.`
+      technicalNotes: `Ficha geral para ${vehModel} (Ano ${vehYear} ${vehMotor || ""}). Pressão de pneus recomendada: 32 PSI em condições normais de uso.`
     };
 
     if (searchModel.includes("civic")) {
@@ -455,7 +452,7 @@ app.post("/api/gemini/specs", async (req, res) => {
           { name: "Filtro de Combustível", category: "Filtros", oemReference: "OEM Honda", shortDescription: "Acoplado ao copo da bomba dentro do tanque. Troca a cada 40.000 km" },
           { name: "Kit Pastilha Freio Dianteira", category: "Frenagem", oemReference: "Bosch Ceramic ou Brembo", shortDescription: "Excelente frenagem térmica. Inspecione em todas as revisões periódicas." }
         ],
-        technicalNotes: `Honda Civic ${year} ${motor || ""}. Torque de cabeçote exige precisão em fases sequenciais de torque manual e angular. Conexão OBD standard localizada abaixo do painel do motorista, lado esquerdo.`
+        technicalNotes: `Honda Civic ${vehYear} ${vehMotor || ""}. Torque de cabeçote exige precisão em fases sequenciais de torque manual e angular. Conexão OBD standard localizada abaixo do painel do motorista, lado esquerdo.`
       };
     } else if (searchModel.includes("corolla")) {
       simulatedResponse = {
@@ -471,11 +468,11 @@ app.post("/api/gemini/specs", async (req, res) => {
           { name: "Correia de Acessórios (Poly-V)", category: "Correias", oemReference: "Gates 6PK1220", shortDescription: "Trocar preventivamente caso apresente fissuras internas" },
           { name: "Velas de Ignição Double Iridium", category: "Ignição", oemReference: "Denso SC20HR11", shortDescription: "Eletrodo ultrafino para melhor queima de mistura pobre." }
         ],
-        technicalNotes: `Toyota Corolla ${year} ${motor || ""}. Coxim hidráulico do lado do motor tem tendência a fadiga precoce. Troque caso observe vibração no volante com o veículo em marcha lenta.`
+        technicalNotes: `Toyota Corolla ${vehYear} ${vehMotor || ""}. Coxim hidráulico do lado do motor tem tendência a fadiga precoce. Troque caso observe vibração no volante com o veículo em marcha lenta.`
       };
     } else if (searchModel.includes("onix") || searchModel.includes("prisma")) {
       simulatedResponse = {
-        oilViscosity: "0W-20 (Motores turbo de 3 cilindros exigem normas específicas)",
+        oilViscosity: "0W-20 (norma Dexos 1)",
         oilSpecification: "Chevrolet Dexos 1 Gen 2 / Gen 3 / API SP",
         oilCapacity: "3.5L (com troca de filtro)",
         oilType: "100% Sintético",
@@ -487,7 +484,7 @@ app.post("/api/gemini/specs", async (req, res) => {
           { name: "Aditivo de Radiador Orgânico", category: "Fluidos", oemReference: "ACDelco Orgânico Concentrado", shortDescription: "Diluição correta com 50% de água desmineralizada" },
           { name: "Pastilha de Freio Dianteira", category: "Frenagem", oemReference: "Syl 1098 ou Cobreq N-354", shortDescription: "Substituir preventivamente diante de fadiga ou assobio metálico." }
         ],
-        technicalNotes: `GM Onix/Prisma ${year} ${motor || ""}. Atenção especial à tampa do reservatório de expansão de água de arrefecimento e à válvula termostática plástica, que podem apresentar rachaduras invisíveis após ciclos intensos de calor.`
+        technicalNotes: `GM Onix/Prisma ${vehYear} ${vehMotor || ""}. Atenção especial à tampa do reservatório de expansão de água de arrefecimento e à válvula termostática plástica, que podem apresentar rachaduras invisíveis após ciclos intensos de calor.`
       };
     } else if (searchModel.includes("hb20") || searchModel.includes("creta")) {
       simulatedResponse = {
@@ -503,11 +500,11 @@ app.post("/api/gemini/specs", async (req, res) => {
           { name: "Filtro de Ar de Cabine (Ar Condicionado)", category: "Filtros", oemReference: "Filtros Mil FC2309", shortDescription: "Preserve a saúde dos passageiros e o desempenho do ventilador." },
           { name: "Filtro de Ar do Motor", category: "Filtros", oemReference: "Tecfil ARL3113", shortDescription: "Substituir anualmente para evitar restrição no fluxo de admissão." }
         ],
-        technicalNotes: `Hyundai HB20 ${year} ${motor || ""}. Direção elétrica ou eletro-hidráulica e folga de tuchos mecânicos devem ser inspecionadas caso haja batidas de válvulas rítmicas com o motor em temperatura de funcionamento.`
+        technicalNotes: `Hyundai HB20 ${vehYear} ${vehMotor || ""}. Direção elétrica ou eletro-hidráulica e folga de tuchos mecânicos devem ser inspecionadas caso haja batidas de válvulas rítmicas com o motor em temperatura de funcionamento.`
       };
-    } else if (searchModel.includes("gol") || searchModel.includes("fox") || searchModel.includes("voyage") || searchModel.includes("polo")) {
+    } else if (searchModel.includes("gol") || searchModel.includes("fox") || searchModel.includes("voyage") || searchModel.includes("polo") || searchModel.includes("jetta") || searchModel.includes("virtus") || searchModel.includes("t-cross")) {
       simulatedResponse = {
-        oilViscosity: "5W-40 (Norma VW 508.88 ou VW 502.00 para motores EA111 e EA211)",
+        oilViscosity: "5W-40 (Norma VW 508.88 ou VW 502.00)",
         oilSpecification: "VW 508.88 / 509.99 / API SN ou SP",
         oilCapacity: "4.0L (com troca de filtro)",
         oilType: "100% Sintético",
@@ -519,13 +516,18 @@ app.post("/api/gemini/specs", async (req, res) => {
           { name: "Tambor de Freio Traseiro / Lonas", category: "Frenagem", oemReference: "Fras-le", shortDescription: "Garante ancoragem precisa do freio de estacionamento mecânico." },
           { name: "Pastilha de Freio Dianteiro", category: "Frenagem", oemReference: "Bosch Ecopads", shortDescription: "Livre de amianto, excelente dissipação de calor em declives." }
         ],
-        technicalNotes: `Volkswagen ${model} ${year} ${motor || ""}. Motores EA111 requerem vigilância contra vazamento no tubo de água plástico de circulação do bloco e folgas no retentor traseiro do virabrequim (flange de vedação traseira).`
+        technicalNotes: `Volkswagen ${vehModel} ${vehYear} ${vehMotor || ""}. Motores EA111 requerem vigilância contra vazamento no tubo de água plástico de circulação do bloco e folgas no retentor traseiro do virabrequim (flange de vedação traseira).`
       };
     }
 
-    setTimeout(() => {
-      res.json(simulatedResponse);
-    }, 400);
+    return simulatedResponse;
+  };
+
+  const client = getGeminiClient();
+
+  if (!client) {
+    // Elegant local expert mode response immediately without setTimeout wait
+    res.json(getSimulatedSpecs(model, year, motor));
     return;
   }
 
@@ -563,11 +565,18 @@ Rigorosamente não adicione blocos de marcação de código markdown como \`\`\`
       },
     });
 
-    const parsedData = JSON.parse((response.text || "").trim());
+    let resultText = (response.text || "").trim();
+    // Strip markdown code fences if outputted by the model in error
+    if (resultText.startsWith("```")) {
+      resultText = resultText.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
+    }
+
+    const parsedData = JSON.parse(resultText);
     res.json(parsedData);
   } catch (error: any) {
-    console.error("Erro na especificação IA do Gemini:", error);
-    res.status(500).json({ error: "Falha técnica ao consultar as especificações automotivas por inteligência artificial." });
+    console.warn("Erro na especificação IA do Gemini, acionando fallback local inteligente:", error);
+    // Graceful fallback instead of failing with 500
+    res.json(getSimulatedSpecs(model, year, motor));
   }
 });
 

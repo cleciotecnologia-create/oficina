@@ -23,6 +23,175 @@ interface VehicleSpecs {
   technicalNotes: string;
 }
 
+const CAR_DATABASE: Record<string, Record<string, { years: string[]; motors: string[] }>> = {
+  "Chevrolet": {
+    "Onix": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013"],
+      motors: ["1.0 Turbo Flex", "1.0 12V Flex Aspirado", "1.4 8V SPE/4 Flex", "1.0 8V SPE/4 Flex"]
+    },
+    "Prisma": {
+      years: ["2019", "2018", "2017", "2016", "2015", "2014", "2013"],
+      motors: ["1.4 8V SPE/4 Flex", "1.0 8V SPE/4 Flex"]
+    },
+    "Cruze": {
+      years: ["2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016"],
+      motors: ["1.4 16V Turbo Ecotec Flex"]
+    },
+    "S10": {
+      years: ["2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015"],
+      motors: ["2.8 CTDI Diesel", "2.5 16V Ecotec Flex"]
+    },
+    "Tracker": {
+      years: ["2024", "2023", "2022", "2021", "2020"],
+      motors: ["1.0 Turbo 12V", "1.2 Turbo 12V"]
+    }
+  },
+  "Volkswagen": {
+    "Gol": {
+      years: ["2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2010"],
+      motors: ["1.0 MPI 12V EA211", "1.6 MSI 8V EA111", "1.6 MSI 16V EA211", "1.0 TEC 8V EA111"]
+    },
+    "Polo": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018"],
+      motors: ["1.0 TSI (200 TSI) Flex", "1.0 MPI 12V EA211", "1.6 MSI 16V EA211", "1.4 TSI GTS 250 TSI"]
+    },
+    "T-Cross": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019"],
+      motors: ["1.0 TSI (200 TSI)", "1.4 TSI (250 TSI)"]
+    },
+    "Jetta": {
+      years: ["2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["1.4 TSI 250 TSI", "2.0 TSI GLI 350 TSI", "2.0 8V Flex", "1.4 TSI Flex"]
+    },
+    "Voyage": {
+      years: ["2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["1.0 MPI 12V EA211", "1.6 MSI 8V EA111", "1.6 MSI 16V EA211"]
+    }
+  },
+  "Fiat": {
+    "Argo": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017"],
+      motors: ["1.0 6V Firefly Flex", "1.3 8V Firefly Flex", "1.8 16V E.torQ Flex"]
+    },
+    "Uno": {
+      years: ["2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["1.0 6V Firefly Flex", "1.0 8V Fire Flex Evo", "1.3 8V Firefly Flex", "1.4 8V Fire Flex Evo"]
+    },
+    "Palio": {
+      years: ["2017", "2016", "2015", "2014", "2013", "2012", "2011", "2010"],
+      motors: ["1.0 8V Fire Evo", "1.4 8V Fire Evo", "1.6 16V E.torQ"]
+    },
+    "Toro": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016"],
+      motors: ["1.3 Turbo 270 Flex", "1.8 16V E.torQ Flex", "2.0 16V MultiJet Diesel Turbo"]
+    },
+    "Mobi": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016"],
+      motors: ["1.0 8V Fire Evo Flex", "1.0 6V Firefly Flex"]
+    },
+    "Cronos": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018"],
+      motors: ["1.0 6V Firefly Flex", "1.3 8V Firefly Flex", "1.8 16V E.torQ Flex"]
+    },
+    "Strada": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015"],
+      motors: ["1.3 8V Firefly Flex", "1.4 8V Fire Flex", "1.0 Turbo 200 Flex", "1.8 16V E.torQ"]
+    }
+  },
+  "Honda": {
+    "Civic": {
+      years: ["2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["2.0 16V FlexOne i-VTEC", "1.5 16V Turbo Touring", "1.8 16V i-VTEC", "2.0 16V Hybrid"]
+    },
+    "Fit": {
+      years: ["2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["1.5 16V i-VTEC FlexOne", "1.4 16V i-VTEC Flex"]
+    },
+    "HR-V": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015"],
+      motors: ["1.5 Turbo FlexOne", "1.5 i-VTEC Flex", "1.8 16V i-VTEC Flex"]
+    }
+  },
+  "Toyota": {
+    "Corolla": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["2.0 16V Dynamic Force Flex", "1.8 16V Hybrid", "1.8 16V Dual VVT-i", "2.0 16V Dual VVT-i"]
+    },
+    "Hilux": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015"],
+      motors: ["2.8 16V Turbo Diesel D-4D", "2.7 16V VVT-i Flex Dual"]
+    },
+    "Yaris": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018"],
+      motors: ["1.5 16V Dual VVT-i Flex", "1.3 16V Dual VVT-i Flex"]
+    },
+    "Etios": {
+      years: ["2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013"],
+      motors: ["1.5 16V Dual VVT-i Flex", "1.3 16V Dual VVT-i Flex"]
+    }
+  },
+  "Hyundai": {
+    "HB20": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013"],
+      motors: ["1.0 12V 3-Cil Kappa", "1.0 12V Turbo TGDI Flex", "1.6 16V Gamma Flex"]
+    },
+    "Creta": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017"],
+      motors: ["1.0 Turbo TGDI 12V Flex", "1.6 16V Gamma Flex", "2.0 16V Nu Flex"]
+    },
+    "Tucson": {
+      years: ["2022", "2021", "2020", "2018", "2017", "2015", "2014", "2013", "2012"],
+      motors: ["1.6 Turbo GDI Gasolina", "2.0 16V Flex", "2.7 V6 Gasolina"]
+    }
+  },
+  "Ford": {
+    "Ka": {
+      years: ["2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["1.0 12V 3-Cil TiVCT Flex", "1.5 12V 3-Cil Dragon Flex", "1.5 16V Sigma Flex", "1.0 8V Zetec Rocam"]
+    },
+    "EcoSport": {
+      years: ["2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["1.5 12V 3-Cil Dragon Flex", "2.0 16V Direct Flex", "1.6 16V Sigma Flex", "2.0 16V Duratec Flex"]
+    },
+    "Fiesta": {
+      years: ["2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012", "2010"],
+      motors: ["1.6 16V Sigma Flex", "1.5 16V Sigma Flex", "1.0 8V Zetec Rocam"]
+    },
+    "Ranger": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013"],
+      motors: ["3.2 Duratorq Diesel 5-Cil", "2.2 Duratorq Diesel 4-Cil", "2.5 Duratec Flex", "3.0 V6 Turbo Diesel"]
+    }
+  },
+  "Renault": {
+    "Sandero": {
+      years: ["2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["1.0 12V SCe Flex", "1.6 16V SCe Flex", "1.6 8V Hi-Power Flex", "2.0 16V F4R (Sandero RS)"]
+    },
+    "Logan": {
+      years: ["2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013", "2012"],
+      motors: ["1.0 12V SCe Flex", "1.6 16V SCe Flex", "1.6 8V Hi-Power Flex"]
+    },
+    "Duster": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015", "2014", "2013"],
+      motors: ["1.6 16V SCe Flex", "1.3 TCe Turbo Flex", "2.0 16V F4R Flex"]
+    },
+    "Kwid": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018"],
+      motors: ["1.0 12V SCe 3-Cil Flex"]
+    }
+  },
+  "Jeep": {
+    "Renegade": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017", "2016", "2015"],
+      motors: ["1.3 Turbo 270 Flex", "1.8 16V E.torQ Flex", "2.0 16V MultiJet Diesel Turbo"]
+    },
+    "Compass": {
+      years: ["2024", "2023", "2022", "2021", "2020", "2019", "2018", "2017"],
+      motors: ["1.3 Turbo 270 Flex", "2.0 16V Tigershark Flex", "2.0 16V MultiJet Diesel Turbo"]
+    }
+  }
+};
+
 const POPULAR_SUGGESTIONS = [
   { model: 'Honda Civic', year: '2018', motor: '2.0 16V Flex / Turbo' },
   { model: 'Toyota Corolla', year: '2020', motor: '2.0 Dynamic Force / Hybrid' },
@@ -32,6 +201,12 @@ const POPULAR_SUGGESTIONS = [
 ];
 
 export default function EngenhariaView() {
+  const [selectionMode, setSelectionMode] = useState<'catalog' | 'manual'>('catalog');
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedModel, setSelectedModel] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [selectedMotor, setSelectedMotor] = useState('');
+
   const [model, setModel] = useState('');
   const [year, setYear] = useState('');
   const [motor, setMotor] = useState('');
@@ -46,7 +221,7 @@ export default function EngenhariaView() {
 
   const handleSearch = async (targetModel: string, targetYear: string, targetMotor: string) => {
     if (!targetModel.trim() || !targetYear.trim()) {
-      setError('Por favor, digite o modelo do veículo e o ano de fabricação.');
+      setError('Por favor, selecione ou digite o modelo do veículo e o ano de fabricação.');
       return;
     }
 
@@ -90,6 +265,7 @@ export default function EngenhariaView() {
   };
 
   const handleApplySuggestion = (sug: typeof POPULAR_SUGGESTIONS[0]) => {
+    setSelectionMode('manual');
     setModel(sug.model);
     setYear(sug.year);
     setMotor(sug.motor);
@@ -248,48 +424,160 @@ export default function EngenhariaView() {
             <h2 className="text-xs font-bold font-mono tracking-wider text-red-500 uppercase flex items-center gap-1.5">
               <Sliders className="w-3.5 h-3.5" /> Especificador Técnico de Veículos
             </h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              <div className="md:col-span-5 flex flex-col gap-1.5">
-                <label className="text-[10px] font-mono text-slate-400">Modelo do Carro *</label>
-                <div className="relative">
-                  <Car className="w-4 h-4 text-slate-550 absolute left-3 top-3" />
+
+            {/* Mode Switcher */}
+            <div className="flex items-center gap-1 bg-[#070b13] p-1 rounded-xl border border-gray-850">
+              <button
+                type="button"
+                onClick={() => setSelectionMode('catalog')}
+                className={`flex-1 text-center py-1.5 text-[10px] font-mono font-bold rounded-lg transition-all ${selectionMode === 'catalog' ? 'bg-red-950/20 text-red-400 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Catálogo Inteligente de Oficina
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectionMode('manual')}
+                className={`flex-1 text-center py-1.5 text-[10px] font-mono font-bold rounded-lg transition-all ${selectionMode === 'manual' ? 'bg-red-950/20 text-red-400 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-slate-200'}`}
+              >
+                Digitação Livre / Manual
+              </button>
+            </div>
+
+            {selectionMode === 'catalog' ? (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                {/* Brand Selector */}
+                <div className="md:col-span-3 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Marca/Fabricante *</label>
+                  <select
+                    value={selectedBrand}
+                    onChange={(e) => {
+                      const brand = e.target.value;
+                      setSelectedBrand(brand);
+                      setSelectedModel('');
+                      setSelectedYear('');
+                      setSelectedMotor('');
+                      setModel(brand);
+                      setYear('');
+                      setMotor('');
+                    }}
+                    className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white focus:outline-none transition-colors"
+                  >
+                    <option value="">Selecione...</option>
+                    {Object.keys(CAR_DATABASE).map(brand => (
+                      <option key={brand} value={brand}>{brand}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Model Selector */}
+                <div className="md:col-span-3 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Modelo *</label>
+                  <select
+                    value={selectedModel}
+                    disabled={!selectedBrand}
+                    onChange={(e) => {
+                      const m = e.target.value;
+                      setSelectedModel(m);
+                      setSelectedYear('');
+                      setSelectedMotor('');
+                      setModel(selectedBrand ? `${selectedBrand} ${m}` : m);
+                      setYear('');
+                      setMotor('');
+                    }}
+                    className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-1.5 text-xs text-white focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Selecione...</option>
+                    {selectedBrand && Object.keys(CAR_DATABASE[selectedBrand]).map(model => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Year Selector */}
+                <div className="md:col-span-3 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Ano *</label>
+                  <select
+                    value={selectedYear}
+                    disabled={!selectedModel}
+                    onChange={(e) => {
+                      const y = e.target.value;
+                      setSelectedYear(y);
+                      setSelectedMotor('');
+                      setYear(y);
+                      setMotor('');
+                    }}
+                    className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-1.5 text-xs text-white focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Selecione...</option>
+                    {selectedBrand && selectedModel && CAR_DATABASE[selectedBrand][selectedModel].years.map(y => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Motor Selector */}
+                <div className="md:col-span-3 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Motorização *</label>
+                  <select
+                    value={selectedMotor}
+                    disabled={!selectedYear}
+                    onChange={(e) => {
+                      const mot = e.target.value;
+                      setSelectedMotor(mot);
+                      setMotor(mot);
+                    }}
+                    className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-1.5 text-xs text-white focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Selecione...</option>
+                    {selectedBrand && selectedModel && CAR_DATABASE[selectedBrand][selectedModel].motors.map(mot => (
+                      <option key={mot} value={mot}>{mot}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div className="md:col-span-5 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Modelo do Carro *</label>
+                  <div className="relative">
+                    <Car className="w-4 h-4 text-slate-550 absolute left-3 top-3" />
+                    <input 
+                      type="text"
+                      required
+                      value={model}
+                      onChange={(e) => setModel(e.target.value)}
+                      placeholder="Ex: Civic, Corolla, Onix, Gol"
+                      className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-3 pl-9 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="md:col-span-3 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Ano *</label>
+                  <input 
+                    type="number"
+                    required
+                    min="1950"
+                    max="2027"
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                    placeholder="Ex: 2018"
+                    className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
+                  />
+                </div>
+
+                <div className="md:col-span-4 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Motorização (Opcional)</label>
                   <input 
                     type="text"
-                    required
-                    value={model}
-                    onChange={(e) => setModel(e.target.value)}
-                    placeholder="Ex: Civic, Corolla, Onix, Gol"
-                    className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-3 pl-9 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
+                    value={motor}
+                    onChange={(e) => setMotor(e.target.value)}
+                    placeholder="Ex: 2.0 16V / 1.0 Turbo"
+                    className="w-full bg-[#070b13] border border-gray-850 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
                   />
                 </div>
               </div>
-
-              <div className="md:col-span-3 flex flex-col gap-1.5">
-                <label className="text-[10px] font-mono text-slate-400">Ano *</label>
-                <input 
-                  type="number"
-                  required
-                  min="1950"
-                  max="2027"
-                  value={year}
-                  onChange={(e) => setYear(e.target.value)}
-                  placeholder="Ex: 2018"
-                  className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
-                />
-              </div>
-
-              <div className="md:col-span-4 flex flex-col gap-1.5">
-                <label className="text-[10px] font-mono text-slate-400">Motorização (Opcional)</label>
-                <input 
-                  type="text"
-                  value={motor}
-                  onChange={(e) => setMotor(e.target.value)}
-                  placeholder="Ex: 2.0 16V / 1.0 Turbo"
-                  className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
-                />
-              </div>
-            </div>
+            )}
 
             <button 
               type="submit"
