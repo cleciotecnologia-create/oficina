@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
 import QRCode from "qrcode";
 import fs from "fs";
 
@@ -20,7 +21,7 @@ if (admin.apps.length === 0) {
   });
 }
 
-const db = admin.firestore(firebaseAppletConfig.firestoreDatabaseId);
+const db = getFirestore(undefined, firebaseAppletConfig.firestoreDatabaseId);
 
 // Initialize Express
 const app = express();
