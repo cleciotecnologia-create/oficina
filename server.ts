@@ -343,8 +343,13 @@ Evite markdown na formatação externa do JSON.`;
       },
     });
 
-    const cleanText = response.text || "";
-    const parsedData = JSON.parse(cleanText.trim());
+    let cleanText = (response.text || "").trim();
+    const firstBrace = cleanText.indexOf("{");
+    const lastBrace = cleanText.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+    const parsedData = JSON.parse(cleanText);
     res.json(parsedData);
   } catch (error: any) {
     console.error("Erro na chamada do Gemini API:", error);
@@ -421,9 +426,11 @@ app.post("/api/gemini/specs", async (req, res) => {
 
   // Define fallback simulated data function to avoid duplicate code
   const getSimulatedSpecs = (vehModel: string, vehYear: string, vehMotor: string) => {
-    const searchModel = vehModel.toLowerCase();
+    const searchModel = String(vehModel || "").toLowerCase();
     
     let simulatedResponse = {
+      brand: "Outra",
+      engine: vehMotor || "1.6 Flex",
       oilViscosity: "5W-30",
       oilSpecification: "API SP / ACEA A5/B5 / Sintético de Alta Performance",
       oilCapacity: "4.0L (com troca de filtro)",
@@ -441,6 +448,8 @@ app.post("/api/gemini/specs", async (req, res) => {
 
     if (searchModel.includes("civic")) {
       simulatedResponse = {
+        brand: "Honda",
+        engine: "2.0 16V FlexOne",
         oilViscosity: "0W-20",
         oilSpecification: "API SN/SP / ILSAC GF-5/GF-6 / Sintético",
         oilCapacity: "3.7L (com troca de filtro)",
@@ -457,6 +466,8 @@ app.post("/api/gemini/specs", async (req, res) => {
       };
     } else if (searchModel.includes("corolla")) {
       simulatedResponse = {
+        brand: "Toyota",
+        engine: "2.0 Dual VVT-i Flex",
         oilViscosity: "5W-30 (ou 0W-20 para modelos híbridos)",
         oilSpecification: "API SP / ILSAC GF-6 / Sintético de Alta Durabilidade",
         oilCapacity: "4.2L (com troca de filtro)",
@@ -465,7 +476,7 @@ app.post("/api/gemini/specs", async (req, res) => {
         commonParts: [
           { name: "Filtro de Óleo Sachê", category: "Filtros", oemReference: "Mann-Filter HU5111x (Refil)", shortDescription: "Elemento de papel ecológico. Troca recomendada a cada lubrificação." },
           { name: "Filtro de Combustível", category: "Filtros", oemReference: "Fram G10225 ou OEM", shortDescription: "Localizado sob o assento traseiro. Trocar preventivamente" },
-          { name: "Pastilhas de Freio Dianteiras", category: "Frenagem", oemReference: "Fras-le PD/1415", shortDescription: "Pastilha com sensor acústico mecânico de desgaste" },
+          { name: "Pastillas de Freio Dianteiras", category: "Frenagem", oemReference: "Fras-le PD/1415", shortDescription: "Pastilha com sensor acústico mecânico de desgaste" },
           { name: "Correia de Acessórios (Poly-V)", category: "Correias", oemReference: "Gates 6PK1220", shortDescription: "Trocar preventivamente caso apresente fissuras internas" },
           { name: "Velas de Ignição Double Iridium", category: "Ignição", oemReference: "Denso SC20HR11", shortDescription: "Eletrodo ultrafino para melhor queima de mistura pobre." }
         ],
@@ -473,11 +484,13 @@ app.post("/api/gemini/specs", async (req, res) => {
       };
     } else if (searchModel.includes("onix") || searchModel.includes("prisma")) {
       simulatedResponse = {
+        brand: "Chevrolet",
+        engine: "1.4 8V SPE/4 Flex",
         oilViscosity: "0W-20 (norma Dexos 1)",
         oilSpecification: "Chevrolet Dexos 1 Gen 2 / Gen 3 / API SP",
         oilCapacity: "3.5L (com troca de filtro)",
         oilType: "100% Sintético",
-        oilAdditionalNotes: "CRÍTICO: Nos motores de 3 cilindros com correia banhada a óleo, o lubrificante DEVE ser 100% sintético e homologado estritamente Dexos 1, sob risco de dissolução da correia dentada.",
+        oilAdditionalNotes: "CRÍTICO: Nos motores de 3 cilindros com correia banhada a óleo, o lubrificante DEVE ser 100% sintético e homologado estritamente Dexos 1, sob risco de dissolução della correia dentada.",
         commonParts: [
           { name: "Filtro de Óleo GM", category: "Filtros", oemReference: "ACDelco 25206953 / Mann W6014", shortDescription: "Pressão de válvula interna calibrada sob medida para motores SPE/4 ou Ecotec Turbo." },
           { name: "Filtro de Combustível Flex", category: "Filtros", oemReference: "Acdelco 19348757", shortDescription: "Trocar preventivamente a cada 10.000 km devido ao álcool combustível." },
@@ -489,6 +502,8 @@ app.post("/api/gemini/specs", async (req, res) => {
       };
     } else if (searchModel.includes("hb20") || searchModel.includes("creta")) {
       simulatedResponse = {
+        brand: "Hyundai",
+        engine: "1.0 Kappa 12V Flex",
         oilViscosity: "5W-30 (Motores Kappa 1.0 e Gamma 1.6)",
         oilSpecification: "API SN / SP / ACEA A5/B5 ou superior",
         oilCapacity: "3.6L (com troca de filtro)",
@@ -505,6 +520,8 @@ app.post("/api/gemini/specs", async (req, res) => {
       };
     } else if (searchModel.includes("gol") || searchModel.includes("fox") || searchModel.includes("voyage") || searchModel.includes("polo") || searchModel.includes("jetta") || searchModel.includes("virtus") || searchModel.includes("t-cross")) {
       simulatedResponse = {
+        brand: "Volkswagen",
+        engine: "1.6 8V TotalFlex EA111",
         oilViscosity: "5W-40 (Norma VW 508.88 ou VW 502.00)",
         oilSpecification: "VW 508.88 / 509.99 / API SN ou SP",
         oilCapacity: "4.0L (com troca de filtro)",
@@ -541,6 +558,8 @@ ${motor ? `- Motorização / Detalhes: ${motor}` : ''}
 
 Você deve responder rigorosamente em português e retornar apenas um objeto do tipo JSON com a seguinte estrutura exata:
 {
+  "brand": "A marca/montadora correspondente sugerida ou inferida (ex: Chevrolet, Volkswagen, Fiat, Ford, Toyota, Honda, Hyundai)",
+  "engine": "A motorização exata sugerida ou inferida para este modelo e ano se não fornecida (ex: 1.0 12V MPI Flex, 1.4 8V SPE/4 Flex, 2.0 TSI, 1.6 MSI, 1.8 16V Dual VVT-i)",
   "oilViscosity": "A viscosidade recomendada, ex: 0W-20, 5W-30, 5W-40, 10W-40",
   "oilSpecification": "A norma de homologação da montadora ou especificação API/ACEA principal (ex: Dexos 2, VW 508.88, API SP, ACEA A5/B5)",
   "oilCapacity": "A capacidade volumétrica do cárter em Litros, indicando com e sem troca de filtro de óleo se aplicável",
@@ -567,9 +586,10 @@ Rigorosamente não adicione blocos de marcação de código markdown como \`\`\`
     });
 
     let resultText = (response.text || "").trim();
-    // Strip markdown code fences if outputted by the model in error
-    if (resultText.startsWith("```")) {
-      resultText = resultText.replace(/^```[a-z]*\n?/i, "").replace(/```$/, "").trim();
+    const firstBrace = resultText.indexOf("{");
+    const lastBrace = resultText.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      resultText = resultText.substring(firstBrace, lastBrace + 1);
     }
 
     const parsedData = JSON.parse(resultText);

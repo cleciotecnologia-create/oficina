@@ -114,6 +114,10 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   const [quickKm, setQuickKm] = useState('');
   const [quickModelsList, setQuickModelsList] = useState<string[]>([]);
   const [quickVehSuccess, setQuickVehSuccess] = useState<string | null>(null);
+  const [quickAiLoading, setQuickAiLoading] = useState(false);
+  const [quickAiSpecs, setQuickAiSpecs] = useState<any | null>(null);
+  const [quickAiError, setQuickAiError] = useState<string | null>(null);
+  const [quickAiFeedback, setQuickAiFeedback] = useState<string | null>(null);
 
   // New OS form states
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
@@ -222,6 +226,58 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     }
   }, [veiculos]);
 
+  const handleQuickVehicleAiFill = async () => {
+    if (!quickModel) {
+      alert("Por favor, digite o modelo do veículo (ex: Prisma, Corolla, Civic) para podermos analisar via IA.");
+      return;
+    }
+    
+    setQuickAiLoading(true);
+    setQuickAiError(null);
+    setQuickAiSpecs(null);
+    
+    try {
+      const resp = await fetch('/api/gemini/specs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: quickModel,
+          year: quickYear || '2022'
+        })
+      });
+      
+      if (!resp.ok) {
+        throw new Error('Não foi possível obter resposta dos servidores de engenharia.');
+      }
+      
+      const data = await resp.json();
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // Successfully got specifications!
+      setQuickAiSpecs(data);
+      
+      // Autofill fields
+      if (data.brand) {
+        setQuickBrand(data.brand);
+        const foundSug = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === data.brand.toLowerCase());
+        if (foundSug) {
+          setQuickModelsList(foundSug.models);
+        }
+      }
+      
+      if (data.engine) {
+        setQuickEngine(data.engine);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setQuickAiError(err?.message || 'Falha de comunicação com a IA.');
+    } finally {
+      setQuickAiLoading(false);
+    }
+  };
+
   const handleQuickVehicleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedClient) {
@@ -254,6 +310,8 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
       setQuickPlate('');
       setQuickKm('');
       setQuickModelsList([]);
+      setQuickAiSpecs(null);
+      setQuickAiError(null);
       
       setTimeout(() => {
         setQuickVehSuccess(null);
@@ -1118,6 +1176,136 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                           />
                         </div>
                       </div>
+
+                      {/* AI Pre-fill Trigger Button */}
+                      <div className="flex flex-col gap-1 mt-1">
+                        <button
+                          type="button"
+                          disabled={quickAiLoading || !quickModel}
+                          onClick={handleQuickVehicleAiFill}
+                          className="py-2 px-3 bg-cyan-950/40 hover:bg-cyan-900/40 border border-cyan-800/80 disabled:opacity-45 hover:scale-[1.01] transition-all text-cyan-400 font-mono text-[10px] font-bold rounded-lg flex justify-center items-center gap-1.5 cursor-pointer shadow-md"
+                        >
+                          {quickAiLoading ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-cyan-400" />
+                              <span>CONSULTANDO REDE NEURAL DE ENGENHARIA...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+                              <span>PREENCHER MOTORIZAÇÃO & FICHA TÉCNICA VIA IA</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {quickAiSpecs && (
+                        <div className="bg-[#030712] border border-cyan-950/60 rounded-xl p-3.5 flex flex-col gap-2.5 mt-1.5 text-xs">
+                          <div className="flex justify-between items-center border-b border-cyan-950/40 pb-2">
+                            <span className="text-[10px] font-mono font-bold text-cyan-400 flex items-center gap-1.5">
+                              <Cpu className="w-3.5 h-3.5 text-cyan-500 animate-pulse" />
+                              FICHA TÉCNICA SUGERIDA POR IA
+                            </span>
+                            <span className="text-[8px] font-mono text-gray-500 uppercase tracking-widest">Gemini Engine Spec v2.5</span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-2 text-[11px] font-sans">
+                            <div className="p-1.5 bg-black/40 rounded-lg border border-gray-900">
+                              <span className="text-[8px] font-mono text-cyan-500 block uppercase">Viscosidade Óleo</span>
+                              <span className="font-mono text-white text-xs font-bold">{quickAiSpecs.oilViscosity}</span>
+                            </div>
+                            <div className="p-1.5 bg-black/40 rounded-lg border border-gray-900">
+                              <span className="text-[8px] font-mono text-cyan-500 block uppercase">Capacidade Cárter</span>
+                              <span className="font-mono text-white text-xs font-bold">{quickAiSpecs.oilCapacity}</span>
+                            </div>
+                            <div className="p-1.5 bg-black/40 rounded-lg border border-gray-900 col-span-2">
+                              <span className="text-[8px] font-mono text-cyan-500 block uppercase">Especificação da Montadora</span>
+                              <span className="text-gray-200 text-xs font-mono">{quickAiSpecs.oilSpecification}</span>
+                            </div>
+                          </div>
+
+                          <div className="p-1.5 bg-black/40 rounded-lg border border-gray-900 text-[10.5px]">
+                            <span className="text-[8px] font-mono text-gray-500 block uppercase mb-0.5">Propriedades do Fluido</span>
+                            <p className="text-gray-300 italic">{quickAiSpecs.oilAdditionalNotes}</p>
+                          </div>
+
+                          <div className="p-1.5 bg-black/40 rounded-lg border border-gray-900 text-[10.5px]">
+                            <span className="text-[8px] font-mono text-gray-500 block uppercase mb-1">Dicas & Alertas Mecânicos</span>
+                            <p className="text-gray-300 font-mono text-[10px] leading-relaxed">{quickAiSpecs.technicalNotes}</p>
+                          </div>
+
+                          {quickAiSpecs.commonParts && quickAiSpecs.commonParts.length > 0 && (
+                            <div className="p-1.5 bg-black/40 rounded-lg border border-gray-900 text-[10.5px]">
+                              <span className="text-[8px] font-mono text-gray-500 block uppercase mb-1">Peças Periódicas Homologadas</span>
+                              <div className="flex flex-col gap-1 max-h-24 overflow-y-auto pr-1">
+                                {quickAiSpecs.commonParts.map((pt: any, idx: number) => (
+                                  <div key={idx} className="flex justify-between items-center text-[9.5px] border-b border-gray-950/60 py-0.5 last:border-b-0">
+                                    <div className="flex flex-col">
+                                      <span className="text-gray-300 font-bold font-sans">{pt.name}</span>
+                                      <span className="text-gray-500 font-mono text-[8.5px]">Ref: {pt.oemReference}</span>
+                                    </div>
+                                    <span className="text-cyan-400 bg-cyan-950/20 px-1 border border-cyan-950 rounded font-mono text-[8px] uppercase">{pt.category}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {quickAiFeedback && (
+                            <div className="p-2.5 bg-emerald-950/40 border border-emerald-900/50 text-[10px] text-emerald-400 font-mono rounded-lg animate-pulse text-center col-span-2 mt-1">
+                              🎉 {quickAiFeedback}
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-2 mt-1 col-span-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                let specsText = `[FICHA TÉCNICA SUGERIDA POR IA] - ${quickBrand} ${quickModel} (${quickYear})\n`;
+                                specsText += `- Óleo Recomendado: ${quickAiSpecs.oilViscosity} (${quickAiSpecs.oilType || 'Sintético'})\n`;
+                                specsText += `- Especificação / Norma: ${quickAiSpecs.oilSpecification}\n`;
+                                specsText += `- Capacidade Cárter: ${quickAiSpecs.oilCapacity}\n`;
+                                specsText += `- Notas de Engenharia: ${quickAiSpecs.oilAdditionalNotes}\n`;
+                                specsText += `- Problemas/Recall conhecidos: ${quickAiSpecs.technicalNotes}`;
+                                
+                                setDiagnosisText(prev => prev ? prev + "\n\n" + specsText : specsText);
+                                setQuickAiFeedback("Ficha técnica injetada com sucesso no campo de diagnóstico!");
+                                setTimeout(() => setQuickAiFeedback(null), 4000);
+                              }}
+                              className="py-1.5 px-2 bg-cyan-950 hover:bg-cyan-900 border border-cyan-800 rounded text-[9.5px] font-bold font-sans text-cyan-400 cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
+                            >
+                              📋 INJETAR FICHA NA O.S.
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (quickAiSpecs.commonParts && quickAiSpecs.commonParts.length > 0) {
+                                  // Map suggested parts to O.S. partsused format
+                                  const partsToAdd = quickAiSpecs.commonParts.map((pt: any, idx: number) => ({
+                                    id: "part_ai_" + idx + "_" + Date.now(),
+                                    name: `${pt.name} (${quickModel} - ${pt.oemReference})`,
+                                    sellPrice: 0, 
+                                    quantity: 1
+                                  }));
+                                  setParts(prev => [...prev, ...partsToAdd]);
+                                  setQuickAiFeedback("Peças recomendadas adicionadas ao orçamento de O.S.!");
+                                  setTimeout(() => setQuickAiFeedback(null), 4000);
+                                }
+                              }}
+                              className="py-1.5 px-2 bg-emerald-950 hover:bg-emerald-900 border border-emerald-800 rounded text-[9.5px] font-bold font-sans text-emerald-400 cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
+                            >
+                              🛒 ORÇAR PEÇAS DE FILTRO
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {quickAiError && (
+                        <div className="p-2 bg-red-950/20 border border-red-900/60 text-[10px] text-red-400 font-mono rounded-lg">
+                          ⚠️ {quickAiError}
+                        </div>
+                      )}
 
                       <button
                         type="button"
