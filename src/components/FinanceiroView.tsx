@@ -1318,13 +1318,20 @@ export const FinanceiroView: React.FC = () => {
                           if (responseSim.ok) {
                             alert("Sucesso! Pagamento de compensação processado pelo Webhook do banco.");
                           } else {
-                            alert("Falha ao notificar o simulador de pagamento.");
+                            const { liquidarPixNoClientSide } = await import('../services/pixService');
+                            const resFallback = await liquidarPixNoClientSide(pixSelectedReceivable.pixTxid, original);
+                            if (resFallback.success) {
+                              alert("Sucesso! Pagamento compensado via contingência local.");
+                            } else {
+                              alert("Falha ao notificar o simulador de pagamento.");
+                            }
                           }
                         } catch (simErr) {
                           console.error(simErr);
                           alert("Simulando offline por erro de rede...");
                           // Safe client fallback
-                          await editFinanceiro(pixSelectedReceivable.id, { status: 'Pago' });
+                          const { liquidarPixNoClientSide } = await import('../services/pixService');
+                          await liquidarPixNoClientSide(pixSelectedReceivable.pixTxid, original);
                         }
                       }}
                       className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-[10px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all border-none"
@@ -1346,7 +1353,7 @@ export const FinanceiroView: React.FC = () => {
                         if (enteredVal >= original) {
                           alert(`Este valor (R$ ${enteredVal}) quita integralmente a fatura.`);
                           try {
-                            await fetch('/api/pix/simulate-payment', {
+                            const responseSim = await fetch('/api/pix/simulate-payment', {
                               method: 'POST',
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({
@@ -1354,8 +1361,13 @@ export const FinanceiroView: React.FC = () => {
                                 amount: original
                               })
                             });
+                            if (!responseSim.ok) {
+                              const { liquidarPixNoClientSide } = await import('../services/pixService');
+                              await liquidarPixNoClientSide(pixSelectedReceivable.pixTxid, original);
+                            }
                           } catch (e) {
-                            await editFinanceiro(pixSelectedReceivable.id, { status: 'Pago' });
+                            const { liquidarPixNoClientSide } = await import('../services/pixService');
+                            await liquidarPixNoClientSide(pixSelectedReceivable.pixTxid, original);
                           }
                           return;
                         }
@@ -1383,14 +1395,21 @@ export const FinanceiroView: React.FC = () => {
 
                           // Call real webhook register to audit the logs
                           if (pixSelectedReceivable.pixTxid) {
-                            await fetch('/api/pix/simulate-payment', {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                txid: pixSelectedReceivable.pixTxid,
-                                amount: enteredVal
-                              })
-                            });
+                            try {
+                              const responseSim = await fetch('/api/pix/simulate-payment', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  txid: pixSelectedReceivable.pixTxid,
+                                  amount: enteredVal
+                                })
+                              });
+                              if (!responseSim.ok) {
+                                console.warn("Simulação de webhook no servidor ignorada. Atualizando fluxos locais offline.");
+                              }
+                            } catch (e) {
+                              console.warn("Utilizando compensação offline para split parciais:", e);
+                            }
                           }
                         } catch (errSpl) {
                           console.error(errSpl);

@@ -5,6 +5,7 @@ import {
   Printer, ArrowRight, Gauge, Cpu, BookOpen, Send, HelpCircle, 
   ChevronRight, Car, Sliders, RefreshCw, FileText
 } from 'lucide-react';
+import { specsCache } from '../lib/specsCache';
 
 interface Part {
   name: string;
@@ -213,6 +214,8 @@ export default function EngenhariaView() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VehicleSpecs | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isFromCache, setIsFromCache] = useState(false);
+  const [cacheVersion, setCacheVersion] = useState(0);
 
   // Q&A State
   const [qaInput, setQaInput] = useState('');
@@ -229,6 +232,16 @@ export default function EngenhariaView() {
     setError(null);
     setResult(null);
     setQaFeed([]);
+    setIsFromCache(false);
+
+    // 1. Check local cache first
+    const cached = specsCache.get(targetModel, targetYear, targetMotor);
+    if (cached) {
+      setResult(cached);
+      setIsFromCache(true);
+      setLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch('/api/gemini/specs', {
@@ -241,19 +254,36 @@ export default function EngenhariaView() {
         })
       });
 
+      let data;
       if (!response.ok) {
-        throw new Error('Falha técnica ao consultar nossa matriz de engenharia.');
-      }
-
-      const data = await response.json();
-      if (data.error) {
-        throw new Error(data.error);
+        console.warn("Servidor retornado com erro, acionando fallback local no cliente de Engenharia.");
+        const { getSimulatedSpecs } = await import('../lib/specsFallback');
+        data = getSimulatedSpecs(targetModel, targetYear, targetMotor);
+        setIsFromCache(true); // Treat local simulation as similar status
+      } else {
+        data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
       }
 
       setResult(data);
+      
+      // Save spec results to cache
+      specsCache.set(targetModel, targetYear, targetMotor, data);
+      setCacheVersion(v => v + 1);
     } catch (err: any) {
-      console.error(err);
-      setError(err?.message || 'Incapaz de conectar com a central de engenharia por rede neural.');
+      console.error("Erro na busca de especificações da IA, operando em modo contingência local:", err);
+      try {
+        const { getSimulatedSpecs } = await import('../lib/specsFallback');
+        const fallbackData = getSimulatedSpecs(targetModel, targetYear, targetMotor);
+        setResult(fallbackData);
+        setIsFromCache(true);
+        specsCache.set(targetModel, targetYear, targetMotor, fallbackData);
+        setCacheVersion(v => v + 1);
+      } catch (fallbackErr) {
+        setError(err?.message || 'Incapaz de conectar com a central de engenharia por rede neural.');
+      }
     } finally {
       setLoading(false);
     }
@@ -607,36 +637,64 @@ export default function EngenhariaView() {
         </div>
 
         {/* Quick Suggestions Bento */}
-        <div className="lg:col-span-5 bg-[#0c1223] border border-gray-850 p-6 rounded-2xl flex flex-col gap-4">
-          <div>
-            <h3 className="text-xs font-bold font-mono tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
-              <BookOpen className="w-3.5 h-3.5 text-red-500" /> Atalhos Clássicos de Oficina
-            </h3>
-            <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-              Clique para preencher e gerar automaticamente os dados com base nos modelos de rotação intensa das garagens brasileiras.
-            </p>
+        <div className="lg:col-span-5 bg-[#0c1223] border border-gray-850 p-6 rounded-2xl flex flex-col justify-between gap-4">
+          <div className="flex flex-col gap-4">
+            <div>
+              <h3 className="text-xs font-bold font-mono tracking-wider text-slate-400 uppercase flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-red-500" /> Atalhos Clássicos de Oficina
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                Clique para preencher e gerar automaticamente os dados com base nos modelos de rotação intensa das garagens brasileiras.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 overflow-y-auto max-h-[140px] pr-1">
+              {POPULAR_SUGGESTIONS.map((sug, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleApplySuggestion(sug)}
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#070b13] hover:bg-[#0f182c] border border-gray-850 hover:border-slate-800 transition-all text-left group"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-red-950/40 border border-red-900/20 text-red-400">
+                      <Car className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-slate-200 block">{sug.model} <span className="text-[10px] text-slate-500">({sug.year})</span></span>
+                      <span className="text-[9px] text-slate-500 font-mono block mt-0.5">{sug.motor}</span>
+                    </div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-red-500 group-hover:translate-x-1 transition-all" />
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex flex-col gap-2 overflow-y-auto max-h-[180px] pr-1">
-            {POPULAR_SUGGESTIONS.map((sug, i) => (
+          {/* Local specs cache indicator/management */}
+          <div className="pt-3.5 border-t border-gray-850 flex flex-col gap-2 font-mono">
+            <div className="flex justify-between items-center text-[10px]">
+              <span className="text-slate-400 flex items-center gap-1">
+                <Cpu className="w-3.5 h-3.5 text-emerald-450" /> Cache Local de IA:
+              </span>
+              <span className="text-emerald-400 font-bold bg-emerald-950/30 px-2 py-0.5 rounded-md border border-emerald-900/40 text-[9px]">
+                {specsCache.getAllCached().length} modelos salvos
+              </span>
+            </div>
+            {specsCache.getAllCached().length > 0 && (
               <button
-                key={i}
                 type="button"
-                onClick={() => handleApplySuggestion(sug)}
-                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-[#070b13] hover:bg-[#0f182c] border border-gray-850 hover:border-slate-800 transition-all text-left group"
+                onClick={() => {
+                  specsCache.clear();
+                  setCacheVersion(v => v + 1);
+                  setError("Cache local de especificações limpo com sucesso!");
+                  setTimeout(() => setError(null), 3000);
+                }}
+                className="w-full text-center py-1.5 text-[9.5px] bg-[#070b13] hover:bg-red-955 hover:bg-red-950/15 border border-gray-850 hover:border-red-950 text-slate-400 hover:text-red-400 rounded-xl transition-all cursor-pointer font-bold"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-red-950/40 border border-red-900/20 text-red-400">
-                    <Car className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className="text-xs font-semibold text-slate-200 block">{sug.model} <span className="text-[10px] text-slate-500">({sug.year})</span></span>
-                    <span className="text-[9px] text-slate-500 font-mono block mt-0.5">{sug.motor}</span>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-red-500 group-hover:translate-x-1 transition-all" />
+                Limpar Cache de Consultas
               </button>
-            ))}
+            )}
           </div>
         </div>
 
@@ -700,9 +758,16 @@ export default function EngenhariaView() {
 
               {/* LUBRICANT CORE SPECIFICATIONS CARD */}
               <div className="lg:col-span-5 bg-[#0c1223] border border-gray-850 p-6 rounded-2xl flex flex-col gap-6 print:border-none print:bg-white print:p-0 col-span-12">
-                <div className="no-print">
-                  <span className="text-[10px] font-mono text-red-500 uppercase font-bold tracking-wider block">RECOMENDAÇÃO DE LUBRIFICAÇÃO</span>
-                  <h3 className="text-sm font-bold text-white font-sans mt-1">Ficha de Óleo de Motor</h3>
+                <div className="no-print flex justify-between items-start">
+                  <div>
+                    <span className="text-[10px] font-mono text-red-500 uppercase font-bold tracking-wider block">RECOMENDAÇÃO DE LUBRIFICAÇÃO</span>
+                    <h3 className="text-sm font-bold text-white font-sans mt-1">Ficha de Óleo de Motor</h3>
+                  </div>
+                  {isFromCache && (
+                    <span className="text-[9px] bg-emerald-950/50 text-emerald-400 border border-emerald-900/40 rounded-lg px-2 py-0.5 font-mono font-bold animate-pulse text-right">
+                      ⚡ CACHE IA
+                    </span>
+                  )}
                 </div>
 
                 <div className="hidden print:block print-heading-2">

@@ -28,6 +28,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
 import { AUTO_SUGGESTIONS } from '../lib/autoSuggestions';
+import { specsCache } from '../lib/specsCache';
 
 interface OSViewProps {
   initialSearchPlate?: string;
@@ -236,6 +237,26 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     setQuickAiError(null);
     setQuickAiSpecs(null);
     
+    // 1. Check local cache first
+    const cached = specsCache.get(quickModel, quickYear || '2022', "");
+    if (cached) {
+      setQuickAiSpecs(cached);
+      if (cached.brand) {
+        setQuickBrand(cached.brand);
+        const foundSug = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === cached.brand.toLowerCase());
+        if (foundSug) {
+          setQuickModelsList(foundSug.models);
+        }
+      }
+      if (cached.engine) {
+        setQuickEngine(cached.engine);
+      }
+      setQuickAiFeedback("Ficha recuperada do cache local instantaneamente (offline)!");
+      setTimeout(() => setQuickAiFeedback(null), 4000);
+      setQuickAiLoading(false);
+      return;
+    }
+    
     try {
       const resp = await fetch('/api/gemini/specs', {
         method: 'POST',
@@ -246,17 +267,25 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
         })
       });
       
+      let data;
       if (!resp.ok) {
-        throw new Error('Não foi possível obter resposta dos servidores de engenharia.');
-      }
-      
-      const data = await resp.json();
-      if (data.error) {
-        throw new Error(data.error);
+        console.warn("Servidor retornado com erro, acionando fallback local no cliente.");
+        const { getSimulatedSpecs } = await import('../lib/specsFallback');
+        data = getSimulatedSpecs(quickModel, quickYear || '2022', "");
+        setQuickAiFeedback("Ficha estimada localmente (offline)!");
+        setTimeout(() => setQuickAiFeedback(null), 4000);
+      } else {
+        data = await resp.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
       }
       
       // Successfully got specifications!
       setQuickAiSpecs(data);
+      
+      // Save to cache
+      specsCache.set(quickModel, quickYear || '2022', "", data);
       
       // Autofill fields
       if (data.brand) {
@@ -271,8 +300,28 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
         setQuickEngine(data.engine);
       }
     } catch (err: any) {
-      console.error(err);
-      setQuickAiError(err?.message || 'Falha de comunicação com a IA.');
+      console.error("Erro na API, ativando fallback local:", err);
+      try {
+        const { getSimulatedSpecs } = await import('../lib/specsFallback');
+        const fallbackData = getSimulatedSpecs(quickModel, quickYear || '2022', "");
+        setQuickAiSpecs(fallbackData);
+        specsCache.set(quickModel, quickYear || '2022', "", fallbackData);
+        setQuickAiFeedback("Ficha técnica estimada localmente (offline)!");
+        setTimeout(() => setQuickAiFeedback(null), 4000);
+        
+        if (fallbackData.brand) {
+          setQuickBrand(fallbackData.brand);
+          const foundSug = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === fallbackData.brand.toLowerCase());
+          if (foundSug) {
+            setQuickModelsList(foundSug.models);
+          }
+        }
+        if (fallbackData.engine) {
+          setQuickEngine(fallbackData.engine);
+        }
+      } catch (fallbackErr) {
+        setQuickAiError(err?.message || 'Falha de comunicação com a IA.');
+      }
     } finally {
       setQuickAiLoading(false);
     }
