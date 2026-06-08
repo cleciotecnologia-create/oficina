@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, Component, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppProvider, useApp } from './context/AppContext';
 import { LandingPage } from './components/LandingPage';
@@ -1224,10 +1224,92 @@ function AppContent() {
   );
 }
 
+// 5. SECURE CRASH RECOVERY SHIELD (ErrorBoundary) TO PREVENT BLACK SCREENS IN ANY DEPLOYMENT
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  props: { children: ReactNode };
+  state = { hasError: false, error: null };
+
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.props = props;
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught an uncaught exception on load:", error, errorInfo);
+  }
+
+  handleRestart = () => {
+    try {
+      localStorage.clear();
+      window.location.search = ""; // remove parameters that could be causing portal crashes
+      window.location.reload();
+    } catch (e) {
+      window.location.reload();
+    }
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div id="crash-screen" className="min-h-screen bg-[#060913] text-gray-100 flex flex-col justify-center items-center p-6 text-center select-none font-sans">
+          <div className="max-w-md w-full bg-[#0c1223]/95 border border-red-500/30 rounded-3xl p-8 shadow-2xl relative">
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-12 bg-red-650 rounded-2xl flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+              <span className="text-white text-xl font-bold font-mono">⚠️</span>
+            </div>
+            
+            <h1 className="text-lg font-bold font-display text-white mt-4 tracking-tight leading-tight">
+              SISTEMA AUTOMOTIVO PROTEGIDO
+            </h1>
+            <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
+              Evitamos que sua tela ficasse preta! Ocorreu um erro no carregamento da interface. Não se preocupe, seus dados locais estão guardados e seguros.
+            </p>
+
+            <div className="my-5 p-4 bg-[#050810] border border-gray-800 rounded-xl max-h-40 overflow-y-auto text-left">
+              <span className="text-[9px] font-mono block text-red-400 uppercase tracking-wider font-bold mb-1">Diagnóstico Técnico:</span>
+              <p className="font-mono text-[9.5px] text-gray-300 leading-snug break-all whitespace-pre-wrap">
+                {this.state.error?.stack || this.state.error?.message || "Erro desconhecido na renderização."}
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={this.handleRestart}
+                className="w-full py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs tracking-wider font-mono cursor-pointer transition-colors flex items-center justify-center gap-2 shadow-lg hover:shadow-red-950/40 border-none"
+              >
+                🔄 LIMPAR CACHE E REINICIAR SISTEMA
+              </button>
+              
+              <button
+                type="button"
+                onClick={() => { (this as any).setState({ hasError: false, error: null }); window.location.reload(); }}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-gray-300 rounded-xl text-[10px] uppercase font-bold tracking-wider cursor-pointer border border-gray-800 transition-colors"
+              >
+                Voltar ao Início / Recarregar
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </ErrorBoundary>
   );
 }
