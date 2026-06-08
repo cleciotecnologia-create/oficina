@@ -279,6 +279,27 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   // AI Diagnostic output helper
   const [aiDiagnosticSummary, setAiDiagnosticSummary] = useState<any | null>(null);
 
+  // Safe local date formatting without timezone-shifting
+  const safeFormatLocalDate = (dateStr: string | undefined): string => {
+    if (!dateStr) return 'vazio';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const day = parseInt(parts[2], 10);
+        if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+          return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+        }
+      }
+      const d = new Date(dateStr + 'T00:00:00');
+      if (isNaN(d.getTime())) return dateStr;
+      return d.toLocaleDateString('pt-BR');
+    } catch (e) {
+      return dateStr || '';
+    }
+  };
+
   // Status Colors Mapping
   const statusColors: Record<string, string> = {
     'Agendada': 'border-purple-900 bg-purple-950/20 text-purple-400',
@@ -589,7 +610,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
       plate: selectedVehicle.plate,
       km: parseInt(kmStr) || selectedVehicle.km,
       problem: problemText,
-      diagnosis: diagnosisText || (entryMode === 'agendada' ? `Serviço Agendado para ${scheduledDate ? new Date(scheduledDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'futuro'} às ${scheduledTime}.` : "Aguardando diagnóstico mecânico detalhado."),
+      diagnosis: diagnosisText || (entryMode === 'agendada' ? `Serviço Agendado para ${safeFormatLocalDate(scheduledDate)} às ${scheduledTime}.` : "Aguardando diagnóstico mecânico detalhado."),
       status: (entryMode === 'agendada' ? "Agendada" : "Aberta") as any,
       mechanicId: "staff_2",
       mechanicName: assignedStaff,
@@ -1020,7 +1041,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                       <span className="text-[10px] text-purple-400 font-mono block mt-1.5 flex items-center gap-1 bg-purple-950/45 p-1 px-2.5 rounded-lg border border-purple-900/40 w-fit">
                         <span>📅 AGENDADO PARA:</span>
                         <strong className="text-purple-300">
-                          {new Date(os.scheduledDate + 'T00:00:00').toLocaleDateString('pt-BR')} às {os.scheduledTime || '09:00'}
+                          {safeFormatLocalDate(os.scheduledDate)} às {os.scheduledTime || '09:00'}
                         </strong>
                       </span>
                     )}
@@ -1382,10 +1403,17 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                       const isSelected = scheduledDate === formattedDayString;
                       
                       // Count OS entries scheduled or created on this day
-                      const osEvents = ordensServico.filter(o => 
-                        o.scheduledDate === formattedDayString || 
-                        (o.createdAt && new Date(o.createdAt).toISOString().split('T')[0] === formattedDayString)
-                      );
+                      const osEvents = ordensServico.filter(o => {
+                        if (o.scheduledDate === formattedDayString) return true;
+                        if (!o.createdAt) return false;
+                        try {
+                          const dateObj = new Date(o.createdAt);
+                          if (isNaN(dateObj.getTime())) return false;
+                          return dateObj.toISOString().split('T')[0] === formattedDayString;
+                        } catch (e) {
+                          return false;
+                        }
+                      });
                       const hasEvents = osEvents.length > 0;
 
                       return (
@@ -1425,7 +1453,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                   {/* Detalhes do dia selecionado */}
                   {scheduledDate && (
                     <div className="mt-2 pt-2 border-t border-gray-850/50 text-[10px] text-left">
-                      <span className="text-gray-400 font-mono">📅 AGENDAMENTO EM {new Date(scheduledDate + 'T00:00:00').toLocaleDateString('pt-BR')}:</span>
+                      <span className="text-gray-400 font-mono">📅 AGENDAMENTO EM {safeFormatLocalDate(scheduledDate)}:</span>
                       {(() => {
                         const dayEvents = ordensServico.filter(o => o.scheduledDate === scheduledDate);
                         if (dayEvents.length === 0) {
