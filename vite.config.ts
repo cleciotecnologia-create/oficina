@@ -20,13 +20,18 @@ export default defineConfig(() => {
                 id.includes('react') || 
                 id.includes('react-dom') || 
                 id.includes('scheduler') || 
-                id.includes('motion') || 
                 id.includes('zustand')
               ) {
-                return 'vendor-core';
+                return 'vendor-react';
               }
               if (id.includes('firebase')) {
                 return 'vendor-firebase';
+              }
+              if (id.includes('@google/genai')) {
+                return 'vendor-genai';
+              }
+              if (id.includes('motion')) {
+                return 'vendor-motion';
               }
               if (id.includes('recharts') || id.includes('d3')) {
                 return 'vendor-charts';
