@@ -281,6 +281,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
 
   // Status Colors Mapping
   const statusColors: Record<string, string> = {
+    'Agendada': 'border-purple-900 bg-purple-950/20 text-purple-400',
     'Aberta': 'border-blue-900 bg-blue-950/20 text-blue-400',
     'Em análise': 'border-yellow-900 bg-yellow-950/20 text-yellow-400',
     'Aguardando peça': 'border-orange-950 bg-orange-950/20 text-orange-400',
@@ -940,6 +941,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                 className="w-full bg-[#080c16] border border-gray-800 py-2.5 px-3 rounded-xl text-xs text-white focus:outline-none focus:border-red-500 font-mono"
               >
                 <option value="Todas">Status: Todas</option>
+                <option value="Agendada">Agendada</option>
                 <option value="Aberta">Aberta</option>
                 <option value="Em análise">Em análise</option>
                 <option value="Aguardando peça">Aguardando peça</option>
@@ -1014,6 +1016,14 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                         })()}
                       </span>
                     </span>
+                    {os.status === 'Agendada' && os.scheduledDate && (
+                      <span className="text-[10px] text-purple-400 font-mono block mt-1.5 flex items-center gap-1 bg-purple-950/45 p-1 px-2.5 rounded-lg border border-purple-900/40 w-fit">
+                        <span>📅 AGENDADO PARA:</span>
+                        <strong className="text-purple-300">
+                          {new Date(os.scheduledDate + 'T00:00:00').toLocaleDateString('pt-BR')} às {os.scheduledTime || '09:00'}
+                        </strong>
+                      </span>
+                    )}
                   </div>
 
                   <span className="text-sm font-mono font-extrabold text-white">
@@ -1224,10 +1234,220 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
       )}
 
       {activeTab === 'nova' && (
-        <form onSubmit={handleSaveOS} className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6 w-full">
+        <form onSubmit={handleSaveOS} className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6 w-full font-sans">
           <div className="border-b border-gray-850 pb-4">
             <h3 className="font-display font-extrabold text-white text-base">ABRIR NOVA ORDEM DE SERVIÇO</h3>
             <span className="text-xs text-gray-400 font-mono">Associe o cadastro de clientes, execute vistorias físicas e defina o pátio de execução.</span>
+          </div>
+
+          {/* MODO DE ENTRADA: IMEDIATA OU AGENDADA */}
+          <div className="bg-[#080c16] border border-gray-850 p-4 rounded-xl flex flex-col gap-4 text-left">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-850/50 pb-3">
+              <div>
+                <span className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block">PLANEJAMENTO DE RECEPÇÃO</span>
+                <h4 className="text-white text-sm font-bold flex items-center gap-1.5 mt-0.5">
+                  Como o veículo está dando entrada?
+                </h4>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setEntryMode('imediata')}
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all border cursor-pointer ${
+                    entryMode === 'imediata'
+                      ? 'bg-red-950/35 text-red-500 border-red-900 shadow-[0_0_8px_rgba(239,68,68,0.15)]'
+                      : 'bg-[#050810] text-gray-400 border-gray-850 hover:text-white hover:border-gray-700'
+                  }`}
+                >
+                  🚀 EXECUÇÃO IMEDIATA
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEntryMode('agendada');
+                    if (!scheduledDate) {
+                      setScheduledDate(new Date().toISOString().split('T')[0]);
+                    }
+                  }}
+                  className={`flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold transition-all border cursor-pointer ${
+                    entryMode === 'agendada'
+                      ? 'bg-purple-950/35 text-purple-400 border-purple-900 shadow-[0_0_8px_rgba(168,85,247,0.15)]'
+                      : 'bg-[#050810] text-gray-400 border-gray-850 hover:text-white hover:border-gray-700'
+                  }`}
+                >
+                  📅 AGENDAMENTO FUTURO
+                </button>
+              </div>
+            </div>
+
+            {entryMode === 'agendada' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-1 animate-fadeIn">
+                {/* Inputs do Agendamento */}
+                <div className="lg:col-span-4 flex flex-col gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-gray-400 uppercase">Selecione Data do Compromisso</label>
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={scheduledDate}
+                        onChange={(e) => setScheduledDate(e.target.value)}
+                        className="w-full bg-[#050810] border border-gray-800 rounded-lg py-2 px-3 text-xs text-white pl-9 font-mono cursor-pointer"
+                        required={entryMode === 'agendada'}
+                      />
+                      <Calendar className="w-4 h-4 text-purple-500 absolute left-3 top-2.5" />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-gray-400 uppercase">Selecione Horário</label>
+                    <div className="relative">
+                      <input
+                        type="time"
+                        value={scheduledTime}
+                        onChange={(e) => setScheduledTime(e.target.value)}
+                        className="w-full bg-[#050810] border border-gray-800 rounded-lg py-2 px-3 text-xs text-white pl-9 font-mono cursor-pointer"
+                        required={entryMode === 'agendada'}
+                      />
+                      <Clock className="w-4 h-4 text-purple-500 absolute left-3 top-2.5" />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-purple-950/15 border border-purple-900/30 rounded-lg text-xs leading-relaxed text-purple-300">
+                    <strong className="text-purple-200 block mb-1 font-sans">ℹ️ Fluxo de Agendamento Ativo:</strong>
+                    A ordem de serviço será registrada no banco de dados com o status de <span className="font-bold bg-purple-950 text-purple-400 border border-purple-900/40 px-1 py-0.2 rounded font-mono">Agendada</span>. O cliente poderá acompanhar seu status e o agendamento será exibido na agenda de compromissos da oficina.
+                  </div>
+                </div>
+
+                {/* Calendário Interativo Integrado */}
+                <div className="lg:col-span-8 bg-[#050810] border border-gray-850 p-4 rounded-xl flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest font-bold flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-purple-400" /> Agenda de Ocupação da Oficina
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (currentCalendarMonth === 0) {
+                            setCurrentCalendarMonth(11);
+                            setCurrentCalendarYear(prev => prev - 1);
+                          } else {
+                            setCurrentCalendarMonth(prev => prev - 1);
+                          }
+                        }}
+                        className="p-1 px-2 rounded bg-gray-900 hover:bg-gray-800 text-gray-300 text-[9px] uppercase font-mono cursor-pointer"
+                      >
+                        Anterior
+                      </button>
+                      <span className="text-xs font-mono text-white font-bold px-2 whitespace-nowrap">
+                        {new Date(currentCalendarYear, currentCalendarMonth).toLocaleString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (currentCalendarMonth === 11) {
+                            setCurrentCalendarMonth(0);
+                            setCurrentCalendarYear(prev => prev + 1);
+                          } else {
+                            setCurrentCalendarMonth(prev => prev + 1);
+                          }
+                        }}
+                        className="p-1 px-2 rounded bg-gray-900 hover:bg-gray-800 text-gray-300 text-[9px] uppercase font-mono cursor-pointer"
+                      >
+                        Próximo
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1 text-center font-mono text-[9px] text-gray-500 uppercase tracking-wider font-extrabold border-b border-gray-850/50 pb-1.5">
+                    <span>Dom</span>
+                    <span>Seg</span>
+                    <span>Ter</span>
+                    <span>Qua</span>
+                    <span>Qui</span>
+                    <span>Sex</span>
+                    <span>Sáb</span>
+                  </div>
+
+                  <div className="grid grid-cols-7 gap-1">
+                    {/* Fillers for empty day start */}
+                    {Array.from({ length: new Date(currentCalendarYear, currentCalendarMonth, 1).getDay() }).map((_, idx) => (
+                      <div key={`filler-${idx}`} className="h-9" />
+                    ))}
+
+                    {/* True days */}
+                    {Array.from({ length: new Date(currentCalendarYear, currentCalendarMonth + 1, 0).getDate() }).map((_, idx) => {
+                      const dayNum = idx + 1;
+                      const formattedDayString = `${currentCalendarYear}-${String(currentCalendarMonth + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                      const isSelected = scheduledDate === formattedDayString;
+                      
+                      // Count OS entries scheduled or created on this day
+                      const osEvents = ordensServico.filter(o => 
+                        o.scheduledDate === formattedDayString || 
+                        (o.createdAt && new Date(o.createdAt).toISOString().split('T')[0] === formattedDayString)
+                      );
+                      const hasEvents = osEvents.length > 0;
+
+                      return (
+                        <button
+                          key={`day-${dayNum}`}
+                          type="button"
+                          onClick={() => setScheduledDate(formattedDayString)}
+                          className={`h-9 flex flex-col items-center justify-between py-1 px-0.5 rounded transition cursor-pointer relative ${
+                            isSelected 
+                              ? 'bg-purple-600 text-white font-bold border border-purple-500' 
+                              : 'bg-slate-950 hover:bg-slate-900 text-gray-300 border border-slate-900'
+                          }`}
+                        >
+                          <span className="text-[10px] leading-none">{dayNum}</span>
+                          
+                          {/* Event counter indicators */}
+                          {hasEvents && (
+                            <div className="flex gap-0.5 items-center justify-center mt-auto" style={{ minHeight: '4px' }}>
+                              {osEvents.map((ev, evIdx) => {
+                                if (evIdx > 2) return null; // cap visual count
+                                const evColor = ev.status === 'Agendada' ? 'bg-purple-400' : 'bg-blue-400';
+                                return (
+                                  <span 
+                                    key={ev.id} 
+                                    className={`w-1 h-1 rounded-full ${evColor}`} 
+                                    title={`OS: ${ev.id} (${ev.status})`}
+                                  />
+                                );
+                              })}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Detalhes do dia selecionado */}
+                  {scheduledDate && (
+                    <div className="mt-2 pt-2 border-t border-gray-850/50 text-[10px] text-left">
+                      <span className="text-gray-400 font-mono">📅 AGENDAMENTO EM {new Date(scheduledDate + 'T00:00:00').toLocaleDateString('pt-BR')}:</span>
+                      {(() => {
+                        const dayEvents = ordensServico.filter(o => o.scheduledDate === scheduledDate);
+                        if (dayEvents.length === 0) {
+                          return <div className="text-emerald-400 mt-1 font-mono">✅ Nenhum agendamento prévio. Horários totalmente livres nesta data!</div>;
+                        }
+                        return (
+                          <div className="flex flex-col gap-1 mt-1.5 max-h-[100px] overflow-y-auto scrollbar-thin">
+                            {dayEvents.map(e => (
+                              <div key={e.id} className="flex justify-between items-center bg-[#070b13] p-1.5 rounded border border-gray-900">
+                                <span className="font-mono text-purple-400">🕒 {e.scheduledTime || '00:00'} - OS {e.id}</span>
+                                <span className="text-gray-300 truncate max-w-[120px] sm:max-w-none">{e.clienteName} • {e.veiculoInfo}</span>
+                                <span className="bg-purple-950/40 text-purple-400 border border-purple-900/40 text-[8px] px-1.5 py-0.2 rounded uppercase font-mono">{e.status}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
