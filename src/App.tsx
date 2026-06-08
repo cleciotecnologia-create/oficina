@@ -73,7 +73,8 @@ function AppContent() {
     syncPendingActions,
     syncing,
     ordensServico,
-    produtos
+    produtos,
+    highContrast
   } = useApp();
 
   const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering'>('landing');
@@ -482,7 +483,7 @@ function AppContent() {
 
   // 4. MAIN WORKSPACE AND LAYOUT DRAWER ASSEMBLAGE
   return (
-    <div className="min-h-screen bg-[#060913] text-gray-100 flex flex-col font-sans">
+    <div className={`min-h-screen bg-[#060913] text-gray-100 flex flex-col font-sans ${highContrast ? 'high-contrast' : ''}`}>
       
       {/* IMPERSONATION BANNER CARD */}
       {localStorage.getItem('original_saas_admin_user') && (
@@ -604,7 +605,8 @@ function AppContent() {
                     'Aguardando peça': 'border-orange-950 bg-orange-950/40 text-orange-400',
                     'Em execução': 'border-red-955 bg-red-950/20 text-red-500',
                     'Finalizada': 'border-green-900 bg-green-950/20 text-green-400',
-                    'Entregue': 'border-emerald-600 bg-emerald-950/20 text-emerald-400'
+                    'Entregue': 'border-emerald-600 bg-emerald-950/20 text-emerald-400',
+                    'Agendada': 'border-purple-900 bg-purple-950/40 text-purple-400'
                   };
                   const colorClass = statusColors[os.status] || 'border-slate-850 text-slate-400 bg-slate-900/40';
 
@@ -730,9 +732,12 @@ function AppContent() {
                         {/* List container */}
                         <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
                           {waitingPartsOS.length > 0 ? (
-                            waitingPartsOS.map((os) => (
-                              <div 
+                            waitingPartsOS.map((os, index) => (
+                              <motion.div 
                                 key={os.id}
+                                initial={{ opacity: 0, x: -16 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.25, delay: index * 0.05, ease: "easeOut" }}
                                 className="p-3 bg-gray-950/40 rounded-xl border border-gray-900 hover:border-orange-900/30 transition-all flex flex-col gap-2 relative group"
                               >
                                 <div className="flex justify-between items-start">
@@ -765,7 +770,7 @@ function AppContent() {
                                     📞 Entrar em contato / Follow-Up Fornecedor
                                   </button>
                                 </div>
-                              </div>
+                              </motion.div>
                             ))
                           ) : (
                             <div className="text-center py-6 flex flex-col items-center gap-2 text-gray-500 font-sans">

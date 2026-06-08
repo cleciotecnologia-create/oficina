@@ -55,7 +55,9 @@ export const ConfigView: React.FC = () => {
     localAuditLogs,
     resetToProduction,
     user,
-    updateUserProfile
+    updateUserProfile,
+    highContrast,
+    setHighContrast
   } = useApp();
 
   // Primary Company fields state
@@ -854,6 +856,45 @@ export const ConfigView: React.FC = () => {
                   value={whiteLabelTitle}
                   onChange={(e) => setWhiteLabelTitle(e.target.value)}
                 />
+              </div>
+            </div>
+
+            {/* Acessibilidade e Alto Contraste */}
+            <div className="border-t border-gray-850 pt-4 flex items-center gap-2">
+              <Eye className="w-5 h-5 text-amber-500" />
+              <div>
+                <h3 className="font-display font-bold text-white text-sm">Acessibilidade e Recursos Visuais</h3>
+                <span className="text-[10px] text-gray-500 font-mono block">Ajuste a interface da aplicação para melhorar a visualização.</span>
+              </div>
+            </div>
+
+            <div className="bg-[#09101f] border border-gray-850/65 p-4 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 font-sans text-xs">
+              <div className="flex flex-col gap-1.5 max-w-xl text-left">
+                <span className="font-bold text-white uppercase text-[10px] tracking-wider font-mono flex items-center gap-1.5">
+                  🌗 Modo de Alto Contraste para Oficinas
+                </span>
+                <p className="text-gray-400 leading-relaxed text-[11px]">
+                  Ative esta opção para maximizar o contraste da interface, transformando fundos de tela cinzas em preto absoluto (<code className="text-gray-300 font-mono bg-black px-1 rounded">#000000</code>), engrossando bordas de formulários e acentuando a luminosidade dos textos e ícones críticos. 
+                </p>
+                <span className="text-[10px] text-amber-500/90 font-medium">
+                  💡 Ideal para dispositivos móveis ou tablets expostos diretamente sob forte iluminação solar/fluorescente no pátio de atendimento das oficinas.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 bg-slate-950/40 p-2 rounded-lg border border-gray-850 self-end sm:self-center">
+                <span className="text-[10px] font-mono text-gray-400 uppercase font-bold">Estado:</span>
+                <button
+                  type="button"
+                  id="btn-toggle-high-contrast"
+                  onClick={() => setHighContrast(!highContrast)}
+                  className={`px-4 py-1.5 rounded-lg text-[10px] font-bold font-mono border transition-all cursor-pointer ${
+                    highContrast
+                      ? 'bg-amber-600 border-amber-500 text-white shadow shadow-amber-950/40 font-bold'
+                      : 'bg-transparent border-gray-800 text-gray-400 hover:text-white hover:border-gray-500'
+                  }`}
+                >
+                  {highContrast ? '⚡ ATIVADO (MAX)' : '⚪ DESATIVADO'}
+                </button>
               </div>
             </div>
 

@@ -142,7 +142,7 @@ export interface PartUsed {
   quantity: number;
 }
 
-export type OSStatus = 'Aberta' | 'Em análise' | 'Aguardando peça' | 'Em execução' | 'Finalizada' | 'Entregue' | 'Garantia Reaberta';
+export type OSStatus = 'Aberta' | 'Em análise' | 'Aguardando peça' | 'Em execução' | 'Finalizada' | 'Entregue' | 'Garantia Reaberta' | 'Agendada';
 
 export interface OSHistoryEntry {
   status: OSStatus;
@@ -184,6 +184,8 @@ export interface OrdemServico {
   statusPagamento?: 'PENDENTE' | 'PAGO';
   financeiroId?: string;
   faturamentoMode?: 'Balcão' | 'A faturar';
+  scheduledDate?: string; // YYYY-MM-DD
+  scheduledTime?: string; // HH:MM
 }
 
 export interface Fornecedor {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Wrench, 
@@ -20,6 +20,8 @@ import {
   Sparkles,
   Bell,
   CalendarRange,
+  Calendar,
+  Clock,
   Trash2,
   RefreshCw,
   Link,
@@ -137,6 +139,111 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   const [reminderDays, setReminderDays] = useState(3);
   const [faturamentoMode, setFaturamentoMode] = useState<'Balcão' | 'A faturar'>('Balcão');
 
+  // Scheduling states
+  const [entryMode, setEntryMode] = useState<'imediata' | 'agendada'>('imediata');
+  const [scheduledDate, setScheduledDate] = useState<string>('');
+  const [scheduledTime, setScheduledTime] = useState<string>('09:00');
+  const [currentCalendarYear, setCurrentCalendarYear] = useState<number>(new Date().getFullYear());
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState<number>(new Date().getMonth());
+
+  // Camera capture states
+  const [capturedPhotos, setCapturedPhotos] = useState<string[]>([]);
+  const [cameraActive, setCameraActive] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Stop camera feed helper
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => {
+        try {
+          track.stop();
+        } catch (err) {
+          console.error("Erro ao parar track:", err);
+        }
+      });
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+  };
+
+  // Start camera feed helper
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }, // Rear camera first
+        audio: false
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(err => {
+          console.error("Erro ao play no video:", err);
+        });
+      }
+      setCameraActive(true);
+    } catch (err: any) {
+      console.error("Erro ao acessar câmera:", err);
+      setCameraError("Não foi possível acessar a câmera do dispositivo. Verifique as permissões de privacidade ou envie um arquivo diretamente.");
+    }
+  };
+
+  // Capture frame as Base64 JPEG string
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        setCapturedPhotos(prev => [...prev, dataUrl]);
+      }
+    } catch (err) {
+      console.error("Erro ao capturar foto:", err);
+      setCameraError("Falha ao processar captura física do frame.");
+    }
+  };
+
+  // Handle local file fallback uploads
+  const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    
+    Array.from(files).forEach((file: File) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setCapturedPhotos(prev => [...prev, reader.result as string]);
+        }
+      };
+      reader.onerror = () => {
+        setCameraError("Erro ao processar arquivo local de imagem.");
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Delete specific capture index
+  const deleteCapturedPhoto = (indexToDelete: number) => {
+    setCapturedPhotos(prev => prev.filter((_, idx) => idx !== indexToDelete));
+  };
+
+  // Clean-up on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
   // Checklist states
   const [checklist, setChecklist] = useState([
     { label: "Nível de Combustível", status: "ok" as const },
@@ -165,6 +272,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
 
   // Print/Share modal states
   const [activeOSForModal, setActiveOSForModal] = useState<OrdemServico | null>(null);
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
   const [whatsappTextCreated, setWhatsappTextCreated] = useState('');
   const [customSignName, setCustomSignName] = useState('');
 
@@ -480,18 +588,21 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
       plate: selectedVehicle.plate,
       km: parseInt(kmStr) || selectedVehicle.km,
       problem: problemText,
-      diagnosis: diagnosisText || "Aguardando diagnóstico mecânico detalhado.",
-      status: "Aberta" as const,
+      diagnosis: diagnosisText || (entryMode === 'agendada' ? `Serviço Agendado para ${scheduledDate ? new Date(scheduledDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'futuro'} às ${scheduledTime}.` : "Aguardando diagnóstico mecânico detalhado."),
+      status: (entryMode === 'agendada' ? "Agendada" : "Aberta") as any,
       mechanicId: "staff_2",
       mechanicName: assignedStaff,
       services: [...services],
       parts: [...parts],
       checklist: [...checklist],
+      photoUrls: [...capturedPhotos],
       total: totalOS,
       reminderEnabled,
       vencimentoDays: Number(vencimentoDays),
       reminderDays: Number(reminderDays),
-      faturamentoMode: faturamentoMode
+      faturamentoMode: faturamentoMode,
+      scheduledDate: entryMode === 'agendada' ? (scheduledDate || new Date().toISOString().split('T')[0]) : undefined,
+      scheduledTime: entryMode === 'agendada' ? scheduledTime : undefined
     };
 
     await addOS(payload);
@@ -508,6 +619,9 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
       }
     }
 
+    // Stop camera if active
+    stopCamera();
+
     // Reset Form
     setSelectedClient(null);
     setSelectedVehicle(null);
@@ -516,10 +630,14 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     setKmStr('');
     setServices([]);
     setParts([]);
+    setCapturedPhotos([]);
     setReminderEnabled(true);
     setVencimentoDays(30);
     setReminderDays(3);
     setFaturamentoMode('Balcão');
+    setEntryMode('imediata');
+    setScheduledDate('');
+    setScheduledTime('09:00');
     setChecklist([
       { label: "Nível de Combustível", status: "ok" as const },
       { label: "Objetos no Carro", status: "ok" as const },
@@ -981,6 +1099,27 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                         return date.toLocaleDateString('pt-BR');
                       })()}
                     </span>
+                  </div>
+                )}
+
+                {/* Pre-existing damage entry photos gallery */}
+                {os.photoUrls && os.photoUrls.length > 0 && (
+                  <div className="mt-2.5 p-2.5 bg-[#050810] border border-gray-850 rounded-xl flex flex-col gap-1.5 text-left">
+                    <span className="text-[9.5px] font-mono uppercase tracking-wider text-orange-400 font-extrabold flex items-center gap-1">
+                      📸 FOTOS DE VISTORIA / ENTRADA ({os.photoUrls.length})
+                    </span>
+                    <div className="flex gap-2.5 overflow-x-auto py-1 pr-1 scrollbar-thin">
+                      {os.photoUrls.map((photo, pIdx) => (
+                        <div 
+                          key={pIdx} 
+                          className="relative rounded border border-gray-800 hover:border-orange-500 h-11 aspect-square overflow-hidden shrink-0 cursor-pointer transition-all duration-150 transform hover:scale-105 shadow"
+                          onClick={() => setActiveLightboxImage(photo)}
+                          title="Clique para ampliar imagem da avaria"
+                        >
+                          <img src={photo} alt={`Avaria ${pIdx + 1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -1650,6 +1789,113 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               </div>
             </div>
 
+            {/* Camera Visual Capture Component */}
+            <div className="md:col-span-2 flex flex-col gap-3 p-4 bg-orange-950/5 border border-orange-900/15 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px]">📸</span>
+                  <label className="text-[10.5px] font-mono font-bold text-orange-400 uppercase tracking-wider">
+                    4.1 REGISTRO FOTOGRÁFICO DE AVARIAS (IMAGEM DO VEÍCULO DE ENTRADA)
+                  </label>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-orange-950/40 text-orange-400 border border-orange-900/30 text-[9px] font-mono uppercase font-bold">
+                  Laudo Visual de Pátio
+                </span>
+              </div>
+
+              <p className="text-[11px] text-gray-400 font-sans leading-normal -mt-1 mb-1">
+                Utilize a câmera de pátio ou anexe arquivos para salvaguardar o estado do veículo frente a ranhuras, riscos ou amassados pré-existentes no ato do check-in.
+              </p>
+
+              {cameraError && (
+                <div className="p-2.5 bg-red-950/25 border border-red-900/50 rounded-xl text-red-400 font-mono text-[10px] text-left leading-normal">
+                  ⚠️ {cameraError}
+                </div>
+              )}
+
+              {/* Flexbox for Actions */}
+              <div className="flex flex-wrap gap-2.5">
+                {!cameraActive ? (
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="py-1.5 px-3 bg-orange-600 hover:bg-orange-700 text-white font-mono text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition duration-150 shadow"
+                  >
+                    <Camera className="w-4 h-4" /> Ativar Câmera do Dispositivo
+                  </button>
+                ) : (
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={capturePhoto}
+                      className="py-1.5 px-3.5 bg-red-600 hover:bg-red-700 text-white font-mono text-xs font-bold rounded-lg flex items-center gap-1.5 cursor-pointer transition duration-150 shadow animate-pulse"
+                    >
+                      📸 TIRAR FOTO DO VEÍCULO
+                    </button>
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      className="py-1.5 px-3 bg-slate-800 text-slate-300 font-mono text-xs font-semibold rounded-lg hover:bg-slate-700 cursor-pointer transition duration-150"
+                    >
+                      Desativar Câmera
+                    </button>
+                  </div>
+                )}
+
+                {/* Upload form element */}
+                <label className="py-1.5 px-3 bg-slate-900 border border-gray-850 text-gray-300 font-mono text-xs font-semibold rounded-lg hover:text-white hover:border-gray-500 cursor-pointer flex items-center gap-1.5 transition">
+                  📁 Escolher do Computador/Celular
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handlePhotoFileUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              {/* Camera view screen if active */}
+              {cameraActive && (
+                <div className="relative mt-2 rounded-xl overflow-hidden border border-orange-900/40 bg-black aspect-video max-w-lg mx-auto w-full flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-black/60 backdrop-blur-sm border border-gray-800 rounded-lg p-2 text-center text-[10px] text-gray-300 font-mono">
+                    ⚠️ Posicione a avaria ou a dianteira do carro no campo de visão e tire a foto.
+                  </div>
+                </div>
+              )}
+
+              {/* Uploaded / Captured Photos Gallery */}
+              {capturedPhotos.length > 0 && (
+                <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-gray-900">
+                  <span className="text-[10px] text-gray-400 font-mono uppercase font-bold text-left">📸 IMAGENS DE VISTORIA VINCULADAS AO CHECK-IN ({capturedPhotos.length}):</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3.5 mt-1">
+                    {capturedPhotos.map((photo, index) => (
+                      <div key={index} className="relative group rounded-xl overflow-hidden border border-gray-800 aspect-square bg-slate-950">
+                        <img src={photo} alt={`Pre-existing conditions ${index + 1}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => deleteCapturedPhoto(index)}
+                          className="absolute top-1 right-1 bg-red-650/90 text-white rounded-full p-1 border border-red-500 hover:bg-red-700 transition"
+                          title="Remover Imagem"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="absolute bottom-1 left-1 px-1.5 py-0.2 rounded bg-black/75 text-[9px] text-orange-400 font-bold border border-orange-950">
+                          FOTO {index + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Checklist of reception (Technical items) */}
             <div className="md:col-span-2 flex flex-col gap-2 bg-slate-900/10 p-4 rounded-2xl border border-gray-800">
               <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block mb-1">
@@ -1701,11 +1947,11 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                 {/* Cataloged predefined services */}
                 <div className="border-b border-gray-850 pb-3 mb-1 flex flex-col gap-1.5">
                   <span className="text-[9px] font-mono text-gray-500 uppercase">SELECIONAR DE SERVIÇO DO CATÁLOGO</span>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <select
                       value={selectedSrvId}
                       onChange={(e) => setSelectedSrvId(e.target.value)}
-                      className="flex-grow bg-[#050810] border border-gray-800 rounded py-1.5 px-2 text-xs text-white"
+                      className="flex-grow min-w-0 bg-[#050810] border border-gray-800 rounded py-1.5 px-2 text-xs text-white"
                     >
                       <option value="">-- Escolha um Serviço Pré-Cadastrado --</option>
                       {servicos.map(s => (
@@ -1715,7 +1961,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                     <button
                       type="button"
                       onClick={() => handleAddCatalogService(selectedSrvId)}
-                      className="px-4 py-1.5 bg-red-650 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded font-mono"
+                      className="px-4 py-1.5 bg-red-650 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded font-mono shrink-0 whitespace-nowrap cursor-pointer"
                     >
                       VINCULAR
                     </button>
@@ -3006,6 +3252,32 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Lightbox Zoom Overlay for Photos */}
+      {activeLightboxImage && (
+        <div 
+          className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md"
+          onClick={() => setActiveLightboxImage(null)}
+        >
+          <div className="absolute top-4 right-4 z-50 flex items-center gap-3">
+            <span className="text-[10px] text-gray-400 font-mono">Clique em qualquer lugar para fechar</span>
+            <button
+              type="button"
+              className="p-2 rounded-full bg-slate-900 border border-slate-800 text-gray-300 hover:text-white transition cursor-pointer"
+              onClick={() => setActiveLightboxImage(null)}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="max-w-4xl w-full max-h-[85vh] flex items-center justify-center relative" onClick={(e) => e.stopPropagation()}>
+            <img 
+              src={activeLightboxImage} 
+              alt="Ampliação da vistoria do veículo" 
+              className="max-w-full max-h-[85vh] rounded-xl object-contain shadow-2xl border border-gray-800" 
+            />
           </div>
         </div>
       )}

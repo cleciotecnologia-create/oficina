@@ -40,6 +40,7 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
   const [searchTriggered, setSearchTriggered] = useState(false);
   const [matchedOSList, setMatchedOSList] = useState<OrdemServico[]>([]);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [activeLightboxImage, setActiveLightboxImage] = useState<string | null>(null);
 
   // Normalize string for safety comparison
   const normalizeNumeric = (str: string) => {
@@ -432,6 +433,33 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                 </div>
               )}
 
+              {/* Pre-existing damage entry photos gallery */}
+              {selectedOS.photoUrls && selectedOS.photoUrls.length > 0 && (
+                <div className="bg-[#0a0f1d] border border-[#1e293b] rounded-2xl p-6 shadow-lg flex flex-col gap-4 text-left">
+                  <span className="text-[9.5px] font-mono text-slate-500 font-extrabold uppercase tracking-wider block">📸 REGISTROS FOTOGRÁFICOS DE RECEPÇÃO ({selectedOS.photoUrls.length})</span>
+                  <p className="text-[11px] text-slate-400 font-sans leading-normal -mt-2">
+                    Fotos registradas pela nossa recepção no momento da entrada do veículo para documentar o estado de conservação do carro e registrar danos ou riscos pré-existentes.
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3.5">
+                    {selectedOS.photoUrls.map((photo, pIdx) => (
+                      <div 
+                        key={pIdx} 
+                        className="relative rounded-xl border border-[#1e293b] hover:border-orange-500/80 aspect-square overflow-hidden cursor-pointer transition-all duration-150 transform hover:scale-105 shadow-md bg-slate-950 flex items-center justify-center"
+                        onClick={() => {
+                          setActiveLightboxImage(photo);
+                        }}
+                        title="Clique para ampliar esta foto de entrada"
+                      >
+                        <img src={photo} alt={`Registro Entrada ${pIdx + 1}`} className="w-full h-full object-cover" />
+                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded bg-black/80 text-[8.5px] font-mono text-orange-400 font-bold border border-[#1e293b]/40">
+                          IMAGEM {pIdx + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
 
           </div>
@@ -452,6 +480,33 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
           </span>
         </div>
       </footer>
+
+      {/* Lightbox Zoom Overlay for Photos */}
+      {activeLightboxImage && (
+        <div 
+          className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md"
+          onClick={() => setActiveLightboxImage(null)}
+        >
+          <div className="absolute top-4 right-4 z-50 flex items-center gap-3">
+            <span className="text-[10px] text-gray-400 font-mono">Clique em qualquer lugar para fechar</span>
+            <button
+              type="button"
+              className="p-2 rounded-full bg-slate-900 border border-slate-800 text-gray-300 hover:text-white transition cursor-pointer"
+              onClick={() => setActiveLightboxImage(null)}
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="max-w-4xl w-full max-h-[85vh] flex items-center justify-center relative" onClick={(e) => e.stopPropagation()}>
+            <img 
+              src={activeLightboxImage} 
+              alt="Ampliação da vistoria do veículo" 
+              className="max-w-full max-h-[85vh] rounded-xl object-contain shadow-2xl border border-gray-800" 
+            />
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

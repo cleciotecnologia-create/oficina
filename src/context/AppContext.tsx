@@ -127,6 +127,10 @@ interface AppContextType {
   localAuditLogs: LocalAuditLog[];
   addLocalAuditLog: (action: string, details: string) => void;
   resetToProduction: () => Promise<void>;
+
+  // High Contrast accessibility mode
+  highContrast: boolean;
+  setHighContrast: (v: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -139,6 +143,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // High Contrast Mode
+  const [highContrast, setHighContrastState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pref-high-contrast') === 'true';
+    }
+    return false;
+  });
+
+  const setHighContrast = (v: boolean) => {
+    setHighContrastState(v);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pref-high-contrast', String(v));
+    }
+    // Gravar log de alteração de modo
+    addLocalAuditLog("Acessibilidade", `Modo Alto Contraste ${v ? 'Ativado' : 'Desativado'}.`);
+  };
 
   // Network, Sync and Pending Offline Queues
   const [isOnline, setIsOnline] = useState<boolean>(typeof window !== 'undefined' ? navigator.onLine : true);
@@ -1580,7 +1601,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Local Audit Logs
       localAuditLogs,
       addLocalAuditLog,
-      resetToProduction
+      resetToProduction,
+
+      // High Contrast variables
+      highContrast,
+      setHighContrast
     }}>
       {children}
     </AppContext.Provider>

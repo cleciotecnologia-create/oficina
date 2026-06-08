@@ -145,3 +145,153 @@ body {
   }
 }
 
+/* ==========================================
+   ACESSIBILIDADE: MODO ALTO CONTRASTE MESTRE
+   ========================================== */
+.high-contrast {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+.high-contrast body,
+.high-contrast #root {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+
+/* Forçar fundos para preto absoluto ou cinza de altíssimo contraste */
+.high-contrast div,
+.high-contrast section,
+.high-contrast h1,
+.high-contrast h2,
+.high-contrast h3,
+.high-contrast h4,
+.high-contrast h5,
+.high-contrast h6,
+.high-contrast p,
+.high-contrast label,
+.high-contrast span,
+.high-contrast header,
+.high-contrast aside,
+.high-contrast main,
+.high-contrast table,
+.high-contrast tr,
+.high-contrast td,
+.high-contrast th,
+.high-contrast form,
+.high-contrast ul,
+.high-contrast li {
+  background-color: transparent !important;
+  color: #ffffff !important;
+}
+
+/* Divs que agem como Cards ou containers secundários usam preto com borda branca proeminente */
+.high-contrast .bg-\[\#060913\],
+.high-contrast .bg-\[\#080d1a\],
+.high-contrast .bg-\[\#0c1223\],
+.high-contrast .bg-\[\#0a0f1d\],
+.high-contrast .bg-\[\#0e1628\],
+.high-contrast .bg-\[\#09101f\],
+.high-contrast .bg-\[\#080c16\],
+.high-contrast .bg-gray-950,
+.high-contrast .bg-slate-950,
+.high-contrast .bg-slate-900,
+.high-contrast .bg-gray-900,
+.high-contrast .bg-\[\#050810\],
+.high-contrast .glass-panel,
+.high-contrast .glass-panel-neon {
+  background-color: #000000 !important;
+  border: 1.5px solid #ffffff !important;
+  box-shadow: none !important;
+}
+
+/* Inputs, Selects e Textareas legíveis e de bordas grossas */
+.high-contrast input,
+.high-contrast select,
+.high-contrast textarea,
+.high-contrast input[type="text"],
+.high-contrast input[type="number"],
+.high-contrast input[type="search"] {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+  border-radius: 4px !important;
+  font-weight: bold !important;
+}
+
+.high-contrast input::placeholder,
+.high-contrast textarea::placeholder {
+  color: #cccccc !important;
+}
+
+/* Botões com bordas grossas e de alta legibilidade */
+.high-contrast button {
+  background-color: #050505 !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+  border-radius: 6px !important;
+  font-weight: 800 !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+.high-contrast button:hover {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  border-color: #000000 !important;
+}
+
+/* Textos secundários ou discretos passam a ter contraste total */
+.high-contrast .text-gray-400,
+.high-contrast .text-slate-400,
+.high-contrast .text-zinc-400,
+.high-contrast .text-gray-500,
+.high-contrast .text-slate-500,
+.high-contrast .text-zinc-500,
+.high-contrast .text-gray-300,
+.high-contrast .text-slate-300,
+.high-contrast .text-zinc-300 {
+  color: #f8fafc !important; /* Branco brilhante */
+}
+
+/* Destacar cores vitais com cores neon super puras */
+.high-contrast .text-red-500,
+.high-contrast .text-red-400,
+.high-contrast .bg-red-500,
+.high-contrast .bg-red-650 {
+  color: #ff3333 !important;
+  border-color: #ff3333 !important;
+}
+
+.high-contrast .text-emerald-400,
+.high-contrast .text-emerald-500,
+.high-contrast .bg-emerald-500 {
+  color: #33ff33 !important;
+  border-color: #33ff33 !important;
+}
+
+.high-contrast .text-amber-500,
+.high-contrast .text-amber-400,
+.high-contrast .text-amber-300 {
+  color: #ffff00 !important; /* Amarelo puro */
+  border-color: #ffff00 !important;
+}
+
+/* Sidebar e Header fixos */
+.high-contrast header,
+.high-contrast aside {
+  background-color: #000000 !important;
+  border-bottom: 2px solid #ffffff !important;
+  border-right: 2px solid #ffffff !important;
+}
+
+/* Forçar scrollbars legíveis no modo alto contraste */
+.high-contrast ::-webkit-scrollbar-track {
+  background: #000000 !important;
+}
+.high-contrast ::-webkit-scrollbar-thumb {
+  background: #ffffff !important;
+  border: 1px solid #000000 !important;
+}
+
+
