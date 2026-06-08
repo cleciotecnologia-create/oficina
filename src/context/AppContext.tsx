@@ -96,6 +96,7 @@ interface AppContextType {
   editOS: (id: string, os: Partial<OrdemServico>) => Promise<void>;
   deleteOS: (id: string) => Promise<void>;
   addVenda: (v: Omit<Venda, 'id' | 'empresaId' | 'date'>) => Promise<void>;
+  editVenda: (id: string, updates: Partial<Venda>) => Promise<void>;
   estornarVenda: (id: string, justificativa: string) => Promise<void>;
   addFinanceiro: (f: Omit<Financeiro, 'id' | 'empresaId' | 'createdAt'>) => Promise<void>;
   editFinanceiro: (id: string, f: Partial<Financeiro>) => Promise<void>;
@@ -1119,6 +1120,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const editVenda = async (id: string, updates: Partial<Venda>) => {
+    setVendas(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
+    addLocalAuditLog("Alteração de Venda", `Venda #${id.toUpperCase()} foi atualizada: ${Object.keys(updates).join(', ')}.`);
+    if (firebaseUser) {
+      await executeWrite("vendas", id, updates, 'merge');
+    }
+  };
+
   const addFinanceiro = async (f: Omit<Financeiro, 'id' | 'empresaId' | 'createdAt'>) => {
     const id = "fin_" + Math.random().toString(36).substr(2, 9);
     const newEntry: Financeiro = {
@@ -1542,6 +1551,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addOS,
       editOS,
       addVenda,
+      editVenda,
       estornarVenda,
       addFinanceiro,
       editFinanceiro,

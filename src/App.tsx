@@ -72,13 +72,19 @@ function AppContent() {
     pendingActionsCount,
     syncPendingActions,
     syncing,
-    ordensServico
+    ordensServico,
+    produtos
   } = useApp();
 
   const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering'>('landing');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+
+  // Calculate critical products count (stock <= minStock) for the warning badge
+  const criticalProductsCount = (produtos || []).filter(
+    p => p.quantity <= (p.minStock ?? 0)
+  ).length;
 
   // States for header global/plate quick-search
   const [globalSearchPlate, setGlobalSearchPlate] = useState('');
@@ -885,9 +891,18 @@ function AppContent() {
 
             <button 
               onClick={() => { setActiveRoute('stock'); setMobileSidebarOpen(false); }}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'stock' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
+              className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-left ${activeRoute === 'stock' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
             >
-              <Package className="w-4 h-4 shrink-0" /> Estoque de Peças
+              <div className="flex items-center gap-3">
+                <Package className="w-4 h-4 shrink-0" />
+                <span>Estoque de Peças</span>
+              </div>
+              {criticalProductsCount > 0 && (
+                <span className="bg-red-600 text-white font-mono font-extrabold text-[9px] px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 animate-pulse border border-red-500/30 shadow-md shadow-red-950/40" title={`${criticalProductsCount} itens em ponto crítico de estoque!`}>
+                  <span className="w-1 h-1 rounded-full bg-white block"></span>
+                  {criticalProductsCount}
+                </span>
+              )}
             </button>
 
             <button 

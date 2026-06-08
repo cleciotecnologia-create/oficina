@@ -32,13 +32,62 @@ function getCacheKey(model: string, year: string, motor: string = ""): string {
 export const specsCache = {
   /**
    * Retrieves specs from standard client-side localStorage.
+   * Supports an optional multi-tiered flexible fallback to prevent redundant API calls
+   * for minor variations of same vehicle models.
    */
-  get(model: string, year: string, motor: string = ""): VehicleSpecs | null {
+  get(model: string, year: string, motor: string = "", flexible: boolean = true): VehicleSpecs | null {
     try {
       const key = getCacheKey(model, year, motor);
       const cached = localStorage.getItem(key);
-      if (!cached) return null;
-      return JSON.parse(cached) as VehicleSpecs;
+      if (cached) return JSON.parse(cached) as VehicleSpecs;
+
+      if (flexible && model) {
+        const normModel = model.trim().toLowerCase().replace(/\s+/g, "_");
+        const normYear = year ? year.trim().toLowerCase() : "";
+        const normMotor = motor ? motor.trim().toLowerCase().replace(/\s+/g, "_") : "";
+
+        let bestMatch: VehicleSpecs | null = null;
+        let bestScore = 0; // Score: 3 = Model + Year + Motor, 2 = Model + Year, 1.5 = Model + Motor, 1 = Model-only
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(CACHE_PREFIX)) {
+            const suffix = k.replace(CACHE_PREFIX, "");
+            const parts = suffix.split(":");
+            const cachedModel = parts[0] || "";
+            const cachedYear = parts[1] || "";
+            const cachedMotor = parts[2] || "";
+
+            // If the model starts with or contains the normalized search string (or vice-versa)
+            if (cachedModel === normModel || cachedModel.includes(normModel) || normModel.includes(cachedModel)) {
+              let score = 1;
+              if (cachedModel === normModel) {
+                score += 0.5; // Exact model match bonus
+              }
+              if (normYear && cachedYear === normYear) {
+                score += 1;
+              }
+              if (normMotor && cachedMotor === normMotor) {
+                score += 0.5;
+              }
+
+              if (score > bestScore) {
+                bestScore = score;
+                const raw = localStorage.getItem(k);
+                if (raw) {
+                  bestMatch = JSON.parse(raw) as VehicleSpecs;
+                }
+              }
+            }
+          }
+        }
+
+        if (bestMatch && bestScore >= 1.5) {
+          console.log(`[specsCache] Encontrou correspondência flexível com score ${bestScore} para: ${model}`);
+          return bestMatch;
+        }
+      }
+      return null;
     } catch (e) {
       console.error("Erro ao ler do cache de especificações:", e);
       return null;

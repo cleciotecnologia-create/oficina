@@ -203,18 +203,28 @@ export const RelatoriosView: React.FC = () => {
         {/* Printable-only Corporate Header */}
         <div className="hidden print:flex flex-col gap-2 border-b-2 border-slate-300 pb-4 mb-2 w-full text-black">
           <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-lg font-bold uppercase tracking-tight text-slate-900">
-                {company?.name || 'AUTOPRECISION PREMIUM CUSTOMS'}
-              </h2>
-              <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                {company?.address ? `Endereço: ${company.address}` : 'Matriz AutoPrecision Cloud System'}
-                {company?.cnpj ? ` • CNPJ: ${company.cnpj}` : ''}
-              </p>
-              <p className="text-[10px] text-slate-500 font-mono">
-                {company?.phone ? `Telefone: ${company.phone}` : ''}
-                {company?.email ? ` • E-mail: ${company.email}` : ''}
-              </p>
+            <div className="flex gap-4 items-center">
+              {company?.logoUrl && (
+                <img 
+                  src={company.logoUrl} 
+                  alt="Logo" 
+                  className="w-12 h-12 object-contain rounded-lg border border-slate-300"
+                  referrerPolicy="no-referrer"
+                />
+              )}
+              <div>
+                <h2 className="text-lg font-bold uppercase tracking-tight text-slate-900">
+                  {company?.name || 'AUTOPRECISION PREMIUM CUSTOMS'}
+                </h2>
+                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                  {company?.address ? `Endereço: ${company.address}` : 'Matriz AutoPrecision Cloud System'}
+                  {company?.cnpj ? ` • CNPJ: ${company.cnpj}` : ''}
+                </p>
+                <p className="text-[10px] text-slate-500 font-mono">
+                  {company?.phone ? `Telefone: ${company.phone}` : ''}
+                  {company?.email ? ` • E-mail: ${company.email}` : ''}
+                </p>
+              </div>
             </div>
             <div className="text-right">
               <span className="text-[10px] font-bold font-mono px-2 py-0.5 bg-slate-900 text-white rounded uppercase">

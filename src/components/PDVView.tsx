@@ -56,10 +56,12 @@ export const PDVView: React.FC = () => {
     servicos,
     clientes,
     addCliente,
+    editCliente,
     caixaStatus, 
     abrirCaixa, 
     fecharCaixa, 
     addVenda, 
+    editVenda,
     estornarVenda,
     vendas,
     user,
@@ -719,10 +721,101 @@ export const PDVView: React.FC = () => {
     }
   };
 
+  const handleChangePaymentMethod = async (sale: any, newMethod: 'PIX' | 'Cartão' | 'Dinheiro' | 'Fatura') => {
+    if (sale.paymentMethod === newMethod) return;
+
+    // Check if new method is Fatura
+    if (newMethod === 'Fatura') {
+      if (!sale.clienteId) {
+        alert("Atenção: Não é possível mudar o pagamento para 'Fatura' porque este registro foi fechado sem cliente identificado. Por favor adicione um cliente à venda primeiro!");
+        return;
+      }
+      
+      const clientObj = clientes.find((c: any) => c.id === sale.clienteId);
+      if (!clientObj) {
+        alert("Cliente cadastrado correspondente não foi localizado.");
+        return;
+      }
+
+      const limit = clientObj.limitAmount || 0;
+      const status = clientObj.limitStatus || 'Pendente';
+      const used = clientObj.usedLimit || 0;
+      const available = limit - used;
+
+      if (status !== 'Aprovado') {
+        alert(`Não permitido: O cliente ${clientObj.name} não possui limite de crédito aprovado por Administrador.\n\nSituação atual: ${status === 'Pendente' ? '⏳ Pendente de Aprovação' : '🔴 Recusado pelo Administrador'}.\nPor favor, gerencie e aprove o limite deste cliente no CRM primeiro.`);
+        return;
+      }
+
+      if (sale.total > available) {
+        alert(`Não permitido: O valor total da compra (R$ ${sale.total.toFixed(2)}) ultrapassa o saldo de crédito disponível deste cliente (R$ ${available.toFixed(2)}).\n\nLimite Total: R$ ${limit.toFixed(2)}\nSaldo Utilizado Atual: R$ ${used.toFixed(2)}.`);
+        return;
+      }
+    }
+
+    // Adjust client limits if changing from/to Fatura
+    if (sale.clienteId) {
+      const clientObj = clientes.find((c: any) => c.id === sale.clienteId);
+      if (clientObj) {
+        let updatedUsed = clientObj.usedLimit || 0;
+        
+        // If previous method was Fatura, we release the credit limit
+        if (sale.paymentMethod === 'Fatura') {
+          updatedUsed = Math.max(0, updatedUsed - sale.total);
+        }
+        
+        // If new method is Fatura, we consume the credit limit
+        if (newMethod === 'Fatura') {
+          updatedUsed = updatedUsed + sale.total;
+        }
+
+        try {
+          await editCliente(clientObj.id, { usedLimit: updatedUsed });
+        } catch (err) {
+          console.error("Erro ao atualizar limite do cliente:", err);
+        }
+      }
+    }
+
+    try {
+      await editVenda(sale.id, { paymentMethod: newMethod });
+      alert(`Sucesso! Forma de pagamento da venda ${sale.id} alterada para "${newMethod}".`);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao alterar método de faturamento da venda.");
+    }
+  };
+
   // Register Checkout Sale
   const handleFinalizeSale = async () => {
     if (basket.length === 0) return;
     
+    if (paymentMethod === 'Fatura') {
+      if (selectedClienteId === 'unidentified') {
+        alert("Atenção: A forma de pagamento 'Fatura' exige que você selecione um Cliente cadastrado!");
+        return;
+      }
+      if (!activeCustomer) {
+        alert("Erro: Cliente selecionado não foi localizado.");
+        return;
+      }
+      
+      const limit = activeCustomer.limitAmount || 0;
+      const status = activeCustomer.limitStatus || 'Pendente';
+      const used = activeCustomer.usedLimit || 0;
+      const available = limit - used;
+
+      if (status !== 'Aprovado') {
+        alert(`Não permitido: Este cliente não possui limite de crédito aprovado por Administrador.\n\nSituação atual: ${status === 'Pendente' ? '⏳ Pendente de Aprovação' : '🔴 Recusado pelo Administrador'}.\n\nPor favor, gerencie e aprove o limite do cliente no módulo CRM.`);
+        return;
+      }
+
+      if (grandTotal > available) {
+        alert(`Saldo de Crédito Excedido: O valor da compra (R$ ${grandTotal.toFixed(2)}) ultrapassa o saldo disponível para faturamento deste cliente.\n\nLimite Cadastrado: R$ ${limit.toFixed(2)}\nSaldo Utilizado Atual: R$ ${used.toFixed(2)}\nSaldo Disponível Restante: R$ ${available.toFixed(2)}.`);
+        return;
+      }
+    }
+
     const saleId = "VND-" + Math.floor(100000 + Math.random() * 900000);
     
     // Resolve final client metadata
@@ -752,6 +845,18 @@ export const PDVView: React.FC = () => {
     };
 
     await addVenda(saleDetails);
+
+    // Update customer used credit limit 
+    if (paymentMethod === 'Fatura' && selectedClienteId !== 'unidentified' && activeCustomer) {
+      const currentUsed = activeCustomer.usedLimit || 0;
+      try {
+        await editCliente(activeCustomer.id, {
+          usedLimit: currentUsed + grandTotal
+        });
+      } catch (err) {
+        console.error("Erro ao incrementar limite utilizado do cliente:", err);
+      }
+    }
 
     if (linkedOSId) {
       try {
@@ -1296,34 +1401,51 @@ export const PDVView: React.FC = () => {
               
               {/* Payment Methods selector */}
               <div>
-                <label className="text-[9px] font-mono text-gray-400 block mb-2 font-bold uppercase">MÉTODOS DE PAGAMENTO DE FRENTE DE CAIXA</label>
-                <div className="grid grid-cols-3 gap-2 [&>button]:py-2.5 [&>button]:rounded-xl [&>button]:text-xs [&>button]:font-bold [&>button]:font-mono">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-[9px] font-mono text-gray-400 font-bold uppercase">MÉTODOS DE PAGAMENTO DE FRENTE DE CAIXA</label>
+                  {paymentMethod === 'Fatura' && activeCustomer && (
+                    <span className="text-[8.5px] font-mono text-emerald-400 bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-900/30">
+                      Disponível: R$ {Math.max(0, (activeCustomer.limitAmount || 0) - (activeCustomer.usedLimit || 0)).toFixed(2)}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-4 gap-2 [&>button]:py-2.5 [&>button]:rounded-xl [&>button]:text-[10px] [&>button]:font-bold [&>button]:font-mono">
                   <button 
                     type="button"
                     onClick={() => setPaymentMethod('PIX')}
-                    className={`flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1 border transition-all cursor-pointer ${
                       paymentMethod === 'PIX' ? 'border-red-500 text-white bg-red-950/20 shadow' : 'border-gray-800 text-gray-400 bg-transparent'
                     }`}
                   >
-                    <QrCode className="w-3.5 h-3.5 text-red-500" /> PIX
+                    <QrCode className="w-3.5 h-3.5 text-red-500 shrink-0" /> PIX
                   </button>
                   <button 
                     type="button"
                     onClick={() => setPaymentMethod('Cartão')}
-                    className={`flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1 border transition-all cursor-pointer ${
                       paymentMethod === 'Cartão' ? 'border-red-500 text-white bg-red-950/20 shadow' : 'border-gray-800 text-gray-400 bg-transparent'
                     }`}
                   >
-                    <CreditCard className="w-3.5 h-3.5 text-red-500" /> Cartão
+                    <CreditCard className="w-3.5 h-3.5 text-red-500 shrink-0" /> Cartão
                   </button>
                   <button 
                     type="button"
                     onClick={() => setPaymentMethod('Dinheiro')}
-                    className={`flex items-center justify-center gap-1.5 border transition-all cursor-pointer ${
+                    className={`flex items-center justify-center gap-1 border transition-all cursor-pointer ${
                       paymentMethod === 'Dinheiro' ? 'border-red-500 text-white bg-red-950/20 shadow' : 'border-gray-800 text-gray-400 bg-transparent'
                     }`}
                   >
-                    <DollarSign className="w-3.5 h-3.5 text-red-500" /> Dinheiro
+                    <DollarSign className="w-3.5 h-3.5 text-red-500 shrink-0" /> Dinheiro
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setPaymentMethod('Fatura')}
+                    className={`flex items-center justify-center gap-1 border transition-all cursor-pointer ${
+                      paymentMethod === 'Fatura' ? 'border-red-500 text-white bg-red-950/20 shadow' : 'border-gray-800 text-gray-400 bg-transparent'
+                    }`}
+                    title="Faturamento em conta corrente do cliente"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-red-500 shrink-0" /> Fatura
                   </button>
                 </div>
               </div>
@@ -1821,14 +1943,33 @@ export const PDVView: React.FC = () => {
                             )}
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 font-mono">
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
-                            v.paymentMethod === 'PIX' ? 'bg-cyan-950/45 text-cyan-400 border border-cyan-900/30' :
-                            v.paymentMethod === 'Cartão' ? 'bg-purple-950/45 text-purple-400 border border-purple-900/30' :
-                            'bg-emerald-950/45 text-emerald-400 border border-emerald-900/30'
-                          }`}>
-                            {v.paymentMethod}
-                          </span>
+                        <td className="py-3.5 px-4 font-mono select-none">
+                          {isEstornada ? (
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                              v.paymentMethod === 'PIX' ? 'bg-cyan-950/45 text-cyan-400 border border-cyan-900/30' :
+                              v.paymentMethod === 'Cartão' ? 'bg-purple-950/45 text-purple-400 border border-purple-900/30' :
+                              v.paymentMethod === 'Dinheiro' ? 'bg-emerald-950/45 text-emerald-400 border border-emerald-900/30' :
+                              'bg-amber-950/45 text-amber-500 border border-amber-900/30'
+                            }`}>
+                              {v.paymentMethod}
+                            </span>
+                          ) : (
+                            <select
+                              value={v.paymentMethod}
+                              onChange={(e) => handleChangePaymentMethod(v, e.target.value as any)}
+                              className={`px-2 py-0.5 rounded-full text-[9px] font-bold font-mono bg-[#080d16] hover:bg-[#111929] cursor-pointer focus:outline-none border ${
+                                v.paymentMethod === 'PIX' ? 'border-cyan-900 text-cyan-400' :
+                                v.paymentMethod === 'Cartão' ? 'border-purple-900/60 text-purple-400' :
+                                v.paymentMethod === 'Dinheiro' ? 'border-emerald-900/60 text-emerald-400' :
+                                'border-amber-900/60 text-amber-500 bg-amber-950/10'
+                              }`}
+                            >
+                              <option value="PIX">⚡ PIX</option>
+                              <option value="Cartão">💳 Cartão</option>
+                              <option value="Dinheiro">💵 Dinheiro</option>
+                              <option value="Fatura">🧾 Fatura</option>
+                            </select>
+                          )}
                         </td>
                         <td className="py-3.5 px-4 font-mono text-right text-gray-400 font-semibold">R$ {v.discount.toFixed(2)}</td>
                         <td className="py-3.5 px-4 font-mono text-right font-extrabold text-white">R$ {v.total.toFixed(2)}</td>

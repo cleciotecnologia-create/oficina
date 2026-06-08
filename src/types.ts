@@ -51,6 +51,9 @@ export interface Cliente {
   cep?: string;
   address?: string;
   nextReviewDate?: string; // Next scheduled/recommended preventive review date (YYYY-MM-DD)
+  limitAmount?: number;    // Credit limit for "Fatura" payment option
+  limitStatus?: 'Pendente' | 'Aprovado' | 'Recusado'; // Admin approval status for credit limit
+  usedLimit?: number;      // Current credit amount used
 }
 
 export interface Veiculo {
@@ -101,7 +104,7 @@ export interface Venda {
   items: SaleItem[];
   discount: number;
   total: number;
-  paymentMethod: 'PIX' | 'Cartão' | 'Dinheiro';
+  paymentMethod: 'PIX' | 'Cartão' | 'Dinheiro' | 'Fatura';
   commission: number; // calculated seller fee
   sellerId: string;
   sellerName?: string;
@@ -180,6 +183,7 @@ export interface OrdemServico {
   statusHistory?: OSHistoryEntry[];
   statusPagamento?: 'PENDENTE' | 'PAGO';
   financeiroId?: string;
+  faturamentoMode?: 'Balcão' | 'A faturar';
 }
 
 export interface Fornecedor {

@@ -23,7 +23,8 @@ import {
   Edit2,
   Trash2,
   ShoppingBag,
-  Printer
+  Printer,
+  CreditCard
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Cliente, Veiculo, OrdemServico } from '../types';
@@ -132,7 +133,8 @@ export const CRMView: React.FC = () => {
     deleteVeiculo,
     ordensServico,
     vendas,
-    company
+    company,
+    user
   } = useApp();
 
   const printSaleReceiptDirect = (v: any, comp: any) => {
@@ -265,6 +267,7 @@ export const CRMView: React.FC = () => {
   };
 
   const [activeTab, setActiveTab] = useState<'clientes' | 'veiculos' | 'fidelidade' | 'campanhas' | 'lembretes'>('clientes');
+  const [selectedHistoryVehicle, setSelectedHistoryVehicle] = useState<Veiculo | null>(null);
 
   // Automated maintenance reminders states
   const [reminderKmThreshold, setReminderKmThreshold] = useState<number>(() => {
@@ -470,6 +473,8 @@ export const CRMView: React.FC = () => {
   const [editCliReviewAlert, setEditCliReviewAlert] = useState(true);
   const [isFetchingEditCliCep, setIsFetchingEditCliCep] = useState(false);
   const [editCliCepError, setEditCliCepError] = useState<string | null>(null);
+  const [editCliLimitAmount, setEditCliLimitAmount] = useState<number | ''>('');
+  const [editCliLimitStatus, setEditCliLimitStatus] = useState<'Pendente' | 'Aprovado' | 'Recusado'>('Pendente');
 
   // Edit Vehicle Form Fields
   const [editVehClient, setEditVehClient] = useState('');
@@ -491,6 +496,8 @@ export const CRMView: React.FC = () => {
     setEditCliAddress(cli.address || '');
     setEditCliOilAlert(cli.oilChangeAlert !== false);
     setEditCliReviewAlert(cli.reviewAlert !== false);
+    setEditCliLimitAmount(cli.limitAmount !== undefined ? cli.limitAmount : '');
+    setEditCliLimitStatus(cli.limitStatus || 'Pendente');
   };
 
   const startEditVehicle = (veh: Veiculo) => {
@@ -561,7 +568,9 @@ export const CRMView: React.FC = () => {
       cep: editCliCep || undefined,
       address: editCliAddress || undefined,
       oilChangeAlert: editCliOilAlert,
-      reviewAlert: editCliReviewAlert
+      reviewAlert: editCliReviewAlert,
+      limitAmount: editCliLimitAmount !== '' ? Number(editCliLimitAmount) : 0,
+      limitStatus: editCliLimitStatus
     });
 
     setEditingClient(null);
@@ -616,6 +625,8 @@ export const CRMView: React.FC = () => {
   const [cliCpfCnpj, setCliCpfCnpj] = useState('');
   const [cliCep, setCliCep] = useState('');
   const [cliAddress, setCliAddress] = useState('');
+  const [cliLimitAmount, setCliLimitAmount] = useState<number | ''>('');
+  const [cliLimitStatus, setCliLimitStatus] = useState<'Pendente' | 'Aprovado' | 'Recusado'>('Pendente');
   const [isFetchingCliCep, setIsFetchingCliCep] = useState(false);
   const [cliCepError, setCliCepError] = useState<string | null>(null);
 
@@ -694,7 +705,10 @@ export const CRMView: React.FC = () => {
       oilChangeAlert: cliOilAlert,
       reviewAlert: cliReviewAlert,
       cep: cliCep || undefined,
-      address: cliAddress || undefined
+      address: cliAddress || undefined,
+      limitAmount: cliLimitAmount !== '' ? Number(cliLimitAmount) : 0,
+      limitStatus: cliLimitStatus,
+      usedLimit: 0
     });
 
     setCliName('');
@@ -703,6 +717,8 @@ export const CRMView: React.FC = () => {
     setCliCpfCnpj('');
     setCliCep('');
     setCliAddress('');
+    setCliLimitAmount('');
+    setCliLimitStatus('Pendente');
     alert("Cliente registrado com êxito!");
   };
 
@@ -872,13 +888,22 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                             )}
                           </span>
                           <span className="text-[10px] text-gray-400 font-mono">CPF/CNPJ: {cli.cpfCnpj} • ID: {cli.id}</span>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <span className="text-[10px] font-mono bg-[#0b101c] border border-gray-800 px-1.5 py-0.5 rounded text-gray-300">
                               🚗 {carsCount} carro(s) vinculado(s)
                             </span>
                             {spendingStat && (
                               <span className="text-[10px] font-mono bg-cyan-950/30 border border-cyan-900/30 px-1.5 py-0.5 rounded text-cyan-400 flex items-center gap-1">
                                 <Coins className="w-3 h-3 text-cyan-400" /> CB: R$ {spendingStat.cashback.toFixed(2)}
+                              </span>
+                            )}
+                            {cli.limitAmount !== undefined && cli.limitAmount > 0 && (
+                              <span className={`text-[10px] font-mono border px-1.5 py-0.5 flex items-center gap-1 rounded ${
+                                cli.limitStatus === 'Aprovado' ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-450 text-emerald-400 font-bold' :
+                                cli.limitStatus === 'Recusado' ? 'bg-red-950/20 border-red-900/30 text-red-450 text-red-400' :
+                                'bg-[#18120b] border-amber-950 text-amber-500'
+                              }`} title={cli.limitStatus === 'Aprovado' ? "Limite aprovado por administrador" : "Aguardando liberação de limite por administrador"}>
+                                💳 Lmt: R$ {cli.limitAmount} ({cli.limitStatus || 'Pendente'})
                               </span>
                             )}
                           </div>
@@ -956,6 +981,87 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
 
                     {isExpanded && (
                       <div className="p-4 bg-[#050912]/80 flex flex-col gap-4 text-left">
+                        
+                        {/* 💳 CREDIT DETAILS SHEET */}
+                        <div className="bg-[#0b1020] border border-gray-850 p-3.5 rounded-xl flex flex-col gap-2 text-xs">
+                          <div className="flex items-center justify-between border-b border-[#161f36] pb-2">
+                            <span className="font-bold font-mono text-xs text-red-500 flex items-center gap-1.5 uppercase">
+                              <CreditCard className="w-4 h-4 text-red-500" /> Conta de Faturamento / Limite de Crédito
+                            </span>
+                            <span className="text-[9px] font-mono text-gray-500">ADMIN CONTROLS</span>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-1">
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] text-[#8a98b5] font-semibold uppercase tracking-wider">Limite Total Cadastrado</span>
+                              <strong className="text-white text-sm font-mono font-black">
+                                R$ {(cli.limitAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </strong>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] text-[#8a98b5] font-semibold uppercase tracking-wider">Limite Utilizado/Aberto</span>
+                              <strong className="text-amber-500 text-sm font-mono font-black">
+                                R$ {(cli.usedLimit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </strong>
+                            </div>
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-[9px] text-[#8a98b5] font-semibold uppercase tracking-wider font-mono font-bold">Limite Disponível para Fatura</span>
+                              <strong className="text-emerald-400 text-sm font-mono font-black">
+                                R$ {Math.max(0, (cli.limitAmount || 0) - (cli.usedLimit || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </strong>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 bg-black/45 p-2 rounded-lg border border-gray-900 justify-between flex-wrap mt-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-gray-400 font-mono">Status de Liberação:</span>
+                              <span className={`px-2 py-0.5 rounded text-[10.5px] font-mono font-black border ${
+                                cli.limitStatus === 'Aprovado' ? 'bg-[#06180f] text-emerald-450 border-emerald-900/60 text-emerald-400' :
+                                cli.limitStatus === 'Recusado' ? 'bg-[#180606] text-red-400 border-red-900/60' :
+                                'bg-[#181106] text-amber-500 border-amber-900/60'
+                              }`}>
+                                {cli.limitStatus?.toUpperCase() || 'PENDENTE'}
+                              </span>
+                            </div>
+
+                            {/* Admin Instant Approval Actions */}
+                            {user?.role === 'Administrador' ? (
+                              <div className="flex gap-2.5">
+                                {cli.limitStatus !== 'Aprovado' && (
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await editCliente(cli.id, { limitStatus: 'Aprovado' });
+                                      alert(`Limite do cliente ${cli.name} foi APROVADO com sucesso.`);
+                                    }}
+                                    className="py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded font-sans flex items-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    ✓ APROVAR LIMITE
+                                  </button>
+                                )}
+                                {cli.limitStatus !== 'Recusado' && (
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      await editCliente(cli.id, { limitStatus: 'Recusado' });
+                                      alert(`Limite do cliente ${cli.name} foi RECUSADO.`);
+                                    }}
+                                    className="py-1 px-2.5 bg-red-600 hover:bg-red-700 text-white font-bold text-[10px] rounded font-sans flex items-center gap-1 cursor-pointer transition-colors"
+                                  >
+                                    ✕ RECUSAR
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[9px] italic text-gray-500 font-mono">
+                                🔒 Contate um Administrador para aprovar este limite.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
                         {(cli.address || cli.cep) && (
                           <div className="bg-[#0b1020] border border-gray-850 p-3 rounded-xl flex items-start gap-2.5 text-xs">
                             <MapPin className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
@@ -1278,6 +1384,42 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                 </div>
               </div>
 
+              {/* Credit Limit / Fatura Setup Section */}
+              <div className="bg-[#121727] p-3 rounded-xl border border-gray-800 flex flex-col gap-2.5">
+                <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider block">💳 Limite de Crédito / Faturas</span>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] text-gray-400">LIMITE MÁXIMO (R$)</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    placeholder="Ex: 1500"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-1.5 px-2 text-white font-mono"
+                    value={cliLimitAmount}
+                    onChange={(e) => setCliLimitAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[9px] text-gray-400">APROVAÇÃO ADMIN</label>
+                    {user?.role !== 'Administrador' && (
+                      <span className="text-[8px] text-amber-500 bg-amber-950/20 px-1 py-0.5 rounded border border-amber-900/45 font-bold">🔒 Liberação Admin</span>
+                    )}
+                  </div>
+                  <select
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-1.5 px-2 text-white font-mono text-xs cursor-pointer focus:border-red-500"
+                    value={cliLimitStatus}
+                    onChange={(e) => setCliLimitStatus(e.target.value as any)}
+                    disabled={user?.role !== 'Administrador'}
+                  >
+                    <option value="Pendente">⏳ Pendente de Aprovação</option>
+                    <option value="Aprovado">🟢 Aprovado pelo Admin</option>
+                    <option value="Recusado">🔴 Recusado pelo Admin</option>
+                  </select>
+                </div>
+              </div>
+
               <button 
                 type="submit"
                 className="w-full mt-2 py-3 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl text-white font-bold text-xs font-sans shadow-md shadow-red-950/40 cursor-pointer"
@@ -1356,6 +1498,93 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                         );
                       })()}
 
+                      {/* Scheduling of vehicle service/revision based on the last O.S. */}
+                      {(() => {
+                        const vehicleOS = ordensServico.filter(os => 
+                          os.plate?.toUpperCase().trim() === veh.plate?.toUpperCase().trim()
+                        );
+                        const sortedOS = [...vehicleOS].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                        const lastOS = sortedOS[0];
+                        const lastOSDate = lastOS ? new Date(lastOS.createdAt).toLocaleDateString('pt-BR') : null;
+                        
+                        const companyName = company?.name || "AutoTech";
+                        const clientName = owner?.name || "Cliente";
+                        const vehicleName = `${veh.brand} ${veh.model}`;
+                        const plateText = veh.plate;
+                        
+                        const messageText = lastOSDate
+                          ? `Olá, ${clientName}! Tudo bem? 🔧 Passando aqui da ${companyName} para lembrar que a última revisão do seu ${vehicleName} (Placa: ${plateText}) foi realizada em ${lastOSDate}.\n\nPara garantir que o carro continue em perfeito estado e evitar problemas inesperados, sugerimos agendar uma revisão preventiva periódica. Qual seria o melhor dia e horário para trazê-lo até nossa oficina esta semana?`
+                          : `Olá, ${clientName}! Tudo bem? 🔧 Passando aqui da ${companyName} para convidá-lo a fazer uma revisão preventiva no seu ${vehicleName} (Placa: ${plateText}) conosco.\n\nA manutenção preventiva é a melhor forma de garantir a segurança e economia do seu carro. Qual seria o melhor dia e horário para trazê-lo até nossa oficina esta semana?`;
+                        
+                        const cleanPhone = owner?.phone ? owner.phone.replace(/\D/g, "") : "";
+                        const waLink = cleanPhone 
+                          ? `https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${encodeURIComponent(messageText)}`
+                          : null;
+
+                        return (
+                          <div className="mb-3 pt-2.5 border-t border-gray-900/60 flex flex-col gap-1.5 text-[10px] font-mono text-left">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[9px] text-gray-500 font-bold block uppercase tracking-wider flex items-center gap-1">
+                                <Calendar className="w-3.5 h-3.5 text-red-500" /> Agendar Revisão:
+                              </span>
+                              {lastOSDate ? (
+                                <span className="text-[8.5px] text-emerald-400 bg-emerald-950/30 px-1.5 py-0.5 rounded font-black border border-emerald-900/30">
+                                  Última OS: {lastOSDate}
+                                </span>
+                              ) : (
+                                <span className="text-[8.5px] text-amber-500 bg-amber-950/20 px-1.5 py-0.5 rounded font-bold border border-amber-900/20">
+                                  Sem histórico de OS
+                                </span>
+                              )}
+                            </div>
+                            
+                            <div className="flex flex-col gap-2 p-2 bg-[#090e1a] rounded-lg border border-gray-900">
+                              <p className="text-[9px] text-gray-400 leading-normal">
+                                {lastOSDate 
+                                  ? `Sugerir agendamento técnico baseado na manutenção anterior de ${lastOSDate}.`
+                                  : 'Sugerir primeira revisão preventiva de frota para registrar o veículo.'
+                                }
+                              </p>
+                              
+                              <div className="flex gap-2">
+                                {waLink ? (
+                                  <a
+                                    href={waLink}
+                                    target="_blank"
+                                    rel="noreferrer noopener"
+                                    className="flex-1 py-1 px-2.5 rounded bg-emerald-600 hover:bg-emerald-700 font-sans font-bold text-[9px] text-white hover:text-white text-center transition-all flex items-center justify-center gap-1 cursor-pointer"
+                                  >
+                                    💬 Agendar WhatsApp
+                                  </a>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      alert(`O cliente ${clientName} não possui um telefone de contato válido cadastrado. Por favor, edite as informações do cliente primeiro.`);
+                                    }}
+                                    className="flex-1 py-1 px-2.5 rounded bg-[#0c1223] text-gray-500 cursor-not-allowed font-sans font-bold text-[9px] text-center border border-gray-850"
+                                  >
+                                    🚫 Sem Telefone Cadastrado
+                                  </button>
+                                )}
+                                
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(messageText);
+                                    alert("Mensagem pré-formatada copiada para a área de transferência!");
+                                  }}
+                                  className="py-1 px-2.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white text-center transition-all border border-gray-800 flex items-center justify-center gap-1 cursor-pointer"
+                                  title="Copiar Mensagem"
+                                >
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                     </div>
 
                     <div className="border-t border-gray-900 pt-2 flex flex-col gap-2.5">
@@ -1365,6 +1594,23 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                       </div>
                       
                       <div className="flex items-center gap-2 justify-end pt-1 bg-black/10 rounded">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (selectedHistoryVehicle?.id === veh.id) {
+                              setSelectedHistoryVehicle(null);
+                            } else {
+                              setSelectedHistoryVehicle(veh);
+                            }
+                          }}
+                          className={`text-[10px] font-mono font-bold flex items-center gap-1 px-2.5 py-1 rounded border cursor-pointer transition-all ${
+                            selectedHistoryVehicle?.id === veh.id 
+                              ? 'bg-red-650 bg-red-600 text-white border-red-500 hover:bg-red-700' 
+                              : 'bg-slate-900 text-slate-300 hover:text-white border-gray-800 hover:border-gray-750'
+                          }`}
+                        >
+                          <FileText className="w-3.5 h-3.5" /> HISTÓRICO
+                        </button>
                         <button
                           type="button"
                           onClick={() => startEditVehicle(veh)}
@@ -1387,170 +1633,276 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
             </div>
           </div>
 
-          {/* REGISTER VEHICLE FORM (4 columns) */}
-          <div className="col-span-12 lg:col-span-4 bg-[#0c1223] rounded-2xl border border-gray-800 p-6">
-            <h3 className="font-display font-bold text-white text-base border-b border-gray-850 pb-3 mb-5">
-              CADASTRAR CARRO / VEÍCULO
-            </h3>
-
-            <form onSubmit={handleCreateVehicleSubmit} className="flex flex-col gap-4 text-xs font-mono">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400">DONO / CLIENTE DETENTOR *</label>
-                <select 
-                  value={vehClient}
-                  onChange={(e) => setVehClient(e.target.value)}
-                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                  required
+          {/* REGISTER VEHICLE FORM OR HISTORIC O.S. FEED (4 columns) */}
+          {selectedHistoryVehicle ? (
+            <div className="col-span-12 lg:col-span-4 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4 text-left">
+              <div className="flex justify-between items-center border-b border-gray-850 pb-3 mb-1">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-mono text-gray-500 uppercase tracking-widest">HISTÓRICO CRM</span>
+                  <h3 className="font-display font-black text-white text-sm sm:text-base uppercase tracking-tight mt-0.5">
+                    {selectedHistoryVehicle.brand} {selectedHistoryVehicle.model}
+                  </h3>
+                  <span className="text-[10px] font-mono text-red-400 mt-1 uppercase font-bold bg-red-950/20 py-0.5 px-2 rounded border border-red-900/30 w-max">
+                    {selectedHistoryVehicle.plate}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHistoryVehicle(null)}
+                  className="px-2.5 py-1 text-[10px] font-bold font-mono text-gray-400 hover:text-white bg-slate-900 hover:bg-slate-800 rounded border border-gray-800 hover:border-gray-700 cursor-pointer transition-colors"
                 >
-                  <option value="">-- Vincular Cliente --</option>
-                  {clientes.map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                  FECHAR ×
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="px-3 py-2.5 bg-red-950/20 border border-red-900/30 rounded-xl flex items-center justify-between text-xs font-mono">
+                <span className="text-gray-300 font-sans">Total de Passagens:</span>
+                <span className="bg-red-900/40 text-red-400 px-2.5 py-0.5 rounded font-extrabold font-mono">
+                  {ordensServico.filter(os => 
+                    os.plate.toUpperCase().trim() === selectedHistoryVehicle.plate.toUpperCase().trim()
+                  ).length} Ordens
+                </span>
+              </div>
+
+              <h4 className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-widest mt-2 border-b border-gray-850 pb-2">
+                ⏱️ ÚLTIMAS 5 ORDENS DE SERVIÇO
+              </h4>
+
+              <div className="flex flex-col gap-3.5 max-h-[480px] overflow-y-auto pr-1">
+                {(() => {
+                  const vehicleOrders = ordensServico
+                    .filter(os => 
+                      os.plate.toUpperCase().trim() === selectedHistoryVehicle.plate.toUpperCase().trim() ||
+                      (os.veiculoInfo && os.veiculoInfo.toUpperCase().includes(selectedHistoryVehicle.plate.toUpperCase().trim()))
+                    )
+                    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                    .slice(0, 5);
+
+                  if (vehicleOrders.length === 0) {
+                    return (
+                      <div className="text-center py-8 border border-dashed border-gray-850 rounded-xl bg-black/20 font-sans my-2">
+                        <AlertCircle className="w-5 h-5 text-gray-600 mx-auto mb-2" />
+                        <span className="text-[11px] text-gray-500 font-mono block">Nenhuma Ordem de Serviço registrada para este veículo.</span>
+                      </div>
+                    );
+                  }
+
+                  return vehicleOrders.map((os) => {
+                    // Match badge styles based on status
+                    let statusStyle = "bg-slate-900 text-slate-400 border border-slate-800";
+                    if (os.status === 'Finalizada' || os.status === 'Entregue') {
+                      statusStyle = "bg-green-950/50 text-green-400 border border-green-900/45 text-emerald-400 bg-emerald-950/50 border-emerald-900/45";
+                    } else if (os.status === 'Em execução' || os.status === 'Novo') {
+                      statusStyle = "bg-cyan-950/50 text-cyan-400 border border-cyan-900/45";
+                    } else if (os.status === 'Orçamento' || os.status === 'Aguardando Aprovação') {
+                      statusStyle = "bg-amber-950/50 text-amber-500 border border-amber-900/45";
+                    } else if (os.status === 'Cancelado' || os.status === 'Cancelada') {
+                      statusStyle = "bg-red-950/50 text-red-400 border border-red-900/45";
+                    }
+
+                    return (
+                      <div key={os.id} className="p-3 rounded-xl border border-gray-850 bg-black/35 hover:border-gray-800 transition flex flex-col gap-2 scale-100 hover:scale-[1.01]">
+                        <div className="flex justify-between items-center text-[10.5px] font-mono">
+                          <span className="text-white font-extrabold">{os.id}</span>
+                          <span className="text-gray-500 text-[10px]">
+                            {new Date(os.createdAt).toLocaleDateString('pt-BR')}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5 text-left border-t border-gray-900/65 pt-2 font-mono">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[9px] text-gray-505 text-gray-505 text-gray-500 uppercase font-bold">STATUS</span>
+                            <span className={`px-2 py-0.2 rounded text-[8px] font-bold tracking-wider ${statusStyle}`}>
+                              {os.status.toUpperCase()}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-col gap-1 bg-[#050810] p-2 rounded-lg border border-gray-900 mt-1">
+                            <span className="text-red-400 uppercase font-bold text-[8.5px] tracking-wider block">Diagnóstico:</span>
+                            <p className="text-[10px] text-slate-350 leading-relaxed font-sans line-clamp-4">
+                              {os.diagnosis || os.problem || "Nenhum laudo mecânico cadastrado."}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedHistoryVehicle(null)}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-750 text-white font-bold text-xs rounded-xl font-mono transition mt-2 cursor-pointer border border-gray-750"
+              >
+                ← CADASTRAR CARRO / VEÍCULO
+              </button>
+            </div>
+          ) : (
+            <div className="col-span-12 lg:col-span-4 bg-[#0c1223] rounded-2xl border border-gray-800 p-6">
+              <h3 className="font-display font-bold text-white text-base border-b border-gray-850 pb-3 mb-5">
+                CADASTRAR CARRO / VEÍCULO
+              </h3>
+
+              <form onSubmit={handleCreateVehicleSubmit} className="flex flex-col gap-4 text-xs font-mono">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">PLACA *</label>
-                  <input 
-                    type="text" 
-                    placeholder="GOLF-2018"
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white uppercase"
-                    value={vehPlate}
-                    onChange={(e) => setVehPlate(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">MARCA *</label>
-                  <input 
-                    type="text" 
-                    placeholder="Volkswagen"
+                  <label className="text-[10px] text-gray-400">DONO / CLIENTE DETENTOR *</label>
+                  <select 
+                    value={vehClient}
+                    onChange={(e) => setVehClient(e.target.value)}
                     className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={vehBrand}
-                    onChange={(e) => {
-                      setVehBrand(e.target.value);
-                      const matched = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === e.target.value.toLowerCase());
-                      if (matched) {
-                        setCrmModelsList(matched.models);
-                      }
-                    }}
                     required
-                  />
-                </div>
-              </div>
-
-              {/* CRM Brand selection suggestions */}
-              <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pb-1.5 pt-0.5 border-b border-gray-850/20">
-                {AUTO_SUGGESTIONS.map(sug => (
-                  <button
-                    key={sug.name}
-                    type="button"
-                    onClick={() => {
-                      setVehBrand(sug.name);
-                      setCrmModelsList(sug.models);
-                      setVehModel('');
-                    }}
-                    className={`px-2 py-0.5 rounded text-[9px] font-mono transition-colors border cursor-pointer flex items-center gap-1 ${
-                      vehBrand === sug.name
-                        ? "bg-red-950/40 border-red-500/80 text-red-400 font-bold"
-                        : "bg-slate-950/40 border-gray-900 text-gray-400 hover:text-white hover:border-gray-800"
-                    }`}
                   >
-                    <span>{sug.emoji}</span> {sug.name}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400">MODELO DO CARRO *</label>
-                <input 
-                  type="text" 
-                  placeholder="Ex: Polo TSI Comfortline"
-                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                  value={vehModel}
-                  onChange={(e) => setVehModel(e.target.value)}
-                  required
-                />
-              </div>
-
-              {/* CRM Model selection suggestions */}
-              {crmModelsList.length > 0 && (
-                <div className="flex flex-col gap-1 pb-1">
-                  <span className="text-[8.5px] font-mono text-gray-500 uppercase">Sugestões de Modelos:</span>
-                  <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-                    {crmModelsList.map(md => (
-                      <button
-                        key={md}
-                        type="button"
-                        onClick={() => setVehModel(md)}
-                        className={`px-2 py-0.5 rounded text-[9px] font-medium transition-colors border cursor-pointer ${
-                          vehModel === md
-                            ? "bg-cyan-950/40 border-cyan-500/80 text-cyan-400 font-bold"
-                            : "bg-slate-950 border-gray-900 text-gray-500 hover:text-gray-300 hover:border-gray-800"
-                        }`}
-                      >
-                        {md}
-                      </button>
+                    <option value="">-- Vincular Cliente --</option>
+                    {clientes.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400">PLACA *</label>
+                    <input 
+                      type="text" 
+                      placeholder="GOLF-2018"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white uppercase"
+                      value={vehPlate}
+                      onChange={(e) => setVehPlate(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400">MARCA *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Volkswagen"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                      value={vehBrand}
+                      onChange={(e) => {
+                        setVehBrand(e.target.value);
+                        const matched = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === e.target.value.toLowerCase());
+                        if (matched) {
+                          setCrmModelsList(matched.models);
+                        }
+                      }}
+                      required
+                    />
                   </div>
                 </div>
-              )}
 
-              <div className="grid grid-cols-2 gap-3">
+                {/* CRM Brand selection suggestions */}
+                <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pb-1.5 pt-0.5 border-b border-gray-850/20">
+                  {AUTO_SUGGESTIONS.map(sug => (
+                    <button
+                      key={sug.name}
+                      type="button"
+                      onClick={() => {
+                        setVehBrand(sug.name);
+                        setCrmModelsList(sug.models);
+                        setVehModel('');
+                      }}
+                      className={`px-2 py-0.5 rounded text-[9px] font-mono transition-colors border cursor-pointer flex items-center gap-1 ${
+                        vehBrand === sug.name
+                          ? "bg-red-950/40 border-red-500/80 text-red-400 font-bold"
+                          : "bg-slate-950/40 border-gray-900 text-gray-400 hover:text-white hover:border-gray-800"
+                      }`}
+                    >
+                      <span>{sug.emoji}</span> {sug.name}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">MOTORIZAÇÃO</label>
+                  <label className="text-[10px] text-gray-400">MODELO DO CARRO *</label>
                   <input 
                     type="text" 
-                    placeholder="1.4 TSI Flex"
+                    placeholder="Ex: Polo TSI Comfortline"
                     className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={vehEngine}
-                    onChange={(e) => setVehEngine(e.target.value)}
+                    value={vehModel}
+                    onChange={(e) => setVehModel(e.target.value)}
+                    required
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">ANO FABRICAÇÃO</label>
-                  <input 
-                    type="text" 
-                    placeholder="2018"
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={vehYear}
-                    onChange={(e) => setVehYear(e.target.value)}
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">KM DE ENTRADA</label>
-                  <input 
-                    type="number" 
-                    placeholder="68500"
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={vehKm}
-                    onChange={(e) => setVehKm(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[10px] text-gray-400">NÚMERO CHASSI</label>
-                  <input 
-                    type="text" 
-                    placeholder="9BWAB..."
-                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
-                    value={vehChassi}
-                    onChange={(e) => setVehChassi(e.target.value)}
-                  />
-                </div>
-              </div>
+                {/* CRM Model selection suggestions */}
+                {crmModelsList.length > 0 && (
+                  <div className="flex flex-col gap-1 pb-1">
+                    <span className="text-[8.5px] font-mono text-gray-500 uppercase">Sugestões de Modelos:</span>
+                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                      {crmModelsList.map(md => (
+                        <button
+                          key={md}
+                          type="button"
+                          onClick={() => setVehModel(md)}
+                          className={`px-2 py-0.5 rounded text-[9px] font-medium transition-colors border cursor-pointer ${
+                            vehModel === md
+                              ? "bg-cyan-950/40 border-cyan-500/80 text-cyan-400 font-bold"
+                              : "bg-slate-950 border-gray-900 text-gray-500 hover:text-gray-300 hover:border-gray-800"
+                          }`}
+                        >
+                          {md}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-              <button 
-                type="submit"
-                className="w-full mt-2 py-3 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl text-white font-bold text-xs font-sans shadow-md shadow-red-950/40 cursor-pointer"
-              >
-                💾 REGISTRAR VEÍCULO NA FROTA
-              </button>
-            </form>
-          </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400">MOTORIZAÇÃO</label>
+                    <input 
+                      type="text" 
+                      placeholder="1.4 TSI Flex"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                      value={vehEngine}
+                      onChange={(e) => setVehEngine(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400">ANO FABRICAÇÃO</label>
+                    <input 
+                      type="text" 
+                      placeholder="2018"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                      value={vehYear}
+                      onChange={(e) => setVehYear(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400">KM DE ENTRADA</label>
+                    <input 
+                      type="number" 
+                      placeholder="68500"
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                      value={vehKm}
+                      onChange={(e) => setVehKm(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] text-gray-400">NÚMERO CHASSI</label>
+                    <input 
+                      type="text" 
+                      placeholder="9BWAB..."
+                      className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white"
+                      value={vehChassi}
+                      onChange={(e) => setVehChassi(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit"
+                  className="w-full mt-2 py-3 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl text-white font-bold text-xs font-sans shadow-md shadow-red-950/40 cursor-pointer"
+                >
+                  💾 REGISTRAR VEÍCULO NA FROTA
+                </button>
+              </form>
+            </div>
+          )}
 
         </div>
       )}
@@ -2804,6 +3156,42 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                     onChange={(e) => setEditCliReviewAlert(e.target.checked)}
                     className="w-4 h-4 checked:bg-red-500 rounded border-gray-800 bg-[#080c16] cursor-pointer"
                   />
+                </div>
+              </div>
+
+              {/* Credit Limit / Fatura Setup Section */}
+              <div className="bg-[#121727] p-3 rounded-xl border border-gray-800 flex flex-col gap-2.5">
+                <span className="text-[9px] font-bold text-red-500 uppercase tracking-wider block">💳 Limite de Crédito / Faturas</span>
+                
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] text-gray-400">LIMITE MÁXIMO (R$)</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    placeholder="Ex: 1500"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-1.5 px-2 text-white font-mono"
+                    value={editCliLimitAmount}
+                    onChange={(e) => setEditCliLimitAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[9px] text-gray-400">APROVAÇÃO ADMIN</label>
+                    {user?.role !== 'Administrador' && (
+                      <span className="text-[8px] text-amber-500 bg-amber-950/20 px-1 py-0.5 rounded border border-amber-900/45 font-bold">🔒 Liberação Admin</span>
+                    )}
+                  </div>
+                  <select
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-1.5 px-2 text-white font-mono text-xs cursor-pointer focus:border-red-500"
+                    value={editCliLimitStatus}
+                    onChange={(e) => setEditCliLimitStatus(e.target.value as any)}
+                    disabled={user?.role !== 'Administrador'}
+                  >
+                    <option value="Pendente">⏳ Pendente de Aprovação</option>
+                    <option value="Aprovado">🟢 Aprovado pelo Admin</option>
+                    <option value="Recusado">🔴 Recusado pelo Admin</option>
+                  </select>
                 </div>
               </div>
 

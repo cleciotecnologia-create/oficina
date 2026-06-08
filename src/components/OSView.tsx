@@ -23,7 +23,8 @@ import {
   Trash2,
   RefreshCw,
   Link,
-  History
+  History,
+  CreditCard
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
@@ -43,6 +44,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     deleteOS,
     addVeiculo,
     clientes, 
+    editCliente,
     veiculos, 
     produtos, 
     servicos,
@@ -119,6 +121,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   const [quickAiSpecs, setQuickAiSpecs] = useState<any | null>(null);
   const [quickAiError, setQuickAiError] = useState<string | null>(null);
   const [quickAiFeedback, setQuickAiFeedback] = useState<string | null>(null);
+  const [quickAiIsFromCache, setQuickAiIsFromCache] = useState(false);
 
   // New OS form states
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
@@ -132,9 +135,13 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   const [reminderEnabled, setReminderEnabled] = useState(true);
   const [vencimentoDays, setVencimentoDays] = useState(30);
   const [reminderDays, setReminderDays] = useState(3);
+  const [faturamentoMode, setFaturamentoMode] = useState<'Balcão' | 'A faturar'>('Balcão');
 
   // Checklist states
   const [checklist, setChecklist] = useState([
+    { label: "Nível de Combustível", status: "ok" as const },
+    { label: "Objetos no Carro", status: "ok" as const },
+    { label: "Avarias Existentes", status: "na" as const },
     { label: "Nível de Óleo do Motor", status: "ok" as const },
     { label: "Nível do Fluido de Freio", status: "ok" as const },
     { label: "Inspeção de Pastilhas/Discos", status: "ok" as const },
@@ -236,11 +243,13 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     setQuickAiLoading(true);
     setQuickAiError(null);
     setQuickAiSpecs(null);
+    setQuickAiIsFromCache(false);
     
-    // 1. Check local cache first
-    const cached = specsCache.get(quickModel, quickYear || '2022', "");
+    // 1. Check local cache first with flexible multi-tiered matching
+    const cached = specsCache.get(quickModel, quickYear || '2022', "", true);
     if (cached) {
       setQuickAiSpecs(cached);
+      setQuickAiIsFromCache(true);
       if (cached.brand) {
         setQuickBrand(cached.brand);
         const foundSug = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === cached.brand.toLowerCase());
@@ -273,12 +282,14 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
         const { getSimulatedSpecs } = await import('../lib/specsFallback');
         data = getSimulatedSpecs(quickModel, quickYear || '2022', "");
         setQuickAiFeedback("Ficha estimada localmente (offline)!");
+        setQuickAiIsFromCache(true);
         setTimeout(() => setQuickAiFeedback(null), 4000);
       } else {
         data = await resp.json();
         if (data.error) {
           throw new Error(data.error);
         }
+        setQuickAiIsFromCache(false);
       }
       
       // Successfully got specifications!
@@ -305,6 +316,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
         const { getSimulatedSpecs } = await import('../lib/specsFallback');
         const fallbackData = getSimulatedSpecs(quickModel, quickYear || '2022', "");
         setQuickAiSpecs(fallbackData);
+        setQuickAiIsFromCache(true);
         specsCache.set(quickModel, quickYear || '2022', "", fallbackData);
         setQuickAiFeedback("Ficha técnica estimada localmente (offline)!");
         setTimeout(() => setQuickAiFeedback(null), 4000);
@@ -440,6 +452,25 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
       return;
     }
 
+    const totalOS = osCalculatedTotal();
+
+    if (faturamentoMode === 'A faturar') {
+      const limit = selectedClient.limitAmount || 0;
+      const status = selectedClient.limitStatus || 'Pendente';
+      const used = selectedClient.usedLimit || 0;
+      const available = limit - used;
+
+      if (status !== 'Aprovado') {
+        alert(`Não permitido: O cliente ${selectedClient.name} não possui limite de crédito de faturamento devidamente aprovado por um administrador.\n\nSituação atual: ${status === 'Pendente' ? '⏳ Pendente de Aprovação' : '🔴 Recusado pelo Administrador'}.`);
+        return;
+      }
+
+      if (totalOS > available) {
+        alert(`Saldo de Crédito Excedido: O valor total desta O.S. (R$ ${totalOS.toFixed(2)}) ultrapassa o saldo de faturamento disponível do cliente (R$ ${available.toFixed(2)}).\n\nLimite Cadastrado: R$ ${limit.toFixed(2)}\nSaldo Utilizado Atual: R$ ${used.toFixed(2)}\nSaldo Disponível Restante: R$ ${available.toFixed(2)}.`);
+        return;
+      }
+    }
+
     const payload = {
       clienteId: selectedClient.id,
       clienteName: selectedClient.name,
@@ -456,13 +487,26 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
       services: [...services],
       parts: [...parts],
       checklist: [...checklist],
-      total: osCalculatedTotal(),
+      total: totalOS,
       reminderEnabled,
       vencimentoDays: Number(vencimentoDays),
-      reminderDays: Number(reminderDays)
+      reminderDays: Number(reminderDays),
+      faturamentoMode: faturamentoMode
     };
 
     await addOS(payload);
+
+    // If 'A faturar', increment used limit of client
+    if (faturamentoMode === 'A faturar') {
+      const currentUsed = selectedClient.usedLimit || 0;
+      try {
+        await editCliente(selectedClient.id, {
+          usedLimit: currentUsed + totalOS
+        });
+      } catch (err) {
+        console.error("Erro ao incrementar limite utilizado do cliente:", err);
+      }
+    }
 
     // Reset Form
     setSelectedClient(null);
@@ -475,7 +519,11 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     setReminderEnabled(true);
     setVencimentoDays(30);
     setReminderDays(3);
+    setFaturamentoMode('Balcão');
     setChecklist([
+      { label: "Nível de Combustível", status: "ok" as const },
+      { label: "Objetos no Carro", status: "ok" as const },
+      { label: "Avarias Existentes", status: "na" as const },
       { label: "Nível de Óleo do Motor", status: "ok" as const },
       { label: "Nível do Fluido de Freio", status: "ok" as const },
       { label: "Inspeção de Pastilhas/Discos", status: "ok" as const },
@@ -1228,6 +1276,40 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
 
                       {/* AI Pre-fill Trigger Button */}
                       <div className="flex flex-col gap-1 mt-1">
+                        {/* Cached models history to avoid redundancy */}
+                        {(() => {
+                          const cachedList = specsCache.getAllCached().slice(0, 4);
+                          if (cachedList.length === 0) return null;
+                          return (
+                            <div className="flex flex-col gap-1 my-1.5 bg-black/25 p-1.5 rounded-lg border border-gray-950/60">
+                              <span className="text-[8px] text-gray-400 font-mono uppercase tracking-wider flex items-center gap-1">
+                                <span>📂</span> Fichas Salvas no Cache Local:
+                              </span>
+                              <div className="flex flex-wrap gap-1">
+                                {cachedList.map((item, idx) => (
+                                  <button
+                                    type="button"
+                                    key={idx}
+                                    onClick={() => {
+                                      setQuickModel(item.model);
+                                      if (item.year) setQuickYear(item.year);
+                                      if (item.motor) setQuickEngine(item.motor);
+                                      setQuickAiSpecs(item.specs);
+                                      setQuickAiIsFromCache(true);
+                                      setQuickAiFeedback(`Carregado do cache: ${item.model}`);
+                                      setTimeout(() => setQuickAiFeedback(null), 3000);
+                                    }}
+                                    className="px-1.5 py-0.5 rounded bg-cyan-950/20 hover:bg-cyan-950/40 border border-cyan-900/60 text-[8px] font-mono text-cyan-400 transition-all cursor-pointer truncate max-w-[150px]"
+                                    title={`${item.model} (${item.year}) - Clique para preencher instantaneamente offline`}
+                                  >
+                                    {item.model} ({item.year})
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         <button
                           type="button"
                           disabled={quickAiLoading || !quickModel}
@@ -1244,7 +1326,8 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                               <Sparkles className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
                               <span>PREENCHER MOTORIZAÇÃO & FICHA TÉCNICA VIA IA</span>
                             </>
-                          )}
+                          )
+                          }
                         </button>
                       </div>
 
@@ -1255,7 +1338,15 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                               <Cpu className="w-3.5 h-3.5 text-cyan-500 animate-pulse" />
                               FICHA TÉCNICA SUGERIDA POR IA
                             </span>
-                            <span className="text-[8px] font-mono text-gray-500 uppercase tracking-widest">Gemini Engine Spec v2.5</span>
+                            {quickAiIsFromCache ? (
+                              <span className="text-[8.5px] bg-emerald-950/40 border border-emerald-800/80 text-emerald-400 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-wide">
+                                ⚡ CACHED (Offline)
+                              </span>
+                            ) : (
+                              <span className="text-[8.5px] bg-sky-950/40 border border-sky-800/80 text-sky-400 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-wide">
+                                🌐 LIVE API
+                              </span>
+                            )}
                           </div>
                           
                           <div className="grid grid-cols-2 gap-2 text-[11px] font-sans">
@@ -1477,44 +1568,134 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               )}
             </div>
 
-            {/* Checklist of reception */}
-            <div className="md:col-span-2 flex flex-col gap-2">
-              <label className="text-[10px] font-mono text-gray-400 uppercase">4. CHECKLIST MECÂNICO DE RECEPÇÃO</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {checklist.map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center p-3.5 rounded-xl border border-gray-900 bg-[#080c16]">
-                    <span className="text-[11px] text-gray-300 font-medium ">{item.label}</span>
-                    <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-gray-800">
-                      <button 
-                        type="button" 
-                        onClick={() => toggleChecklistStatus(idx, 'ok')}
-                        className={`px-2 py-0.5 text-[9px] font-bold font-mono rounded ${item.status === 'ok' ? 'bg-green-600 text-white' : 'text-gray-500'}`}
-                      >
-                        OK
-                      </button>
-                      <button 
-                        type="button" 
-                        onClick={() => toggleChecklistStatus(idx, 'fail')}
-                        className={`px-2 py-0.5 text-[9px] font-bold font-mono rounded ${item.status === 'fail' ? 'bg-red-650 bg-red-650 bg-red-600 text-white' : 'text-gray-500'}`}
-                      >
-                        REPR
-                      </button>
-                      <button 
-                        type="button" 
-                        onClick={() => toggleChecklistStatus(idx, 'na')}
-                        className={`px-2 py-0.5 text-[9px] font-bold font-mono rounded ${item.status === 'na' ? 'bg-slate-700 text-white' : 'text-gray-500'}`}
-                      >
-                        N/A
-                      </button>
+            {/* Quick Yard Check-in Checklist */}
+            <div className="md:col-span-2 flex flex-col gap-3 p-4 bg-red-950/5 border border-red-900/10 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12px]">📋</span>
+                  <label className="text-[10.5px] font-mono font-bold text-red-400 uppercase tracking-wider">
+                    4. VISTORIA RÁPIDA DE ENTRADA NO PÁTIO (CHECK-IN DE VEÍCULO)
+                  </label>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-red-950/40 text-red-400 border border-red-900/30 text-[9px] font-mono uppercase font-bold animate-pulse">
+                  Recepção Segura
+                </span>
+              </div>
+              
+              <p className="text-[11px] text-gray-400 font-sans leading-normal -mt-1 mb-1">
+                Vistoria de pátio indispensável para salvaguarda de integridade legal e jurídica de pátio técnico frente a reclamações posteriores.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                {checklist.map((item, idx) => {
+                  if (!["Nível de Combustível", "Objetos no Carro", "Avarias Existentes"].includes(item.label)) {
+                    return null;
+                  }
+
+                  // Contextual guidance helper text based on label and active status
+                  let guidanceText = "Aguardando Vistoria";
+                  if (item.label === "Nível de Combustível") {
+                    guidanceText = item.status === 'ok' ? 'Tanque Seguro (Acima de 1/4)' : item.status === 'fail' ? 'Atenção: Combustível na Reserva!' : 'Não avaliado no pátio';
+                  } else if (item.label === "Objetos no Carro") {
+                    guidanceText = item.status === 'ok' ? 'Sem pertences declarados' : item.status === 'fail' ? 'Possui pertences de valor declarados' : 'Não vistoriado';
+                  } else if (item.label === "Avarias Existentes") {
+                    guidanceText = item.status === 'ok' ? 'Veículo sem ranhuras ou riscos visíveis' : item.status === 'fail' ? 'Avarias/riscos catalogados' : 'Vistoria visual pendente';
+                  }
+
+                  return (
+                    <div key={idx} className="flex flex-col gap-2.5 p-3.5 rounded-xl border border-gray-900 bg-[#080c16] hover:border-gray-800 transition-all duration-200">
+                      <div className="flex flex-col text-left">
+                        <span className="text-[11px] text-gray-200 font-bold tracking-wider uppercase font-mono">{item.label}</span>
+                        <span className="text-[9.5px] text-gray-400 font-sans mt-0.5 block italic">{guidanceText}</span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1 bg-black/50 p-1 rounded-lg border border-gray-850">
+                        <button 
+                          type="button" 
+                          onClick={() => toggleChecklistStatus(idx, 'ok')}
+                          className={`text-[8.5px] font-bold py-1 px-1 rounded transition duration-150 uppercase tracking-tighter ${
+                            item.status === 'ok' 
+                              ? 'bg-green-600/90 text-white shadow-sm font-extrabold' 
+                              : 'text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {item.label === "Avarias Existentes" ? "INTEGRO" : item.label === "Nível de Combustível" ? "OK / CHEIO" : "RECOLHIDO"}
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => toggleChecklistStatus(idx, 'fail')}
+                          className={`text-[8.5px] font-bold py-1 px-1 rounded transition duration-150 uppercase tracking-tighter ${
+                            item.status === 'fail' 
+                              ? 'bg-red-650 bg-red-600 text-white shadow-sm font-extrabold' 
+                              : 'text-gray-500 hover:text-gray-300'
+                          }`}
+                        >
+                          {item.label === "Avarias Existentes" ? "CONSTA RISCOS" : item.label === "Nível de Combustível" ? "RESERVA" : "TEM OBJETOS"}
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => toggleChecklistStatus(idx, 'na')}
+                          className={`text-[8.5px] font-bold py-1 px-1 rounded transition duration-150 uppercase tracking-tighter ${
+                            item.status === 'na' 
+                              ? 'bg-slate-700 text-white shadow-sm font-extrabold' 
+                              : 'text-gray-505 text-gray-500 hover:text-gray-400'
+                          }`}
+                        >
+                          N/A
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Checklist of reception (Technical items) */}
+            <div className="md:col-span-2 flex flex-col gap-2 bg-slate-900/10 p-4 rounded-2xl border border-gray-800">
+              <label className="text-[10px] font-mono text-gray-400 uppercase tracking-wider block mb-1">
+                5. INSPEÇÃO TÉCNICA DE RECEPÇÃO (SISTEMAS E FLUIDOS AUTOMOTIVOS)
+              </label>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {checklist.map((item, idx) => {
+                  if (["Nível de Combustível", "Objetos no Carro", "Avarias Existentes"].includes(item.label)) {
+                    return null;
+                  }
+                  return (
+                    <div key={idx} className="flex justify-between items-center p-3 rounded-xl border border-gray-900 bg-[#080c16]">
+                      <span className="text-[11px] text-gray-300 font-medium ">{item.label}</span>
+                      <div className="flex gap-1 bg-black/40 p-1 rounded-lg border border-gray-800">
+                        <button 
+                          type="button" 
+                          onClick={() => toggleChecklistStatus(idx, 'ok')}
+                          className={`px-2 py-0.5 text-[9px] font-bold font-mono rounded ${item.status === 'ok' ? 'bg-green-600 text-white' : 'text-gray-500'}`}
+                        >
+                          OK
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => toggleChecklistStatus(idx, 'fail')}
+                          className={`px-2 py-0.5 text-[9px] font-bold font-mono rounded ${item.status === 'fail' ? 'bg-red-650 bg-red-600 text-white' : 'text-gray-500'}`}
+                        >
+                          REPR
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => toggleChecklistStatus(idx, 'na')}
+                          className={`px-2 py-0.5 text-[9px] font-bold font-mono rounded ${item.status === 'na' ? 'bg-slate-700 text-white' : 'text-gray-500'}`}
+                        >
+                          N/A
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
             {/* Manual ADD Services proposed */}
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-mono text-gray-400 uppercase">5. DEFINE LABOR / MÃO DE OBRA ADICIONAL</label>
+              <label className="text-[10px] font-mono text-gray-400 uppercase">6. DEFINE LABOR / MÃO DE OBRA ADICIONAL</label>
               <div className="bg-[#080c16] p-4 rounded-xl border border-gray-900 flex flex-col gap-3">
                 
                 {/* Cataloged predefined services */}
@@ -1592,7 +1773,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
 
             {/* Select parts registered from Inventory */}
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-mono text-gray-400 uppercase">6. VINCULAR PEÇAS DO ESTOQUE INTERNO</label>
+              <label className="text-[10px] font-mono text-gray-400 uppercase">7. VINCULAR PEÇAS DO ESTOQUE INTERNO</label>
               <div className="bg-[#080c16] p-4 rounded-xl border border-gray-900 flex flex-col gap-3">
                 <select 
                   value={selectedProdId}
@@ -1659,7 +1840,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
 
             {/* Manual Diagnosis */}
             <div className="flex flex-col gap-2 md:col-span-2 font-mono">
-              <label className="text-[10px] font-mono text-gray-450 uppercase">7. DIAGNÓSTICO DO MECÂNICO E LAUDO FINAL</label>
+              <label className="text-[10px] font-mono text-gray-450 uppercase">8. DIAGNÓSTICO DO MECÂNICO E LAUDO FINAL</label>
               <textarea 
                 rows={2}
                 placeholder="Ex Nomeadamente: Constatado sulcos excessivos no disco de freio Fremax, obrigando lixamento ou substituição do par dianteiro."
@@ -1669,13 +1850,13 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               />
             </div>
 
-            {/* 8. CONFIGURAÇÕES DE LEMBRETE DE WHATSAPP */}
+            {/* 9. CONFIGURAÇÕES DE LEMBRETE DE WHATSAPP */}
             <div className="md:col-span-2 bg-[#09101f] border border-gray-800/80 rounded-2xl p-5 flex flex-col gap-4 font-sans text-left">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-850 pb-3">
                 <div className="flex items-center gap-2">
                   <Bell className={`w-5 h-5 ${reminderEnabled ? 'text-red-500 animate-bounce' : 'text-gray-500'}`} />
                   <div>
-                    <h4 className="text-sm font-semibold text-white uppercase font-display tracking-tight">8. Configurações de Lembrete</h4>
+                    <h4 className="text-sm font-semibold text-white uppercase font-display tracking-tight">9. Configurações de Lembrete</h4>
                     <p className="text-[11px] text-gray-400">Defina quantos dias antes do vencimento o cliente deve ser alertado via WhatsApp.</p>
                   </div>
                 </div>
@@ -1807,6 +1988,61 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* 10. REGIME DE FATURAMENTO DA ORDEM DE SERVIÇO */}
+            <div className="md:col-span-2 bg-[#09101f] border border-gray-800/80 rounded-2xl p-5 flex flex-col gap-4 font-sans text-left">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-850 pb-3">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-red-500 animate-pulse" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-white uppercase font-display tracking-tight">10. Regime de Cobrança / Faturamento</h4>
+                    <p className="text-[11px] text-gray-400">Escolha como esta O.S. será cobrada do cliente no controle interno de recebíveis.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5 text-xs text-gray-300">
+                  <label className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">MÉTODO DE COBRANÇA</label>
+                  <select
+                    value={faturamentoMode}
+                    onChange={(e) => setFaturamentoMode(e.target.value as any)}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono cursor-pointer focus:border-red-550 focus:outline-none"
+                  >
+                    <option value="Balcão">💵 Balcão / À Vista / PDV Imediato</option>
+                    <option value="A faturar">💳 A Faturar (Descontar do Limite de Crédito)</option>
+                  </select>
+                </div>
+
+                {selectedClient ? (
+                  <div className="bg-slate-950/45 p-3 rounded-xl border border-gray-900 flex flex-col gap-1 font-mono text-[10px]">
+                    <span className="text-red-400 font-bold uppercase text-[9px] flex items-center gap-1">💳 Limite de Crédito:</span>
+                    <div>• Limite Cadastrado: R$ {(selectedClient.limitAmount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                    <div>• Limite Utilizado: R$ {(selectedClient.usedLimit || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
+                    <div>
+                      • Limite Disponível: {' '}
+                      <span className="text-emerald-400 font-bold">
+                        R$ {Math.max(0, (selectedClient.limitAmount || 0) - (selectedClient.usedLimit || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div>
+                      • Status Liberação: {' '}
+                      <span className={`font-bold px-1.5 py-0.2 rounded text-[9px] font-mono ${
+                        selectedClient.limitStatus === 'Aprovado' ? 'bg-[#06180f] text-emerald-400 font-bold' :
+                        selectedClient.limitStatus === 'Recusado' ? 'bg-[#180606] text-red-400' :
+                        'bg-[#181106] text-amber-500'
+                      }`}>
+                        {selectedClient.limitStatus?.toUpperCase() || 'PENDENTE'}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-slate-950/20 p-3 rounded-xl border border-gray-900 flex items-center justify-center font-mono text-[10px] text-gray-400">
+                    Selecione um cliente para visualizar o limite de crédito.
+                  </div>
+                )}
+              </div>
             </div>
 
           </div>
@@ -2348,15 +2584,15 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               </div>
             </div>
 
-            <div className="flex items-center gap-2 mt-2 sm:mt-0">
+            <div className="flex items-center gap-2 mt-2 sm:mt-0 no-print">
               <button
                 type="button"
                 onClick={() => {
                   window.print();
                 }}
-                className="py-2 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all hover:scale-[1.02]"
+                className="py-2 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all hover:scale-[1.02] no-print"
               >
-                <Printer className="w-4 h-4 text-white" /> Imprimir / Salvar PDF
+                <Printer className="w-4 h-4 text-white" /> Imprimir O.S.
               </button>
               <button
                 type="button"
@@ -2377,21 +2613,31 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
             
             {/* Header Section */}
             <div className="flex flex-col md:flex-row justify-between items-start border-b-2 border-black pb-5 gap-4">
-              <div className="flex flex-col gap-1 max-w-[70%] text-left">
-                <h1 className="font-display font-extrabold text-lg sm:text-xl text-black leading-tight uppercase font-mono tracking-wide">
-                  {company?.name || 'AutoPrecision Premium'}
-                </h1>
-                <p className="text-[10.5px] text-gray-700 leading-normal font-mono max-w-md">
-                  {company?.address || "Avenida das Nações Unidas, 1040 - São Paulo, SP"}
-                </p>
-                <p className="text-[10px] text-gray-500 font-mono">
-                  CNPJ: {company?.cnpj || "12.345.678/0001-90"} • Fone: {company?.phone || "(11) 98765-4321"}
-                </p>
-                {company?.email && (
-                  <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                    E-mail: {company.email}
-                  </p>
+              <div className="flex gap-4 items-center">
+                {company?.logoUrl && (
+                  <img 
+                    src={company.logoUrl} 
+                    alt="Logo" 
+                    className="w-16 h-16 object-contain rounded-xl border border-gray-200"
+                    referrerPolicy="no-referrer"
+                  />
                 )}
+                <div className="flex flex-col gap-1 text-left">
+                  <h1 className="font-display font-extrabold text-lg sm:text-xl text-black leading-tight uppercase font-mono tracking-wide">
+                    {company?.name || 'AutoPrecision Premium'}
+                  </h1>
+                  <p className="text-[10.5px] text-gray-700 leading-normal font-mono max-w-md">
+                    {company?.address || "Avenida das Nações Unidas, 1040 - São Paulo, SP"}
+                  </p>
+                  <p className="text-[10px] text-gray-500 font-mono">
+                    CNPJ: {company?.cnpj || "12.345.678/0001-90"} • Fone: {company?.phone || "(11) 98765-4321"}
+                  </p>
+                  {company?.email && (
+                    <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+                      E-mail: {company.email}
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col md:items-end text-left md:text-right font-mono text-[10px] bg-gray-100 border border-gray-200 rounded-xl p-3 max-w-[280px] w-full md:w-auto">
@@ -2475,6 +2721,44 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                 )}
               </div>
             </div>
+
+            {/* Checklist de Vistoria e Entrada */}
+            {pdfOSSelected.checklist && pdfOSSelected.checklist.length > 0 && (
+              <div className="mt-6">
+                <h2 className="text-[11px] font-bold font-mono tracking-wider text-black bg-gray-100 px-3 py-1 border-l-4 border-black uppercase mb-3 text-left">
+                  VISTORIA DE ENTRADA & INSPEÇÃO DE QUALIDADE
+                </h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-[9px] text-black">
+                  {pdfOSSelected.checklist.map((item, idx) => {
+                    let statusLabel = 'N/A';
+                    let statusStyle = 'bg-gray-100 text-gray-500 border border-gray-250';
+                    
+                    if (item.status === 'ok') {
+                      statusStyle = 'bg-emerald-50 text-emerald-800 border border-emerald-300 font-extrabold';
+                      if (item.label === 'Avarias Existentes') statusLabel = 'SEM DANOS';
+                      else if (item.label === 'Objetos no Carro') statusLabel = 'SEM PERTENCES';
+                      else if (item.label === 'Nível de Combustível') statusLabel = 'CHEIO/SADIO';
+                      else statusLabel = 'CONFORME';
+                    } else if (item.status === 'fail') {
+                      statusStyle = 'bg-red-50 text-red-900 border border-red-350 font-extrabold';
+                      if (item.label === 'Avarias Existentes') statusLabel = 'AVARIADO';
+                      else if (item.label === 'Objetos no Carro') statusLabel = 'CONSTA ITENS';
+                      else if (item.label === 'Nível de Combustível') statusLabel = 'RESERVA';
+                      else statusLabel = 'REPROVADO';
+                    }
+                    
+                    return (
+                      <div key={idx} className="border border-gray-200 bg-gray-50/20 rounded-lg p-2.5 flex items-center justify-between gap-1 leading-none">
+                        <span className="text-gray-700 font-bold block truncate max-w-[150px]">{item.label}</span>
+                        <span className={`text-[8px] px-1.5 py-0.5 rounded uppercase leading-none shrink-0 ${statusStyle}`}>
+                          {statusLabel}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Services Table */}
             <div className="mt-6">
@@ -2602,8 +2886,35 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               )}
             </div>
 
+            {/* Customer Tracking Portal QR Code */}
+            {(() => {
+              const trackingUrl = `${window.location.origin}${window.location.pathname}?cpf=${encodeURIComponent(pdfOSSelected.clienteCpfCnpj || pdfOSSelected.id)}&osId=${encodeURIComponent(pdfOSSelected.id)}`;
+              const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(trackingUrl)}&color=0-0-0&bgcolor=255-255-255`;
+              return (
+                <div className="flex items-center gap-4 max-w-md mx-auto mt-8 border border-slate-200 border-dashed rounded-xl p-3 bg-slate-50">
+                  <img 
+                    src={qrCodeUrl} 
+                    alt="QR Code Acompanhamento" 
+                    className="w-16 h-16 bg-white p-1 border border-slate-300 rounded shadow-sm shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="text-left font-sans">
+                    <span className="text-[10px] font-bold text-slate-800 tracking-wider block uppercase mb-0.5">
+                      Acompanhe seu Veículo Online
+                    </span>
+                    <p className="text-[9px] text-slate-600 leading-normal font-mono">
+                      Aponte a câmera do seu celular para acompanhar o andamento da sua O.S., visualizar laudos de engenharia, fotos e aprovar orçamentos em tempo real.
+                    </p>
+                    <span className="text-[7.5px] text-slate-400 font-mono block mt-1 break-all select-all">
+                      {trackingUrl}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Footer Rules */}
-            <p className="text-[8px] text-gray-400 text-center font-mono mt-12 border-t border-gray-100 pt-3 self-center">
+            <p className="text-[8px] text-gray-400 text-center font-mono mt-8 border-t border-gray-100 pt-3 self-center">
               Este relatório é gerado em conformidade com as regras de orçamento técnico preventivo. A garantia legal para novos componentes aplicados é de 90 dias.
             </p>
 

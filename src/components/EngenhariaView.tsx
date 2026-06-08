@@ -6,6 +6,7 @@ import {
   ChevronRight, Car, Sliders, RefreshCw, FileText
 } from 'lucide-react';
 import { specsCache } from '../lib/specsCache';
+import { useApp } from '../context/AppContext';
 
 interface Part {
   name: string;
@@ -202,6 +203,7 @@ const POPULAR_SUGGESTIONS = [
 ];
 
 export default function EngenhariaView() {
+  const { company } = useApp();
   const [selectionMode, setSelectionMode] = useState<'catalog' | 'manual'>('catalog');
   const [selectedBrand, setSelectedBrand] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
@@ -731,9 +733,21 @@ export default function EngenhariaView() {
               {/* PRINT ONLY HEADER */}
               <div className="hidden print:block w-full border-b-2 border-slate-350 pb-4 mb-4 col-span-12">
                 <div className="flex justify-between items-center text-black">
-                  <div>
-                    <span className="font-mono font-bold text-lg tracking-wider text-red-750 uppercase">AUTOTECH ASSISTENCIAL ADVISOR</span>
-                    <span className="block text-xs text-slate-650 font-mono mt-0.5">Laudo de Engenharia Inteligente - Ficha Técnica de Manutenção</span>
+                  <div className="flex items-center gap-3">
+                    {company?.logoUrl && (
+                      <img 
+                        src={company.logoUrl} 
+                        alt="Logo" 
+                        className="w-12 h-12 object-contain rounded-lg border border-slate-300"
+                        referrerPolicy="no-referrer"
+                      />
+                    )}
+                    <div>
+                      <span className="font-mono font-bold text-lg tracking-wider text-red-750 uppercase">
+                        {company?.name ? `${company.name.toUpperCase()} TECHNICAL` : 'AUTOTECH ASSISTENCIAL ADVISOR'}
+                      </span>
+                      <span className="block text-xs text-slate-650 font-mono mt-0.5">Laudo de Engenharia Inteligente - Ficha Técnica de Manutenção</span>
+                    </div>
                   </div>
                   <div className="text-right text-[10px] font-mono leading-tight">
                     <span>Emissão: {new Date().toLocaleDateString('pt-BR')}</span>
