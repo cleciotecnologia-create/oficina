@@ -41,6 +41,7 @@ import { useApp } from '../context/AppContext';
 import { Produto, Servico, Cliente, SaleItem } from '../types';
 import QRCode from 'qrcode';
 import { generatePixPayload } from '../lib/pix';
+import { playCashRegisterSound } from '../lib/audio';
 
 interface Coupon {
   code: string;
@@ -845,6 +846,7 @@ export const PDVView: React.FC = () => {
     };
 
     await addVenda(saleDetails);
+    playCashRegisterSound();
 
     // Update customer used credit limit 
     if (paymentMethod === 'Fatura' && selectedClienteId !== 'unidentified' && activeCustomer) {

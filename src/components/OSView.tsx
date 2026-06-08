@@ -32,6 +32,7 @@ import { useApp } from '../context/AppContext';
 import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
 import { AUTO_SUGGESTIONS } from '../lib/autoSuggestions';
 import { specsCache } from '../lib/specsCache';
+import { playSuccessSound } from '../lib/audio';
 
 interface OSViewProps {
   initialSearchPlate?: string;
@@ -57,6 +58,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
 
   const [activeTab, setActiveTab] = useState<'lista' | 'nova' | 'orcamento'>('lista');
   const [pdfOSSelected, setPdfOSSelected] = useState<OrdemServico | null>(null);
+  const [isPrintSelectorOpen, setIsPrintSelectorOpen] = useState(false);
 
   React.useEffect(() => {
     const handleOpenNewOS = () => {
@@ -628,6 +630,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     };
 
     await addOS(payload);
+    playSuccessSound();
 
     // If 'A faturar', increment used limit of client
     if (faturamentoMode === 'A faturar') {
@@ -865,6 +868,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
     };
 
     await addOS(payload);
+    playSuccessSound();
     alert("✔️ Orçamento instantâneo convertido com sucesso em uma Ordem de Serviço oficial! Veja-a na fila ativa.");
     
     // Reset easy states
@@ -917,26 +921,38 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
           <p className="text-xs text-gray-400 font-mono">Checklists de pátio, orçamentos, inteligência mecânica de diagnóstico e assinaturas.</p>
         </div>
 
-        <div className="flex bg-[#080d19] p-1 rounded-xl border border-gray-800 self-stretch sm:self-auto [&>button]:px-3.5 [&>button]:py-1.5 [&>button]:text-xs [&>button]:font-mono [&>button]:rounded-lg">
-          <button 
-            onClick={() => setActiveTab('lista')}
-            className={activeTab === 'lista' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
+        <div className="flex flex-wrap items-center gap-3 self-stretch sm:self-auto">
+          {/* Imprimir O.S. Direto */}
+          <button
+            type="button"
+            onClick={() => setIsPrintSelectorOpen(true)}
+            className="px-4 py-2 bg-[#d97706]/20 border border-[#d97706]/40 text-[#f59e0b] hover:bg-[#d97706]/34 hover:text-amber-350 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-all duration-150 font-mono"
+            title="Escolher Ordem de Serviço para Gerar PDF ou Imprimir"
           >
-            Fila Ativa de OS
+            <Printer className="w-3.5 h-3.5" /> Gerar PDF / Imprimir
           </button>
-          <button 
-            onClick={() => setActiveTab('nova')}
-            className={activeTab === 'nova' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
-          >
-            + Abrir Nova OS
-          </button>
-          <button 
-            onClick={() => setActiveTab('orcamento')}
-            className={activeTab === 'orcamento' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
-            id="tab-orcamento-facil"
-          >
-            ⚡ Orçamento Fácil
-          </button>
+
+          <div className="flex bg-[#080d19] p-1 rounded-xl border border-gray-800 [&>button]:px-3.5 [&>button]:py-1.5 [&>button]:text-xs [&>button]:font-mono [&>button]:rounded-lg">
+            <button 
+              onClick={() => setActiveTab('lista')}
+              className={activeTab === 'lista' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
+            >
+              Fila Ativa de OS
+            </button>
+            <button 
+              onClick={() => setActiveTab('nova')}
+              className={activeTab === 'nova' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
+            >
+              + Abrir Nova OS
+            </button>
+            <button 
+              onClick={() => setActiveTab('orcamento')}
+              className={activeTab === 'orcamento' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
+              id="tab-orcamento-facil"
+            >
+              ⚡ Orçamento Fácil
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1213,7 +1229,11 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                     <select 
                       value={os.status}
                       onChange={async (e) => {
-                        await editOS(os.id, { status: e.target.value as any });
+                        const newStatus = e.target.value;
+                        await editOS(os.id, { status: newStatus as any });
+                        if (newStatus === 'Finalizada' || newStatus === 'Entregue') {
+                          playSuccessSound();
+                        }
                       }}
                       className="bg-[#050812] border border-gray-800 rounded px-2 py-1 text-[9px] font-mono text-slate-300"
                     >
@@ -3497,6 +3517,107 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                 className="flex-1 py-1.5 px-2.5 rounded-xl border border-neutral-800 hover:bg-slate-900 text-xs text-neutral-300 font-semibold cursor-pointer transition-all text-center bg-transparent"
               >
                 Cancelar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 📄 SELECTOR DIALOG FOR PRINT AND PDF EXPORT */}
+      {isPrintSelectorOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-[#0c1223] border border-amber-500/30 text-white max-w-xl w-full rounded-2xl p-6 shadow-2xl relative flex flex-col gap-4">
+            
+            <button 
+              type="button"
+              onClick={() => setIsPrintSelectorOpen(false)}
+              className="absolute top-4 right-4 p-1 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-gray-400 hover:text-white transition-colors cursor-pointer animate-none"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                <Printer className="w-5 h-5" />
+              </span>
+              <div>
+                <h3 className="font-display font-extrabold text-sm uppercase tracking-wider text-white">
+                  GERAR PDF / IMPRIMIR ORDENS DE SERVIÇO
+                </h3>
+                <p className="text-[10px] text-gray-400 font-mono">
+                  Selecione uma O.S. ativa para abrir a folha oficial de impressão do cliente.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick search inside the selector */}
+            <div className="relative mt-2">
+              <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-gray-500" />
+              <input 
+                type="text"
+                placeholder="Pesquisar por id, cliente, placa ou carro..."
+                id="print-picker-search"
+                className="w-full bg-[#050810] border border-gray-800 rounded-xl py-2 px-3 pl-9 text-xs text-white focus:outline-none focus:border-amber-500 font-mono"
+                onChange={(e) => {
+                  const val = e.target.value.toLowerCase();
+                  const items = document.querySelectorAll('.print-picker-item');
+                  items.forEach((item: any) => {
+                    const text = item.innerText.toLowerCase();
+                    if (text.includes(val)) {
+                      item.style.display = 'flex';
+                    } else {
+                      item.style.display = 'none';
+                    }
+                  });
+                }}
+              />
+            </div>
+
+            {/* List scroll container */}
+            <div className="max-h-60 overflow-y-auto pr-1 flex flex-col gap-2 scrollbar-thin">
+              {ordensServico.length === 0 ? (
+                <div className="text-center py-6 text-gray-500 text-xs font-mono">
+                  Nenhuma Ordem de Serviço encontrada para impressão.
+                </div>
+              ) : (
+                ordensServico.map((os) => (
+                  <button
+                    key={os.id}
+                    type="button"
+                    onClick={() => {
+                      setPdfOSSelected(os);
+                      setIsPrintSelectorOpen(false);
+                    }}
+                    className="print-picker-item w-full p-3 bg-slate-900/60 hover:bg-slate-800/80 border border-gray-850 hover:border-amber-500/40 rounded-xl flex items-center justify-between gap-3 text-left transition-all duration-150 group cursor-pointer"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-[11px] font-bold text-amber-400">#{os.id}</span>
+                        <span className="text-[10px] text-gray-300 font-bold max-w-[200px] truncate">{os.clienteName}</span>
+                      </div>
+                      <div className="text-[9.5px] text-gray-400 font-mono flex items-center gap-1.5 flex-wrap">
+                        <span className="bg-slate-950 px-1.5 py-0.5 rounded border border-gray-850 uppercase text-amber-500/90 tracking-wide font-extrabold">{os.plate}</span>
+                        <span className="truncate max-w-[200px]">{os.veiculoInfo}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end gap-1 font-mono shrink-0">
+                      <span className="text-[11px] font-bold text-white">R$ {os.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-[8px] text-gray-500">{new Date(os.createdAt).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="flex gap-2.5 mt-2">
+              <button
+                type="button"
+                onClick={() => setIsPrintSelectorOpen(false)}
+                className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-gray-400 hover:text-white rounded-xl text-xs font-semibold tracking-wider cursor-pointer border border-[#1e293b] transition-colors"
+              >
+                FECHAR
               </button>
             </div>
 

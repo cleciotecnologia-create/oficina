@@ -1264,11 +1264,14 @@ class ErrorBoundary extends Component<
               <span className="text-white text-xl font-bold font-mono">⚠️</span>
             </div>
             
-            <h1 className="text-lg font-bold font-display text-white mt-4 tracking-tight leading-tight">
-              SISTEMA AUTOMOTIVO PROTEGIDO
+            <h1 className="text-lg font-bold font-display text-white mt-4 tracking-tight leading-tight uppercase">
+              Sistema em Manutenção / Instabilidade
             </h1>
-            <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
-              Evitamos que sua tela ficasse preta! Ocorreu um erro no carregamento da interface. Não se preocupe, seus dados locais estão guardados e seguros.
+            <p className="text-[11px] text-gray-400 mt-2.5 leading-relaxed">
+              O sistema está temporariamente fora de serviço ou passando por manutenção rápida para correção de instabilidades. <strong>Nossa equipe técnica já está trabalhando ativamente para solucionar este problema e restabelecer o acesso 100% normalizado o mais breve possível.</strong>
+            </p>
+            <p className="text-[10px] text-emerald-450 text-emerald-400 font-semibold mt-1">
+              🛠️ Suporte técnico alertado e monitorando em tempo real.
             </p>
 
             <div className="my-5 p-4 bg-[#050810] border border-gray-800 rounded-xl max-h-40 overflow-y-auto text-left">
