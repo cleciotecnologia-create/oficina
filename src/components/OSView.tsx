@@ -26,10 +26,12 @@ import {
   RefreshCw,
   Link,
   History,
-  CreditCard
+  CreditCard,
+  Kanban,
+  List
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico } from '../types';
+import { OrdemServico, ServiceItem, PartUsed, Cliente, Veiculo, Servico, OSStatus } from '../types';
 import { AUTO_SUGGESTIONS } from '../lib/autoSuggestions';
 import { specsCache } from '../lib/specsCache';
 import { playSuccessSound } from '../lib/audio';
@@ -134,12 +136,17 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   const [diagnosisText, setDiagnosisText] = useState('');
   const [assignedStaff, setAssignedStaff] = useState('Marcio Rezende');
   const [kmStr, setKmStr] = useState('');
+  const [kmAnteriorEtiquetaStr, setKmAnteriorEtiquetaStr] = useState('');
 
   // Reminder configurations
   const [reminderEnabled, setReminderEnabled] = useState(true);
   const [vencimentoDays, setVencimentoDays] = useState(30);
   const [reminderDays, setReminderDays] = useState(3);
   const [faturamentoMode, setFaturamentoMode] = useState<'Balcão' | 'A faturar'>('Balcão');
+  const [isOSPriority, setIsOSPriority] = useState(false);
+  const [viewMode, setViewMode] = useState<'lista' | 'kanban'>('lista');
+  const [draggingOSId, setDraggingOSId] = useState<string | null>(null);
+  const [draggedOverColumn, setDraggedOverColumn] = useState<'Aguardando' | 'Em Execução' | 'Finalizado' | null>(null);
 
   // Scheduling states
   const [entryMode, setEntryMode] = useState<'imediata' | 'agendada'>('imediata');
@@ -271,6 +278,13 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   // Custom manual parts input selector
   const [selectedProdId, setSelectedProdId] = useState('');
   const [selectedProdQty, setSelectedProdQty] = useState('1');
+  const [isPartClientSupplied, setIsPartClientSupplied] = useState(false);
+  const [useManualPart, setUseManualPart] = useState(false);
+  const [manualPartNameInput, setManualPartNameInput] = useState('');
+  const [manualPartPriceInput, setManualPartPriceInput] = useState('');
+  const [partOrigin, setPartOrigin] = useState<'estoque' | 'cliente' | 'terceiros'>('estoque');
+  const [partSupplierName, setPartSupplierName] = useState('');
+  const [partCostPrice, setPartCostPrice] = useState('');
 
   // Print/Share modal states
   const [activeOSForModal, setActiveOSForModal] = useState<OrdemServico | null>(null);
@@ -336,8 +350,26 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     
     const specCar = `${selectedVehicle.brand} ${selectedVehicle.model} ${selectedVehicle.year} - ${selectedVehicle.engine}`;
     
+    let promptKMDetails = "";
+    const currentKmParsed = parseInt(kmStr) || selectedVehicle.km || 0;
+    const previousKmParsed = parseInt(kmAnteriorEtiquetaStr) || 0;
+
+    if (currentKmParsed > 0 || previousKmParsed > 0) {
+      promptKMDetails = `\n\n[MÉTRICAS DE QUILOMETRAGEM - ANÁLISE DE MANUTENÇÃO PREVENTIVA]:
+- Quilometragem Atual do Odômetro: ${currentKmParsed.toLocaleString('pt-BR')} km
+- Quilometragem da Última Etiqueta de Troca de Óleo / Revisão Registrada: ${previousKmParsed > 0 ? previousKmParsed.toLocaleString('pt-BR') + ' km' : 'Não informada'}`;
+
+      if (currentKmParsed > 0 && previousKmParsed > 0) {
+        const diffKm = currentKmParsed - previousKmParsed;
+        promptKMDetails += `\n- Distância Percorrida (Rodado desde a última etiqueta): ${diffKm.toLocaleString('pt-BR')} km.
+INSTRUÇÃO EXTRA AO GEMINI: Como o cliente rodou ${diffKm.toLocaleString('pt-BR')} km desde a última etiqueta de revisão, faça uma análise crítica detalhada sobre as peças que necessitam de MANUTENÇÃO PREVENTIVA IMEDIATA (como óleo do motor, filtro de óleo, filtro de cabine, filtro de ar, fluido de freio, jogo de velas, correia dentada/sincronizadora, discos/pastilhas) e inclua estas sugestões de peças e serviços de forma correspondente e proporcional nos campos JSON 'suggestedParts' e 'suggestedServices' recomendados!`;
+      } else {
+        promptKMDetails += `\nINSTRUÇÃO EXTRA AO GEMINI: Com base na Quilometragem Geral de ${currentKmParsed.toLocaleString('pt-BR')} km, sugira as manutenções preventivas padrões recomendadas pelas montadoras para esta faixa quilométrica nos campos JSON 'suggestedParts' e 'suggestedServices'.`;
+      }
+    }
+
     // Call Context API Gemini Endpoint
-    const result = await getSmartDiagnosis("gemini-2.5-flash", selectedVehicle.plate, `Veículo: ${specCar}. Sintomas relatados: ${problemText}`);
+    const result = await getSmartDiagnosis("gemini-2.5-flash", selectedVehicle.plate, `Veículo: ${specCar}. Sintomas relatados: ${problemText}${promptKMDetails}`);
     
     if (result) {
       setAiDiagnosticSummary(result);
@@ -545,21 +577,73 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
 
   // Add Part to OS
   const handleAddPartToOS = () => {
-    if (!selectedProdId) return;
-    const prod = produtos.find(p => p.id === selectedProdId);
-    if (!prod) return;
-
     const qty = parseInt(selectedProdQty) || 1;
-    const item: PartUsed = {
-      id: prod.id,
-      name: prod.name,
-      sellPrice: prod.sellPrice,
-      quantity: qty
-    };
+    let item: PartUsed;
+
+    const isSuppliedByClient = partOrigin === 'cliente';
+
+    if (partOrigin === 'terceiros' && !partSupplierName.trim()) {
+      alert("Por favor, insira o nome do fornecedor para a Compra de Terceiros.");
+      return;
+    }
+
+    if (useManualPart) {
+      if (!manualPartNameInput.trim()) {
+        alert("Por favor, insira o nome da peça/material manualmente.");
+        return;
+      }
+      
+      let priceVal = 0;
+      if (partOrigin === 'terceiros') {
+        priceVal = parseFloat(partCostPrice) || 0;
+      } else if (partOrigin === 'estoque') {
+        priceVal = parseFloat(manualPartPriceInput) || 0;
+      } // isSuppliedByClient is 0
+
+      item = {
+        id: `custom_part_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        name: manualPartNameInput.trim(),
+        sellPrice: priceVal,
+        quantity: qty,
+        suppliedByClient: isSuppliedByClient,
+        origin: partOrigin,
+        supplierName: partOrigin === 'terceiros' ? partSupplierName.trim() : undefined
+      };
+    } else {
+      if (!selectedProdId) {
+        alert("Por favor, selecione uma peça do estoque ou ative a digitação manual de peças.");
+        return;
+      }
+      const prod = produtos.find(p => p.id === selectedProdId);
+      if (!prod) return;
+
+      let priceVal = prod.sellPrice;
+      if (partOrigin === 'terceiros') {
+        priceVal = parseFloat(partCostPrice) || 0;
+      } else if (isSuppliedByClient) {
+        priceVal = 0;
+      }
+
+      item = {
+        id: prod.id,
+        name: prod.name,
+        sellPrice: priceVal,
+        quantity: qty,
+        suppliedByClient: isSuppliedByClient,
+        origin: partOrigin,
+        supplierName: partOrigin === 'terceiros' ? partSupplierName.trim() : undefined
+      };
+    }
 
     setParts(prev => [...prev, item]);
     setSelectedProdId('');
     setSelectedProdQty('1');
+    setManualPartNameInput('');
+    setManualPartPriceInput('');
+    setPartOrigin('estoque');
+    setPartSupplierName('');
+    setPartCostPrice('');
+    setIsPartClientSupplied(false);
   };
 
   // Handle Checklist Status change click
@@ -572,7 +656,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   // Total current sum
   const osCalculatedTotal = () => {
     const srvTotal = services.reduce((sum, item) => sum + item.price, 0);
-    const prtTotal = parts.reduce((sum, item) => sum + (item.sellPrice * item.quantity), 0);
+    const prtTotal = parts.reduce((sum, item) => sum + (item.suppliedByClient ? 0 : item.sellPrice * item.quantity), 0);
     return srvTotal + prtTotal;
   };
 
@@ -611,6 +695,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
       veiculoInfo: `${selectedVehicle.brand} ${selectedVehicle.model} - (${selectedVehicle.plate})`,
       plate: selectedVehicle.plate,
       km: parseInt(kmStr) || selectedVehicle.km,
+      kmAnteriorEtiqueta: parseInt(kmAnteriorEtiquetaStr) || undefined,
       problem: problemText,
       diagnosis: diagnosisText || (entryMode === 'agendada' ? `Serviço Agendado para ${safeFormatLocalDate(scheduledDate)} às ${scheduledTime}.` : "Aguardando diagnóstico mecânico detalhado."),
       status: (entryMode === 'agendada' ? "Agendada" : "Aberta") as any,
@@ -625,6 +710,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
       vencimentoDays: Number(vencimentoDays),
       reminderDays: Number(reminderDays),
       faturamentoMode: faturamentoMode,
+      priority: isOSPriority,
       scheduledDate: entryMode === 'agendada' ? (scheduledDate || new Date().toISOString().split('T')[0]) : undefined,
       scheduledTime: entryMode === 'agendada' ? scheduledTime : undefined
     };
@@ -653,6 +739,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     setProblemText('');
     setDiagnosisText('');
     setKmStr('');
+    setKmAnteriorEtiquetaStr('');
     setServices([]);
     setParts([]);
     setCapturedPhotos([]);
@@ -660,6 +747,7 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     setVencimentoDays(30);
     setReminderDays(3);
     setFaturamentoMode('Balcão');
+    setIsOSPriority(false);
     setEntryMode('imediata');
     setScheduledDate('');
     setScheduledTime('09:00');
@@ -1017,25 +1105,104 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
             </div>
           </div>
 
-          {/* OS Listing Card Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {filteredOS.map((os, index) => (
-              <motion.div 
-                key={os.id}
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.25) }}
-                className="p-5 bg-[#0c1223] rounded-2xl border border-gray-800 flex flex-col justify-between hover:border-red-500/20 transition-all text-left relative overflow-hidden"
+          {/* MODO DE VISUALIZAÇÃO TOGGLE */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-[#0a0f1d] p-3 rounded-xl border border-gray-900 mt-4 mb-2">
+            <div>
+              <span className="text-xs font-mono font-bold text-gray-400 uppercase flex items-center gap-1.5">
+                👁️ Painel Operacional:
+              </span>
+              <p className="text-[10px] text-gray-500 font-sans mt-0.5">Alterne entre a listagem tradicional e o Quadro Kanban interativo.</p>
+            </div>
+            <div className="flex bg-[#080d19] p-1 rounded-xl border border-gray-800 self-stretch sm:self-auto justify-stretch">
+              <button
+                type="button"
+                onClick={() => setViewMode('lista')}
+                className={`flex-grow sm:flex-grow-0 px-4 py-1.5 text-xs font-mono rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${viewMode === 'lista' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}`}
               >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-bold text-white tracking-widest">{os.id}</span>
-                      <span className={`text-[9px] font-mono border px-1.5 py-0.5 rounded ${statusColors[os.status] || 'border-slate-800'}`}>
-                        {os.status}
-                      </span>
-                    </div>
-                    <span className="text-xs text-gray-400 block mt-1 font-sans font-semibold">🚙 {os.veiculoInfo}</span>
+                <List className="w-3.5 h-3.5" /> Lista / Grade
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('kanban')}
+                className={`flex-grow sm:flex-grow-0 px-4 py-1.5 text-xs font-mono rounded-lg flex items-center justify-center gap-2 transition-all cursor-pointer ${viewMode === 'kanban' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}`}
+                id="btn-kanban-view"
+              >
+                <Kanban className="w-3.5 h-3.5" /> Quadro Kanban
+              </button>
+            </div>
+          </div>
+
+          {viewMode === 'lista' ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {filteredOS.map((os, index) => {
+              const isManualPriority = os.priority === true;
+              const isWarranty = os.status === 'Garantia Reaberta' || (os.reopenCount !== undefined && os.reopenCount > 0);
+              const isActive = os.status !== 'Finalizada' && os.status !== 'Entregue';
+              
+              const diffMs = new Date().getTime() - new Date(os.createdAt).getTime();
+              const isOverdue = isActive && (diffMs > 24 * 60 * 60 * 1000); // Mais de 24h ativa no pátio considera-se atrasada
+              const isPriorityOrDelayed = isManualPriority || isWarranty || isOverdue;
+
+              return (
+                <motion.div 
+                  key={os.id}
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.25) }}
+                  className={`p-5 bg-[#0c1223] rounded-2xl border flex flex-col justify-between hover:border-red-500/20 transition-all text-left relative overflow-hidden ${
+                    isPriorityOrDelayed 
+                      ? 'animate-pulse-glow border-red-500/60' 
+                      : 'border-gray-800'
+                  }`}
+                >
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-sm font-bold text-white tracking-widest">{os.id}</span>
+                        <span className={`text-[9px] font-mono border px-1.5 py-0.5 rounded ${statusColors[os.status] || 'border-slate-800'}`}>
+                          {os.status}
+                        </span>
+                        
+                        {isManualPriority && (
+                          <span className="text-[8px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-tight animate-pulse">
+                            ⚡ PRIORITÁRIA
+                          </span>
+                        )}
+                        {isWarranty && (
+                          <span className="text-[8px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-tight animate-pulse">
+                            ⚙ REDIRECT GARANTIA
+                          </span>
+                        )}
+                        {isOverdue && !isWarranty && (
+                          <span className="text-[8px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono font-bold uppercase tracking-tight animate-pulse">
+                            ⏳ ATRASADA (DIAS +1)
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-gray-400 block mt-1 font-sans font-semibold">🚙 {os.veiculoInfo}</span>
+                      
+                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1 text-[10.5px]">
+                        <span className="text-slate-400 font-sans">
+                          📍 KM Entrada: <strong className="text-slate-200">{os.km ? os.km.toLocaleString('pt-BR') : '0'} km</strong>
+                        </span>
+                        {os.kmAnteriorEtiqueta ? (
+                          <>
+                            <span className="text-gray-500 font-mono">•</span>
+                            <span className="text-slate-400 font-sans">
+                              🏷️ Etiqueta Anterior: <strong className="text-slate-200">{os.kmAnteriorEtiqueta.toLocaleString('pt-BR')} km</strong>
+                            </span>
+                            <span className="text-gray-500 font-mono">•</span>
+                            <span className="text-amber-400 font-sans font-medium">
+                              🔄 Rodado: <strong>{(os.km - os.kmAnteriorEtiqueta).toLocaleString('pt-BR')} km</strong>
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-gray-500 font-mono">•</span>
+                            <span className="text-slate-500 font-sans italic">Sem etiqueta KM anterior</span>
+                          </>
+                        )}
+                      </div>
                     <span className="text-[10px] text-gray-500 font-mono block mt-1 flex items-center gap-1">
                       <span>📅 Entrada:</span>
                       <strong className="text-gray-300">
@@ -1183,6 +1350,21 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
 
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button 
+                      onClick={async () => {
+                        await editOS(os.id, { priority: !os.priority });
+                        playSuccessSound();
+                      }}
+                      className={`px-2 py-1 rounded bg-slate-900 border flex items-center gap-1 cursor-pointer transition-colors text-[9.5px] ${
+                        os.priority 
+                          ? 'border-red-500/40 text-red-400 hover:bg-red-500/10' 
+                          : 'border-slate-850 text-gray-400 hover:hover:text-slate-350'
+                      }`}
+                      title={os.priority ? "Disparar baixa prioridade" : "Definir Alta Prioridade"}
+                    >
+                      ★ {os.priority ? "Prioridade Ativa" : "Priorizar"}
+                    </button>
+
+                    <button 
                       onClick={() => createWhatsAppShare(os)}
                       className="px-2 py-1 rounded bg-slate-900 border border-slate-850 hover:bg-slate-800 text-green-400 flex items-center gap-1 cursor-pointer transition-colors"
                       title="Compartilhar orçamento via WhatsApp"
@@ -1264,13 +1446,230 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                 </div>
 
               </motion.div>
-            ))}
+              );
+            })}
             {filteredOS.length === 0 && (
               <div className="col-span-2 text-center py-20 text-gray-500">
                 Nenhuma Ordem de Serviço conditizente localizada nesta consulta.
               </div>
             )}
           </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start mt-2 text-left">
+              {['Aguardando', 'Em Execução', 'Finalizado'].map((colId) => {
+                const columnItems = filteredOS.filter(os => {
+                  if (colId === 'Em Execução') return os.status === 'Em execução';
+                  if (colId === 'Finalizado') return os.status === 'Finalizada' || os.status === 'Entregue';
+                  return os.status !== 'Em execução' && os.status !== 'Finalizada' && os.status !== 'Entregue';
+                });
+
+                const isDraggedOver = draggedOverColumn === colId;
+                const colTitle = colId === 'Aguardando' ? '⏱️ Aguardando' : colId === 'Em Execução' ? '⚙️ Em Execução' : '✅ Finalizado';
+                const colColor = colId === 'Aguardando' ? 'border-amber-500/20 text-amber-400 bg-amber-500/10' : colId === 'Em Execução' ? 'border-sky-500/20 text-sky-400 bg-sky-500/10' : 'border-emerald-500/20 text-emerald-400 bg-emerald-500/10';
+                
+                return (
+                  <div
+                    key={colId}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      if (draggedOverColumn !== colId) setDraggedOverColumn(colId as any);
+                    }}
+                    onDragLeave={() => {
+                      setDraggedOverColumn(null);
+                    }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      const osId = e.dataTransfer.getData('text/plain');
+                      setDraggedOverColumn(null);
+                      if (osId) {
+                        const targetOS = ordensServico.find(o => o.id === osId);
+                        if (targetOS) {
+                          let newStatus: OSStatus = targetOS.status;
+                          if (colId === 'Aguardando') {
+                            const waitingStates = ['Agendada', 'Aberta', 'Em análise', 'Aguardando peça', 'Garantia Reaberta'];
+                            if (!waitingStates.includes(targetOS.status)) {
+                              newStatus = 'Aberta';
+                            }
+                          } else if (colId === 'Em Execução') {
+                            newStatus = 'Em execução';
+                          } else if (colId === 'Finalizado') {
+                            newStatus = 'Finalizada';
+                          }
+                          if (targetOS.status !== newStatus) {
+                            await editOS(osId, { status: newStatus });
+                            if (newStatus === 'Finalizada') {
+                              playSuccessSound();
+                            }
+                          }
+                        }
+                      }
+                    }}
+                    className={`flex flex-col rounded-2xl bg-[#090f1d] border p-4 min-h-[500px] transition-all duration-200 ${
+                      isDraggedOver 
+                        ? 'border-red-500 bg-red-950/10 shadow-[0_0_20px_rgba(239,68,68,0.25)] ring-2 ring-red-500/30' 
+                        : 'border-gray-800'
+                    }`}
+                  >
+                    {/* Header da coluna */}
+                    <div className="flex justify-between items-center mb-4 pb-2 border-b border-[#151f38]">
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${colColor}`}>
+                          {colTitle}
+                        </span>
+                      </div>
+                      <span className="text-gray-400 font-mono text-xs font-bold bg-[#0c1324] px-2 py-0.5 border border-gray-800 rounded">
+                        {columnItems.length}
+                      </span>
+                    </div>
+
+                    {/* Fila de cards */}
+                    <div className="flex flex-col gap-3 overflow-y-auto max-h-[70vh] pr-0.5 custom-scrollbar flex-grow">
+                      {columnItems.map((os) => {
+                        const isManualPriority = os.priority === true;
+                        const isWarranty = os.status === 'Garantia Reaberta' || (os.reopenCount !== undefined && os.reopenCount > 0);
+                        const isActive = os.status !== 'Finalizada' && os.status !== 'Entregue';
+                        const diffMs = new Date().getTime() - new Date(os.createdAt).getTime();
+                        const isOverdue = isActive && (diffMs > 24 * 60 * 60 * 1000);
+                        const isPriorityOrDelayed = isManualPriority || isWarranty || isOverdue;
+
+                        return (
+                          <div
+                            key={os.id}
+                            draggable={true}
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', os.id);
+                              setDraggingOSId(os.id);
+                            }}
+                            onDragEnd={() => {
+                              setDraggingOSId(null);
+                              setDraggedOverColumn(null);
+                            }}
+                            className={`p-4 bg-[#0d152a] hover:bg-[#111c38] rounded-xl border transition-all text-left relative cursor-grab active:cursor-grabbing select-none group ${
+                              draggingOSId === os.id ? 'opacity-40 border-dashed border-red-500' : ''
+                            } ${
+                              isPriorityOrDelayed 
+                                ? 'animate-pulse-glow border-red-500/60' 
+                                : 'border-gray-800 hover:border-gray-700'
+                            }`}
+                          >
+                            {/* Card Body */}
+                            <div className="flex justify-between items-start mb-2 gap-2">
+                              <span className="font-mono text-xs font-bold text-white tracking-widest bg-[#0a0f1d] px-1.5 py-0.5 border border-gray-800 rounded">
+                                {os.id}
+                              </span>
+                              <span className="text-[11px] font-bold text-white font-mono shrink-0">
+                                R$ {os.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-col gap-1 text-[11px]">
+                              <span className="font-sans font-bold text-gray-200">🚙 {os.veiculoInfo}</span>
+                              <span className="text-[#94a3b8] font-sans">👤 Cliente: <strong className="text-gray-300">{os.clienteName}</strong></span>
+                              <span className="text-[#94a3b8] font-sans">🔧 Mecânico: <strong className="text-gray-300">{os.mechanicName || 'Sem atribuir'}</strong></span>
+                              
+                              <div className="mt-1.25 pt-1.25 border-t border-gray-800/60 flex flex-col gap-0.5 text-[10px] text-gray-400">
+                                <div>📍 KM Entrada: <strong className="text-slate-200">{os.km ? os.km.toLocaleString('pt-BR') : '0'} km</strong></div>
+                                {os.kmAnteriorEtiqueta ? (
+                                  <>
+                                    <div>🏷️ Etiqueta Anterior: <strong className="text-slate-200">{os.kmAnteriorEtiqueta.toLocaleString('pt-BR')} km</strong></div>
+                                    <div className="text-amber-400 font-medium">🔄 Rodado: <strong>{(os.km - os.kmAnteriorEtiqueta).toLocaleString('pt-BR')} km</strong></div>
+                                  </>
+                                ) : (
+                                  <div className="text-slate-500 italic">Sem etiqueta KM anterior</div>
+                                )}
+                              </div>
+                            </div>
+
+                            <p className="text-[10px] text-gray-500 line-clamp-2 italic border-l border-red-500/20 pl-1.5 mt-2">
+                              "{os.problem}"
+                            </p>
+
+                            {/* Badge row details */}
+                            <div className="flex items-center gap-1.5 flex-wrap mt-3 pt-2.5 border-t border-gray-850">
+                              {isManualPriority && (
+                                <span className="text-[7.5px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded font-mono font-bold uppercase animate-pulse">
+                                  ⚡ PRIO
+                                </span>
+                              )}
+                              {isWarranty && (
+                                <span className="text-[7.5px] bg-purple-500/20 text-purple-400 border border-purple-500/30 px-1.5 py-0.5 rounded font-mono font-bold uppercase animate-pulse">
+                                  ⚙ GARANTIA
+                                </span>
+                              )}
+                              {isOverdue && !isWarranty && (
+                                <span className="text-[7.5px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono font-bold uppercase animate-pulse">
+                                  ⏳ ATRASADA
+                                </span>
+                              )}
+                              <span className="text-[8px] bg-gray-900 border border-slate-800 text-gray-300 font-bold font-mono px-1.5 py-0.5 rounded uppercase">
+                                {os.status}
+                              </span>
+                            </div>
+
+                            {/* Mobile / Hover quick status action */}
+                            <div className="flex items-center justify-between gap-1.5 mt-3 pt-2 border-t border-gray-850/40">
+                              {/* Actions dropdown */}
+                              <select
+                                value={os.status}
+                                onChange={async (e) => {
+                                  const newStatus = e.target.value;
+                                  await editOS(os.id, { status: newStatus as any });
+                                  if (newStatus === 'Finalizada' || newStatus === 'Entregue') {
+                                    playSuccessSound();
+                                  }
+                                }}
+                                className="bg-[#050812] border border-gray-800 rounded px-1 py-0.5 text-[8.5px] font-mono text-slate-300 w-full"
+                              >
+                                <option value="Aberta">Aberta</option>
+                                <option value="Em análise">Em análise</option>
+                                <option value="Aguardando peça">Aguardando peça</option>
+                                <option value="Em execução">Em execução</option>
+                                <option value="Finalizada">Finalizada</option>
+                                <option value="Entregue">Entregue</option>
+                                <option value="Garantia Reaberta">Garantia Reaberta</option>
+                              </select>
+
+                              {/* Prioritize button */}
+                              <button 
+                                onClick={async () => {
+                                  await editOS(os.id, { priority: !os.priority });
+                                  playSuccessSound();
+                                }}
+                                className={`px-1.5 py-0.5 rounded bg-slate-900 border cursor-pointer transition-colors text-[8.5px] shrink-0 ${
+                                  os.priority 
+                                    ? 'border-red-500/40 text-red-400 hover:bg-red-500/10 font-bold' 
+                                    : 'border-slate-800 text-gray-400'
+                                }`}
+                                title="Prioridade de Serviço"
+                              >
+                                ★
+                              </button>
+
+                              {/* View / Export PDF */}
+                              <button 
+                                onClick={() => setPdfOSSelected(os)}
+                                className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-amber-400 hover:bg-slate-800 text-[8.5px] shrink-0 font-bold"
+                                title="Exportar PDF"
+                              >
+                                PDF
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {columnItems.length === 0 && (
+                        <div className="text-center py-10 text-gray-600 text-[11px] font-mono border-2 border-dashed border-gray-850 rounded-xl">
+                          Nenhuma O.S.
+                          <p className="text-[9px] text-gray-700 mt-1">Arraste cards para cá</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
 
@@ -1888,7 +2287,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
 
             {/* Kilometer entry */}
             <div className="flex flex-col gap-2 md:col-span-2">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-[10px] font-mono text-gray-400">QUILOMETRAGEM ATUAL (KM)</label>
                   <input 
@@ -1897,6 +2296,17 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                     value={kmStr}
                     onChange={(e) => setKmStr(e.target.value)}
                     className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-xs text-white font-mono"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-gray-400">ETIQUETA KM ANTERIOR</label>
+                  <input 
+                    type="number"
+                    placeholder="Ex: 60000"
+                    value={kmAnteriorEtiquetaStr}
+                    onChange={(e) => setKmAnteriorEtiquetaStr(e.target.value)}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2 px-3 text-xs text-white font-mono focus:border-red-500"
                   />
                 </div>
                 
@@ -1913,8 +2323,8 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                   </select>
                 </div>
 
-                <div className="flex justify-end items-end pb-1.5">
-                  <span className="text-[10px] text-gray-500 font-mono italic">Os custos de mecânica consideram hora-técnica padrão.</span>
+                <div className="flex justify-start sm:justify-end items-end pb-1.5">
+                  <span className="text-[9px] text-gray-500 font-mono italic leading-tight">Análise preventiva ideal com base na diferença de KMs.</span>
                 </div>
               </div>
             </div>
@@ -2273,7 +2683,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                           <button 
                             type="button" 
                             onClick={() => setServices(prev => prev.filter(s => s.id !== srv.id))}
-                            className="text-red-500 font-bold ml-1 hover:text-red-700"
+                            className="text-red-500 font-bold ml-1 hover:text-red-700 font-mono"
                           >
                             ×
                           </button>
@@ -2285,20 +2695,108 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               </div>
             </div>
 
-            {/* Select parts registered from Inventory */}
+            {/* Select parts registered from Inventory or brought by client */}
             <div className="flex flex-col gap-2">
-              <label className="text-[10px] font-mono text-gray-400 uppercase">7. VINCULAR PEÇAS DO ESTOQUE INTERNO</label>
-              <div className="bg-[#080c16] p-4 rounded-xl border border-gray-900 flex flex-col gap-3">
-                <select 
-                  value={selectedProdId}
-                  onChange={(e) => setSelectedProdId(e.target.value)}
-                  className="w-full bg-[#050810] border border-gray-800 rounded py-1.5 px-2 text-xs text-white"
-                >
-                  <option value="">-- Selecione Peça do Estoque --</option>
-                  {produtos.map(p => (
-                    <option key={p.id} value={p.id}>{p.name} (R$ {p.sellPrice}) - Saldo: {p.quantity} un</option>
-                  ))}
-                </select>
+              <label className="text-[10px] font-mono text-gray-400 uppercase">7. VINCULAR PEÇAS DA ORDEM DE SERVIÇO</label>
+              <div className="bg-[#080c16] p-4 rounded-xl border border-gray-900 flex flex-col gap-3 text-left">
+                
+                {/* Tab switch */}
+                <div className="flex justify-between items-center bg-[#050812] p-1 rounded border border-gray-850">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUseManualPart(false);
+                      setPartOrigin('estoque');
+                    }}
+                    className={`flex-1 text-center py-1 rounded text-[10px] font-bold font-mono uppercase transition-all ${!useManualPart ? 'bg-slate-800 text-white' : 'text-gray-500 hover:text-slate-300'}`}
+                  >
+                    Estoque Interno
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseManualPart(true)}
+                    className={`flex-1 text-center py-1 rounded text-[10px] font-bold font-mono uppercase transition-all ${useManualPart ? 'bg-slate-800 text-white' : 'text-gray-500 hover:text-slate-300'}`}
+                  >
+                    Peça Manual / Direta
+                  </button>
+                </div>
+
+                {!useManualPart ? (
+                  <select 
+                    value={selectedProdId}
+                    onChange={(e) => setSelectedProdId(e.target.value)}
+                    className="w-full bg-[#050810] border border-gray-800 rounded py-1.5 px-2 text-xs text-white"
+                  >
+                    <option value="">-- Selecione Peça do Estoque --</option>
+                    {produtos.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} (R$ {p.sellPrice}) - Saldo: {p.quantity} un</option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="Nome/Marca da Peça (Ex: Pastilha Dianteira Bosch)"
+                      className="flex-grow bg-[#050810] border border-gray-800 rounded py-1.5 px-3 text-xs text-white font-mono"
+                      value={manualPartNameInput}
+                      onChange={(e) => setManualPartNameInput(e.target.value)}
+                    />
+                    {partOrigin === 'estoque' && (
+                      <input 
+                        type="number" 
+                        placeholder="Preço R$"
+                        step="0.01"
+                        className="w-24 bg-[#050810] border border-gray-800 rounded py-1.5 px-3 text-xs text-white font-mono text-center"
+                        value={manualPartPriceInput}
+                        onChange={(e) => setManualPartPriceInput(e.target.value)}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* Part Origin Selection */}
+                <div className="flex flex-col gap-1.5 bg-[#050812] border border-gray-850 p-3 rounded-lg">
+                  <span className="text-[10px] font-mono font-bold text-gray-400 uppercase">Origem da Peça:</span>
+                  <select
+                    value={partOrigin}
+                    onChange={(e) => {
+                      const newOrigin = e.target.value as 'estoque' | 'cliente' | 'terceiros';
+                      setPartOrigin(newOrigin);
+                    }}
+                    className="w-full bg-[#050810] border border-gray-800 rounded py-1.5 px-2 text-xs text-white font-mono cursor-pointer"
+                  >
+                    <option value="estoque">Estoque Próprio</option>
+                    <option value="cliente">Cliente Trouxe (R$ 0,00)</option>
+                    <option value="terceiros">Compra de Terceiros (Sem Margem de Lucro)</option>
+                  </select>
+
+                  {partOrigin === 'terceiros' && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-gray-850/50">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] font-mono text-amber-500 uppercase">Nome do Fornecedor:</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Auto Peças Alvorada"
+                          className="bg-[#050810] border border-gray-800 rounded py-1 px-2 text-xs text-white font-mono"
+                          value={partSupplierName}
+                          onChange={(e) => setPartSupplierName(e.target.value)}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] font-mono text-amber-500 uppercase">Valor de Custo (Sem Margem):</label>
+                        <input
+                          type="number"
+                          placeholder="R$ Preço de Custo"
+                          step="0.01"
+                          className="bg-[#050810] border border-gray-800 rounded py-1 px-2 text-xs text-white font-mono"
+                          value={partCostPrice}
+                          onChange={(e) => setPartCostPrice(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 <div className="flex gap-2">
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] text-gray-500 font-mono">Qtd:</span>
@@ -2313,25 +2811,44 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                   <button 
                     type="button"
                     onClick={handleAddPartToOS}
-                    className="flex-grow py-1.5 px-3 bg-slate-800 text-white text-xs font-semibold rounded hover:bg-slate-700 font-mono"
+                    className="flex-grow py-1.5 px-3 bg-[#0a0f1d] hover:bg-slate-800 text-white text-xs font-semibold rounded font-mono uppercase border border-gray-800"
                   >
-                    + ASSOCIAR PEÇA
+                    + associar {partOrigin === 'cliente' ? "peça do cliente" : partOrigin === 'terceiros' ? "peça de terceiros" : "peça"}
                   </button>
                 </div>
 
                 {/* Parts attached list */}
                 {parts.length > 0 && (
                   <div className="flex flex-col gap-1.5 mt-2 bg-black/40 p-2.5 rounded border border-gray-950 font-mono text-[11px]">
-                    <span className="font-bold text-gray-400 block mb-1">PEÇAS RESERVADAS EM ESTOQUE:</span>
+                    <span className="font-bold text-gray-400 block mb-1">RELAÇÃO DE PEÇAS ASSOCIADAS À O.S.:</span>
                     {parts.map((p, idx) => (
-                      <div key={idx} className="flex justify-between items-center text-slate-300">
-                        <span>• ({p.quantity}x) {p.name}</span>
-                        <div className="flex items-center gap-1">
-                          <span>R$ {(p.sellPrice * p.quantity).toFixed(2)}</span>
+                      <div key={idx} className="flex justify-between items-center text-slate-300 border-b border-gray-900 pb-1.5 last:border-0 last:pb-0">
+                        <span className="text-left font-sans flex flex-col sm:flex-row sm:items-center gap-1">
+                          <span>• ({p.quantity}x) {p.name}</span>
+                          <span className="flex items-center gap-1">
+                            {p.suppliedByClient && (
+                              <span className="text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase font-bold font-mono">
+                                Cliente Trouxe
+                              </span>
+                            )}
+                            {p.origin === 'terceiros' && (
+                              <span className="text-[8px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-1.5 py-0.5 rounded uppercase font-bold font-mono">
+                                Compra de Terceiros {p.supplierName ? `(${p.supplierName})` : ''}
+                              </span>
+                            )}
+                            {p.origin === 'estoque' && (
+                              <span className="text-[8px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded uppercase font-bold font-mono">
+                                Estoque Próprio
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0 font-mono">
+                          <span>R$ {p.suppliedByClient ? "0,00" : (p.sellPrice * p.quantity).toFixed(2)}</span>
                           <button 
                             type="button" 
                             onClick={() => setParts(prev => prev.filter((it, index) => index !== idx))}
-                            className="text-red-500 font-bold ml-1 hover:text-red-700"
+                            className="text-red-500 font-bold ml-1.5 hover:text-red-700 text-sm"
                           >
                             ×
                           </button>
@@ -2556,6 +3073,32 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                     Selecione um cliente para visualizar o limite de crédito.
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* 11. PRIORIDADE DA ORDEM DE SERVIÇO */}
+            <div className="md:col-span-2 bg-[#09101f] border border-gray-800/80 rounded-2xl p-5 flex flex-col gap-4 font-sans text-left">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-gray-850 pb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-white uppercase font-display tracking-tight">11. Prioridade e Urgência Visual</h4>
+                    <p className="text-[11px] text-gray-400">Ative o realce visual de pulsação (glow effects) no fluxo de pátio.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 bg-[#180d11]/80 border border-red-900/30 p-3 rounded-xl select-none">
+                <input 
+                  type="checkbox" 
+                  id="isOSPriorityCheck"
+                  checked={isOSPriority}
+                  onChange={(e) => setIsOSPriority(e.target.checked)}
+                  className="w-4 h-4 accent-red-500 rounded cursor-pointer"
+                />
+                <label htmlFor="isOSPriorityCheck" className="text-xs text-red-400 font-mono font-bold tracking-tight cursor-pointer uppercase flex items-center gap-1.5">
+                  🚨 Marcar esta O.S. como prioridade alta (Ativar pulsação visual no painel)
+                </label>
               </div>
             </div>
 
@@ -3204,11 +3747,25 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                   <span className="text-gray-500 font-bold uppercase text-[9px] block">VEÍCULO / COR / DETALHAMENTO:</span>
                   <strong className="text-black text-[12px]">{pdfOSSelected.veiculoInfo}</strong>
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <span className="text-gray-500 font-bold uppercase text-[9px] block font-mono">PLACA DO CARRO:</span>
                   <span className="text-xs font-bold font-mono bg-blue-100 text-blue-900 border border-blue-200 rounded px-1.5 py-0.5 inline-block uppercase mt-1">
                     {pdfOSSelected.plate.toUpperCase()}
                   </span>
+                </div>
+                <div className="col-span-1 border-l border-gray-200 pl-3">
+                  <span className="text-gray-500 font-bold uppercase text-[9px] block">MTR. QUILOMETRAGEM / PREVENTIVA:</span>
+                  <div className="text-[10px] text-black font-sans mt-1 leading-tight">
+                    <div>Odômetro Entrada: <strong className="font-mono">{pdfOSSelected.km ? pdfOSSelected.km.toLocaleString('pt-BR') : '0'} km</strong></div>
+                    {pdfOSSelected.kmAnteriorEtiqueta ? (
+                      <>
+                        <div className="mt-0.5">Etiqueta Anterior: <strong className="font-mono">{pdfOSSelected.kmAnteriorEtiqueta.toLocaleString('pt-BR')} km</strong></div>
+                        <div className="mt-0.5 text-red-650 font-bold uppercase text-[9px] font-mono">🔄 Distância Rodada: {(pdfOSSelected.km - pdfOSSelected.kmAnteriorEtiqueta).toLocaleString('pt-BR')} km</div>
+                      </>
+                    ) : (
+                      <div className="text-gray-400 italic mt-0.5">Etiqueta anterior não informada</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -3326,11 +3883,30 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                     <tbody className="divide-y divide-gray-100">
                       {pdfOSSelected.parts.map((part, pIdx) => (
                         <tr key={part.id || pIdx} className="text-black hover:bg-gray-50">
-                          <td className="p-3 font-semibold text-left">{part.name}</td>
+                          <td className="p-3 font-semibold text-left">
+                            {part.name}
+                            {part.suppliedByClient && (
+                              <span className="text-[8.5px] bg-amber-100 text-amber-850 border border-amber-300 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold font-sans">
+                                Peça do Cliente
+                              </span>
+                            )}
+                            {part.origin === 'terceiros' && (
+                              <span className="text-[8.5px] bg-blue-100 text-blue-800 border border-blue-300 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold font-sans">
+                                Compra de Terceiros {part.supplierName ? `(${part.supplierName})` : ''}
+                              </span>
+                            )}
+                            {part.origin === 'estoque' && (
+                              <span className="text-[8.5px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-1.5 py-0.5 rounded ml-1.5 uppercase font-bold font-sans">
+                                Estoque Próprio
+                              </span>
+                            )}
+                          </td>
                           <td className="p-3 text-center font-bold">{part.quantity}</td>
-                          <td className="p-3 text-right">R$ {part.sellPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="p-3 text-right">
+                            R$ {part.suppliedByClient ? "0,00" : part.sellPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
                           <td className="p-3 text-right font-extrabold text-black">
-                            R$ {(part.sellPrice * part.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            R$ {part.suppliedByClient ? "0,00" : (part.sellPrice * part.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       ))}
@@ -3354,7 +3930,7 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                 <div className="border-l border-gray-300 pl-4">
                   <span>Total Sobressalentes:</span>
                   <strong className="text-black block text-sm">
-                    R$ {pdfOSSelected.parts.reduce((acc, p) => acc + (p.sellPrice * p.quantity), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {pdfOSSelected.parts.reduce((acc, p) => acc + (p.suppliedByClient ? 0 : p.sellPrice * p.quantity), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </strong>
                 </div>
               </div>

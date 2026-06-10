@@ -207,10 +207,10 @@ export const PDVView: React.FC = () => {
     // Map parts
     const loadedParts: SaleItem[] = os.parts.map(p => ({
       produtoId: p.id || `prt_dummy_${Math.random()}`,
-      name: `📦 ${p.name}`,
-      sellPrice: p.sellPrice,
+      name: p.suppliedByClient ? `📦 ${p.name} (Peça do Cliente)` : `📦 ${p.name}`,
+      sellPrice: p.suppliedByClient ? 0 : p.sellPrice,
       quantity: p.quantity,
-      subtotal: p.sellPrice * p.quantity
+      subtotal: p.suppliedByClient ? 0 : p.sellPrice * p.quantity
     }));
 
     setBasket([...loadedServices, ...loadedParts]);
@@ -2688,39 +2688,37 @@ export const PDVView: React.FC = () => {
             </div>
 
             {/* Action buttons inside Ticket receipt popup */}
-            <div className="mt-6 flex flex-col gap-2 font-mono">
+            <div className="mt-6 flex flex-col gap-2 font-mono no-print">
               <button 
                 type="button"
                 onClick={() => {
-                  playScannerBeep();
-                  setSelectedReceiptSale(lastFinishedSale);
-                  setShowDigitalReceiptCardModal(true);
+                  window.print();
                 }}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-all transition-all active:scale-[98%] uppercase"
+                className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0"
               >
-                <Smartphone className="w-4 h-4 text-white animate-pulse" /> Comprovante Digital WhatsApp
+                <Printer className="w-4 h-4 text-white" /> Imprimir p/ Impressora Térmica
               </button>
-              <div className="flex gap-2">
-                <button 
-                  type="button"
-                  onClick={() => {
-                    window.print();
-                  }}
-                  className="flex-1 py-2.5 rounded-xl bg-neutral-900 text-white text-xs font-bold hover:bg-neutral-800 flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%]"
-                >
-                  <Printer className="w-4 h-4 text-white" /> Imprimir Cupom
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setSaleFinished(false);
-                    setLastFinishedSale(null);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center"
-                >
-                  Fechar Recibo
-                </button>
-              </div>
+              
+              <button 
+                type="button"
+                onClick={() => {
+                  window.print();
+                }}
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0"
+              >
+                <FileText className="w-4 h-4 text-white animate-pulse" /> Exportar para PDF / Salvar Recibo
+              </button>
+
+              <button 
+                type="button"
+                onClick={() => {
+                  setSaleFinished(false);
+                  setLastFinishedSale(null);
+                }}
+                className="w-full py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center mt-1 bg-transparent text-black"
+              >
+                Fechar Recibo
+              </button>
             </div>
 
           </div>

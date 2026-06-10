@@ -398,11 +398,18 @@ export const CustomerPortal: React.FC<CustomerPortalProps> = ({
                       {selectedOS.parts.map((it, idx) => (
                         <div key={idx} className="flex justify-between items-start text-xs border-b border-[#1e293b]/50 pb-2">
                           <div className="font-sans flex flex-col gap-0.5">
-                            <span className="text-slate-200 font-medium leading-tight">{it.name}</span>
+                            <span className="text-slate-200 font-medium leading-tight">
+                              {it.name} 
+                              {it.suppliedByClient && (
+                                <span className="text-[8.5px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded ml-1.5 font-mono uppercase font-bold">
+                                  Trazida p/ Cliente
+                                </span>
+                              )}
+                            </span>
                             <span className="text-[9.5px] text-slate-500 font-mono">Quant: {it.quantity}x • Código {it.id.substring(0, 5)}</span>
                           </div>
                           <span className="font-mono text-slate-350 font-medium">
-                            R$ {it.subtotal.toFixed(2)}
+                            R$ {it.suppliedByClient ? '0,00' : ((it.sellPrice || 0) * it.quantity).toFixed(2)}
                           </span>
                         </div>
                       ))}

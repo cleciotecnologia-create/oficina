@@ -213,6 +213,8 @@ export default function EngenhariaView() {
   const [model, setModel] = useState('');
   const [year, setYear] = useState('');
   const [motor, setMotor] = useState('');
+  const [kmAtualEng, setKmAtualEng] = useState('');
+  const [kmAnteriorEng, setKmAnteriorEng] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VehicleSpecs | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -246,13 +248,18 @@ export default function EngenhariaView() {
     }
 
     try {
+      let contextualMotor = targetMotor;
+      if (kmAtualEng || kmAnteriorEng) {
+        contextualMotor = `${targetMotor || 'Padrão'} | KM Atual: ${kmAtualEng || 'Não inf.'} | Etiqueta KM Anterior: ${kmAnteriorEng || 'Não inf.'} - [Análise Crítica de Manutenção Preventiva de Peças]`;
+      }
+
       const response = await fetch('/api/gemini/specs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: targetModel,
           year: targetYear,
-          motor: targetMotor
+          motor: contextualMotor
         })
       });
 
@@ -587,14 +594,14 @@ export default function EngenhariaView() {
                 <div className="md:col-span-3 flex flex-col gap-1.5">
                   <label className="text-[10px] font-mono text-slate-400">Ano *</label>
                   <input 
-                    type="number"
-                    required
-                    min="1950"
-                    max="2027"
-                    value={year}
-                    onChange={(e) => setYear(e.target.value)}
-                    placeholder="Ex: 2018"
-                    className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
+                     type="number"
+                     required
+                     min="1950"
+                     max="2027"
+                     value={year}
+                     onChange={(e) => setYear(e.target.value)}
+                     placeholder="Ex: 2018"
+                     className="w-full bg-[#070b13] border border-gray-800 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
                   />
                 </div>
 
@@ -605,6 +612,29 @@ export default function EngenhariaView() {
                     value={motor}
                     onChange={(e) => setMotor(e.target.value)}
                     placeholder="Ex: 2.0 16V / 1.0 Turbo"
+                    className="w-full bg-[#070b13] border border-gray-850 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Additional row for KM statistics supporting preventative analysis */}
+                <div className="md:col-span-6 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Quilometrogem Atual (Opcional)</label>
+                  <input 
+                    type="number"
+                    value={kmAtualEng}
+                    onChange={(e) => setKmAtualEng(e.target.value)}
+                    placeholder="Quilometragem no hodômetro... Ex: 75000"
+                    className="w-full bg-[#070b13] border border-gray-850 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
+                  />
+                </div>
+
+                <div className="md:col-span-6 flex flex-col gap-1.5">
+                  <label className="text-[10px] font-mono text-slate-400">Etiqueta KM Anterior (Opcional)</label>
+                  <input 
+                    type="number"
+                    value={kmAnteriorEng}
+                    onChange={(e) => setKmAnteriorEng(e.target.value)}
+                    placeholder="KM anotado no selo anterior... Ex: 65000"
                     className="w-full bg-[#070b13] border border-gray-850 focus:border-red-650 rounded-xl py-2 px-3 text-xs text-white placeholder-slate-650 focus:outline-none transition-colors"
                   />
                 </div>

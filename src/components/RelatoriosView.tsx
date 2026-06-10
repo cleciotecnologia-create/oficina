@@ -41,9 +41,9 @@ export const RelatoriosView: React.FC = () => {
   const servicesIncome = finalizedOS.reduce((sum, os) => 
     sum + os.services.reduce((srvSum, srv) => srvSum + srv.price, 0), 0);
   
-  // Sum parts from finalized OS
+  // Sum parts from finalized OS (excluding customer supplied parts)
   const osPartsIncome = finalizedOS.reduce((sum, os) => 
-    sum + os.parts.reduce((partSum, part) => partSum + (part.sellPrice * part.quantity), 0), 0);
+    sum + os.parts.reduce((partSum, part) => partSum + (part.suppliedByClient ? 0 : part.sellPrice * part.quantity), 0), 0);
   
   // PDV sales are completely parts
   const pdvSalesIncome = financeiro

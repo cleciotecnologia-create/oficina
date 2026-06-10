@@ -952,6 +952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Deduct items used on OS from stock parts
     os.parts.forEach(p => {
+      if (p.suppliedByClient) return; // Peça trazida/comprada pelo cliente - não consome estoque interno
       const product = produtos.find(item => item.id === p.id);
       if (product) {
         updateProdutoStock(product.id, Math.max(0, product.quantity - p.quantity));

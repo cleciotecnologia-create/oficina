@@ -140,6 +140,9 @@ export interface PartUsed {
   name: string;
   sellPrice: number;
   quantity: number;
+  suppliedByClient?: boolean;
+  origin?: 'estoque' | 'cliente' | 'terceiros';
+  supplierName?: string;
 }
 
 export type OSStatus = 'Aberta' | 'Em análise' | 'Aguardando peça' | 'Em execução' | 'Finalizada' | 'Entregue' | 'Garantia Reaberta' | 'Agendada';
@@ -161,6 +164,7 @@ export interface OrdemServico {
   veiculoInfo?: string; // e.g., "VW Gol - BRA2E19"
   plate: string;
   km: number;
+  kmAnteriorEtiqueta?: number;
   problem: string;
   diagnosis: string;
   status: OSStatus;
@@ -186,6 +190,7 @@ export interface OrdemServico {
   faturamentoMode?: 'Balcão' | 'A faturar';
   scheduledDate?: string; // YYYY-MM-DD
   scheduledTime?: string; // HH:MM
+  priority?: boolean;
 }
 
 export interface Fornecedor {
