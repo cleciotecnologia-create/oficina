@@ -1110,7 +1110,15 @@ function AppContent() {
               {/* Shortcuts Grid List */}
               <div className="p-6 flex flex-col gap-4 max-h-[70vh] overflow-y-auto font-mono text-xs text-gray-300">
                 <div className="grid grid-cols-1 gap-2.5">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                  <div 
+                    onClick={() => {
+                      setActiveRoute('dashboard');
+                      setMobileSidebarOpen(false);
+                      setIsShortcutModalOpen(false);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-cyan-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
+                    title="Clique para acessar o Dashboard de Indicadores"
+                  >
                     <div className="flex items-center gap-2.5">
                       <LayoutDashboard className="w-4 h-4 text-cyan-400" />
                       <span className="text-gray-200">Dashboard de Indicadores</span>
@@ -1122,7 +1130,18 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                  <div 
+                    onClick={() => {
+                      setActiveRoute('os');
+                      setMobileSidebarOpen(false);
+                      setIsShortcutModalOpen(false);
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('open-new-os'));
+                      }, 80);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-red-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
+                    title="Clique para abrir nova Ordem de Serviço"
+                  >
                     <div className="flex items-center gap-2.5">
                       <Wrench className="w-4 h-4 text-red-500" />
                       <div>
@@ -1137,7 +1156,15 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                  <div 
+                    onClick={() => {
+                      setActiveRoute('stock');
+                      setMobileSidebarOpen(false);
+                      setIsShortcutModalOpen(false);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-amber-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
+                    title="Clique para acessar o Estoque"
+                  >
                     <div className="flex items-center gap-2.5">
                       <Package className="w-4 h-4 text-amber-500" />
                       <span className="text-gray-200">Estoque de Alerta / Peças</span>
@@ -1149,7 +1176,15 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                  <div 
+                    onClick={() => {
+                      setActiveRoute('pdv');
+                      setMobileSidebarOpen(false);
+                      setIsShortcutModalOpen(false);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-emerald-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
+                    title="Clique para acessar o PDV"
+                  >
                     <div className="flex items-center gap-2.5">
                       <ShoppingBag className="w-4 h-4 text-emerald-400" />
                       <span className="text-gray-200">PDV Loja & Caixa</span>
@@ -1161,7 +1196,15 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                  <div 
+                    onClick={() => {
+                      setActiveRoute('finance');
+                      setMobileSidebarOpen(false);
+                      setIsShortcutModalOpen(false);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-green-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
+                    title="Clique para ver o Fluxo Financeiro"
+                  >
                     <div className="flex items-center gap-2.5">
                       <DollarSign className="w-4 h-4 text-green-400" />
                       <span className="text-gray-200">Fluxo Financeiro DRE</span>
@@ -1173,7 +1216,15 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                  <div 
+                    onClick={() => {
+                      setActiveRoute('crm');
+                      setMobileSidebarOpen(false);
+                      setIsShortcutModalOpen(false);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-blue-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
+                    title="Clique para ir ao CRM"
+                  >
                     <div className="flex items-center gap-2.5">
                       <Users className="w-4 h-4 text-blue-400" />
                       <span className="text-gray-200">CRM Clientes & Autos</span>
@@ -1185,7 +1236,15 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                  <div 
+                    onClick={() => {
+                      setActiveRoute('settings');
+                      setMobileSidebarOpen(false);
+                      setIsShortcutModalOpen(false);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-slate-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
+                    title="Clique para ir às Configurações"
+                  >
                     <div className="flex items-center gap-2.5">
                       <Settings className="w-4 h-4 text-slate-400" />
                       <span className="text-gray-200">Painel de Configurações</span>
@@ -1197,7 +1256,13 @@ function AppContent() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-gray-800 transition-all">
+                  <div 
+                    onClick={() => {
+                      setIsShortcutModalOpen(false);
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-emerald-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
+                    title="Clique para fechar o Guia de Atalhos"
+                  >
                     <div className="flex items-center gap-2.5">
                       <Command className="w-4 h-4 text-emerald-400 animate-pulse" />
                       <span className="text-gray-200">Alternar Guia de Atalho</span>
