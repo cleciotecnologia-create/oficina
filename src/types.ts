@@ -282,4 +282,30 @@ export interface LocalAuditLog {
   timestamp: string;
 }
 
+export interface FerramentaMovimentacao {
+  id: string;
+  type: 'Empréstimo' | 'Devolução' | 'Manutenção' | 'Calibração';
+  userName: string;
+  date: string;
+  details: string;
+}
+
+export interface Ferramenta {
+  id: string;
+  empresaId: string;
+  name: string;
+  code: string; // Ex: PAT-0123
+  category: 'Diagnóstico' | 'Pneumática' | 'Especiais' | 'Pesadas' | 'Manuais' | 'Outros';
+  status: 'Disponível' | 'Em Uso' | 'Manutenção' | 'Calibração';
+  condition: 'Novo' | 'Excelente' | 'Bom' | 'Desgastado' | 'Danificado';
+  location: string; // Ex: Prateleira B1, Carrinho 2
+  lastCalibrationDate?: string; // YYYY-MM-DD
+  nextCalibrationDate?: string; // YYYY-MM-DD
+  currentUser?: string; // Nome do mecânico que retirou
+  currentUserId?: string;
+  notes?: string;
+  history: FerramentaMovimentacao[];
+}
+
+
 

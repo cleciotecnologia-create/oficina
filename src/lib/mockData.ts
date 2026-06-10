@@ -1,4 +1,4 @@
-import { Cliente, Veiculo, Produto, Servico, OrdemServico, Financeiro, Fornecedor } from '../types';
+import { Cliente, Veiculo, Produto, Servico, OrdemServico, Financeiro, Fornecedor, Ferramenta } from '../types';
 
 export const MOCK_SERVICES: Servico[] = [
   { id: "srv_cat_1", name: "Revisão Geral Preventiva", description: "Inspeção minuciosa de mais de 40 itens vitais do veículo: sistema de arrefecimento, freios, suspensão, fluidos, luzes e varredura completa por scanner eletrônico.", price: 250.00, duration: "2h", category: "Revisão", empresaId: "comp_demo_1" },
@@ -385,3 +385,97 @@ export const MOCK_FORNECEDORES: Fornecedor[] = [
   { id: "for_2", name: "SulAmérica Comercial de Pneus", cnpj: "02.321.439/0002-34", phone: "(11) 3214-5555", email: "vendas@sulamerecapneus.com.br", empresaId: "comp_demo_1" },
   { id: "for_3", name: "LubriDistr Distribuidora Lubrificantes", cnpj: "11.231.990/0001-22", phone: "(11) 98111-2233", email: "contato@lubridistr.com.br", empresaId: "comp_demo_1" }
 ];
+
+export const MOCK_FERRAMENTAS: Ferramenta[] = [
+  {
+    id: "fer_1",
+    empresaId: "comp_demo_1",
+    name: "Scanner de Diagnóstico OBD-II Bosch KTS 590",
+    code: "PAT-0043",
+    category: "Diagnóstico",
+    status: "Disponível",
+    condition: "Excelente",
+    location: "Maleta de Apoio Elevador 01",
+    lastCalibrationDate: "2026-03-01",
+    nextCalibrationDate: "2026-09-01",
+    notes: "Scanner principal com osciloscópio de 2 canais integrado.",
+    history: [
+      { id: "log_1", type: "Calibração", userName: "Suporte Técnico Bosch", date: "2026-03-01", details: "Calibração periódica certificada efetuada com sucesso" }
+    ]
+  },
+  {
+    id: "fer_2",
+    empresaId: "comp_demo_1",
+    name: "Torquímetro Snap-on Digital TechAngle 1/2\"",
+    code: "PAT-0104",
+    category: "Especiais",
+    status: "Em Uso",
+    condition: "Excelente",
+    location: "Gabinete de Precisão",
+    lastCalibrationDate: "2026-01-15",
+    nextCalibrationDate: "2026-07-15",
+    currentUser: "Mecânico Roberto",
+    currentUserId: "mec_roberto",
+    notes: "Utilizar preferencialmente para aperto de cabeçote com controle angular.",
+    history: [
+      { id: "log_2", type: "Empréstimo", userName: "Mecânico Roberto", date: "2026-06-10", details: "Retirada para substituição de junta do cabeçote do Gol BRA2E19" }
+    ]
+  },
+  {
+    id: "fer_3",
+    empresaId: "comp_demo_1",
+    name: "Chave de Impacto Pneumática 3/4\" Chicago Pneumatic",
+    code: "PAT-0021",
+    category: "Pneumática",
+    status: "Disponível",
+    condition: "Bom",
+    location: "Painel Principal Elevador 02",
+    notes: "Lubrificar diariamente com óleo de linha pneumática de 3 gotas antes de usar.",
+    history: []
+  },
+  {
+    id: "fer_4",
+    empresaId: "comp_demo_1",
+    name: "Elevador Automotivo Hidráulico 4.0 Toneladas Engecáss",
+    code: "PAT-0001",
+    category: "Pesadas",
+    status: "Disponível",
+    condition: "Excelente",
+    location: "Posto de Trabalho Elevador 01",
+    lastCalibrationDate: "2026-05-10",
+    nextCalibrationDate: "2026-11-10",
+    notes: "Revisão geral das sapatas e nível de óleo do reservatório realizadas mensalmente.",
+    history: [
+      { id: "log_3", type: "Manutenção", userName: "Prevenção Soluções", date: "2026-05-10", details: "Troca completa do reparo dos pistões hidráulicos e lubrificação da coluna" }
+    ]
+  },
+  {
+    id: "fer_5",
+    empresaId: "comp_demo_1",
+    name: "Multímetro Automotivo Fluke 88V Deluxe",
+    code: "PAT-0092",
+    category: "Diagnóstico",
+    status: "Disponível",
+    condition: "Excelente",
+    location: "Gabinete de Precisão",
+    lastCalibrationDate: "2025-10-20",
+    nextCalibrationDate: "2026-10-20",
+    notes: "Extremamente preciso para leitura de sensores de rotação, ABS e rede CAN.",
+    history: []
+  },
+  {
+    id: "fer_6",
+    empresaId: "comp_demo_1",
+    name: "Recicladora de Gás Ar Condicionado Robinair AC1234",
+    code: "PAT-0033",
+    category: "Pesadas",
+    status: "Manutenção",
+    condition: "Desgastado",
+    location: "Pátio Climatização",
+    notes: "Aguardando troca de filtro secador interno. Não utilizar sob risco de contaminar o fluido.",
+    history: [
+      { id: "log_4", type: "Manutenção", userName: "Administrador", date: "2026-06-08", details: "Bloqueada no sistema por saturação do filtro secador principal" }
+    ]
+  }
+];
+

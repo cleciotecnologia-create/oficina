@@ -37,7 +37,9 @@ import {
   AutoBackupItem,
   LocalAuditLog,
   Notificacao,
-  PixLog
+  PixLog,
+  Ferramenta,
+  FerramentaMovimentacao
 } from '../types';
 import { 
   INITIAL_COMPANY, 
@@ -47,7 +49,8 @@ import {
   MOCK_SERVICES,
   MOCK_OS, 
   MOCK_FINANCE, 
-  MOCK_FORNECEDORES 
+  MOCK_FORNECEDORES,
+  MOCK_FERRAMENTAS
 } from '../lib/mockData';
 
 interface AppContextType {
@@ -131,6 +134,13 @@ interface AppContextType {
   // High Contrast accessibility mode
   highContrast: boolean;
   setHighContrast: (v: boolean) => void;
+
+  // Tools module
+  ferramentas: Ferramenta[];
+  addFerramenta: (f: Omit<Ferramenta, 'id' | 'empresaId' | 'history'>) => Promise<void>;
+  editFerramenta: (id: string, updates: Partial<Ferramenta>) => Promise<void>;
+  deleteFerramenta: (id: string) => Promise<void>;
+  addFerramentaMovimentacao: (id: string, movable: Omit<FerramentaMovimentacao, 'id' | 'date'>) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -187,6 +197,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [pixLogs, setPixLogs] = useState<PixLog[]>([]);
   const [autoBackups, setAutoBackups] = useState<AutoBackupItem[]>([]);
   const [localAuditLogs, setLocalAuditLogs] = useState<LocalAuditLog[]>([]);
+  const [ferramentas, setFerramentas] = useState<Ferramenta[]>(MOCK_FERRAMENTAS);
 
   // Sandbox data seeder for first-use / new multi-tenant SaaS trial sandbox
   const seedSandboxData = async (empId: string) => {
@@ -611,6 +622,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (err) => handleFirestoreError(err, OperationType.LIST, "pix_logs")
       );
       activeUnsubs.push(unsubPixLogs);
+
+      const unsubFerramentas = onSnapshot(
+        query(collection(db, 'ferramentas'), where('empresaId', '==', targetEmpId)),
+        (snap) => {
+          const list: Ferramenta[] = [];
+          snap.forEach((doc) => list.push({ id: doc.id, ...doc.data() } as Ferramenta));
+          if (list.length > 0) {
+            setFerramentas(list);
+          } else {
+            setFerramentas(MOCK_FERRAMENTAS);
+          }
+        },
+        (err) => handleFirestoreError(err, OperationType.LIST, "ferramentas")
+      );
+      activeUnsubs.push(unsubFerramentas);
 
     } catch (e) {
       console.error("Firestore loading subscription error: ", e);
@@ -1492,6 +1518,118 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addLocalAuditLog("ZERAR_DADOS_PRODUÇÃO", "Banco de dados limpo. Sistema inicializado do zero para operações de produção reais.");
   };
 
+  const addFerramenta = async (f: Omit<Ferramenta, 'id' | 'empresaId' | 'history'>) => {
+    const id = "fer_" + Math.random().toString(36).substr(2, 9);
+    const newTool: Ferramenta = {
+      ...f,
+      id,
+      empresaId: company.id,
+      history: []
+    };
+
+    setFerramentas(prev => [newTool, ...prev]);
+    addLocalAuditLog("Cadastro de Ferramentas", `Ferramenta '${newTool.name}' cadastrada no sistema.`);
+
+    if (firebaseUser) {
+      await executeWrite("ferramentas", id, newTool, 'set');
+    }
+  };
+
+  const editFerramenta = async (id: string, updates: Partial<Ferramenta>) => {
+    setFerramentas(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
+    
+    const current = ferramentas.find(f => f.id === id);
+    const tName = current ? current.name : id;
+    addLocalAuditLog("Alteração de Ferramenta", `Cadastro da ferramenta '${tName}' atualizado.`);
+
+    if (firebaseUser) {
+      await executeWrite("ferramentas", id, updates, 'merge');
+    }
+  };
+
+  const deleteFerramenta = async (id: string) => {
+    const current = ferramentas.find(f => f.id === id);
+    const tName = current ? current.name : id;
+    setFerramentas(prev => prev.filter(f => f.id !== id));
+    addLocalAuditLog("Exclusão de Ferramenta", `Ferramenta '${tName}' removida permanentemente.`);
+
+    if (firebaseUser) {
+      try {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        if (navigator.onLine) {
+          await deleteDoc(doc(db, "ferramentas", id));
+        }
+      } catch (err) {
+        console.warn("Direct online deletion failed, local cache updated.", err);
+      }
+    }
+  };
+
+  const addFerramentaMovimentacao = async (toolId: string, movable: Omit<FerramentaMovimentacao, 'id' | 'date'>) => {
+    const logId = "log_" + Math.random().toString(36).substr(2, 9);
+    const currentDate = new Date().toISOString().substring(0, 10);
+    const newLog: FerramentaMovimentacao = {
+      ...movable,
+      id: logId,
+      date: currentDate
+    };
+
+    let updatedTool: Ferramenta | null = null;
+
+    setFerramentas(prev => prev.map(f => {
+      if (f.id === toolId) {
+        const updatedHistory = [newLog, ...f.history];
+        const statusUpdates: Partial<Ferramenta> = {};
+        
+        if (movable.type === 'Empréstimo') {
+          statusUpdates.status = 'Em Uso';
+          statusUpdates.currentUser = movable.userName;
+          statusUpdates.currentUserId = user?.uid || '';
+        } else if (movable.type === 'Devolução') {
+          statusUpdates.status = 'Disponível';
+          statusUpdates.currentUser = '';
+          statusUpdates.currentUserId = '';
+        } else if (movable.type === 'Manutenção') {
+          statusUpdates.status = 'Manutenção';
+          statusUpdates.currentUser = '';
+          statusUpdates.currentUserId = '';
+        } else if (movable.type === 'Calibração') {
+          statusUpdates.status = 'Disponível';
+          statusUpdates.lastCalibrationDate = currentDate;
+          statusUpdates.currentUser = '';
+          statusUpdates.currentUserId = '';
+        }
+
+        updatedTool = {
+          ...f,
+          ...statusUpdates,
+          history: updatedHistory
+        };
+        return updatedTool;
+      }
+      return f;
+    }));
+
+    const current = ferramentas.find(f => f.id === toolId);
+    const tName = current ? current.name : toolId;
+    addLocalAuditLog("Movimentação de Ferramenta", `Ferramenta '${tName}' registrada como ${movable.type} por ${movable.userName}.`);
+
+    if (firebaseUser) {
+      // Fetch newest state from inside the callback
+      setTimeout(async () => {
+        if (updatedTool) {
+          await executeWrite("ferramentas", toolId, {
+            status: (updatedTool as Ferramenta).status,
+            currentUser: (updatedTool as Ferramenta).currentUser || '',
+            currentUserId: (updatedTool as Ferramenta).currentUserId || '',
+            lastCalibrationDate: (updatedTool as Ferramenta).lastCalibrationDate || '',
+            history: (updatedTool as Ferramenta).history
+          }, 'merge');
+        }
+      }, 0);
+    }
+  };
+
   // Load local audit logs on startup
   useEffect(() => {
     try {
@@ -1549,6 +1687,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       loading,
       aiLoading,
       loginError,
+
+      ferramentas,
+      addFerramenta,
+      editFerramenta,
+      deleteFerramenta,
+      addFerramentaMovimentacao,
       
       loginWithGoogle,
       loginWithEmail,

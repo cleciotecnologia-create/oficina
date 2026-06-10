@@ -15,6 +15,7 @@ import { SuperAdminView } from './components/SuperAdminView';
 import { ManualView } from './components/ManualView';
 import { CustomerPortal } from './components/CustomerPortal';
 import EngenhariaView from './components/EngenhariaView';
+import FerramentasView from './components/FerramentasView';
 
 import { 
   Wrench, 
@@ -50,8 +51,105 @@ import {
   Keyboard,
   Command,
   Search,
-  Car
+  Car,
+  GraduationCap
 } from 'lucide-react';
+
+interface TutorialStep {
+  shortcut: string;
+  badge: string;
+  title: string;
+  description: string;
+  highlights: string[];
+  moduleName: string;
+}
+
+const SHORTCUT_TUTORIALS: Record<string, TutorialStep> = {
+  n: {
+    shortcut: "Ctrl + N",
+    badge: "Nova Ordem de Serviço",
+    title: "Onboarding: Cadastro de O.S. via Atalho",
+    description: "Você usou o atalho para criar uma Ordem de Serviço. Esse painel gerencia a entrada de veículos, diagnósticos e orçamentos da sua oficina.",
+    highlights: [
+      "📍 Quilometragens: Digite o KM Atual e a Etiqueta Anterior para o cálculo de manutenção preventiva.",
+      "✨ Assistente Gemini: Fornece o laudo preditivo e sugere peças e serviços automaticamente.",
+      "📝 Checklist de Entrada: Marque as condições estéticas do veículo para segurança da oficina."
+    ],
+    moduleName: "os"
+  },
+  s: {
+    shortcut: "Ctrl + S",
+    badge: "Controle de Estoque",
+    title: "Onboarding: Gestão de Peças e Filtro de Alerta",
+    description: "Você acessou o Estoque de Peças. Aqui você visualiza o oxigênio financeiro do estoque ativo da sua oficina.",
+    highlights: [
+      "⚠️ Alerta de Estoque Mínimo: Itens destacados em vermelho estão abaixo do limite operacional.",
+      "🔍 Pesquisa e Filtros Rápidos: Localize marcas, OEMs e compatibilidade de motores.",
+      "📈 Registrar Entrada: Utilize para registrar novos lotes fornecidos por distribuidores."
+    ],
+    moduleName: "stock"
+  },
+  d: {
+    shortcut: "Ctrl + D",
+    badge: "Dashboard de Indicadores",
+    title: "Onboarding: Análise de Indicadores de Oficina",
+    description: "Você acessou a central estatística. Este painel resume a saúde financeira e operacional em tempo real.",
+    highlights: [
+      "💰 Indicador DRE: Acompanhe lucros decorrentes da proporção entre peças e serviços prestados.",
+      "📈 Ticket Médio: Saiba o valor médio gasto por cliente que entra no pátio da sua oficina.",
+      "🕒 Tempo Médico de Permanência: Indica se os carros estão sendo liberados devidamente sem travar elevadores."
+    ],
+    moduleName: "dashboard"
+  },
+  p: {
+    shortcut: "Ctrl + P",
+    badge: "Ponto de Venda (PDV)",
+    title: "Onboarding: Terminal de Vendas e Caixa Rápido",
+    description: "Você ativou o PDV da loja. Um checkout unificado desenhado para vendas de balcão e produtos.",
+    highlights: [
+      "🏷️ Venda Balcão Clássica: Permite pesquisa rápida de itens do catálogo e adição instantânea ao carrinho.",
+      "💵 Pagamento Flexível: Opções integradas para Pix (geração automática de QR Code), cartões ou dinheiro.",
+      "🖨️ Recibo de 80mm: Emissão rápida formatada especialmente para impressoras térmicas de cupom."
+    ],
+    moduleName: "pdv"
+  },
+  f: {
+    shortcut: "Ctrl + F",
+    badge: "Fluxo Financeiro",
+    title: "Onboarding: DRE, Entrada e Saída de Caixa",
+    description: "Você entrou na área Financeira. Onde cada centavo pago ou recebido é classificado de modo estruturado.",
+    highlights: [
+      "📥 Receitas Automáticas: Lançamentos automáticos gerados pelo PDV e finalizações de ordens de serviço.",
+      "💸 Lançamento de Custos: Registre despesas operacionais da oficina, comissões de mecânicos e insumos.",
+      "🏦 Caixa Atual: Monitoramento de saldos consolidados e saldo disponível em bancos ou gaveta."
+    ],
+    moduleName: "finance"
+  },
+  c: {
+    shortcut: "Ctrl + C",
+    badge: "CRM Clientes & Autos",
+    title: "Onboarding: Cadastro e Retenção de Clientes",
+    description: "O CRM é o repositório de contatos, dados cadastrais e histórico veicular dos clientes da oficina.",
+    highlights: [
+      "🚙 Histórico Geral: Veja quando o carro esteve na oficina e quais serviços foram realizados nele anteriormente.",
+      "📱 Comunicação Direta: Envie alertas de revisão e links do Portal do Cliente via WhatsApp com 1 clique.",
+      "📊 Foco em Retorno: Classificação por data de última visita para manter a base sempre aquecida."
+    ],
+    moduleName: "crm"
+  },
+  g: {
+    shortcut: "Ctrl + G",
+    badge: "Configurações Gerais",
+    title: "Onboarding: Parametrização e Limites de Inteligência",
+    description: "Painel de Configurações do sistema. Ajuste os pilares tecnológicos do SaaS de oficina.",
+    highlights: [
+      "🏢 Dados da Oficina: Insira CNPJ, link de logotipo que aparecerá nos relatórios e contatos oficiais.",
+      "🧠 Limite do Gemini: Controle a quantidade mensal e consumo de requisições de IA preventiva.",
+      "💾 Backup Manual: Exporte todos os dados da oficina em Excel/JSON com total segurança."
+    ],
+    moduleName: "settings"
+  }
+};
 
 function AppContent() {
   const { 
@@ -77,7 +175,58 @@ function AppContent() {
     highContrast
   } = useApp();
 
-  const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering'>('landing');
+  const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering' | 'tools'>('landing');
+
+  // Training Mode & Interactive Onboarding States for keyboard shortcuts
+  const [isTrainingMode, setIsTrainingMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('saas_training_mode_active');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  const [usedShortcuts, setUsedShortcuts] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('saas_used_shortcuts_keys');
+      return saved ? JSON.parse(saved) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+
+  const [activeTutorialKey, setActiveTutorialKey] = useState<string | null>(null);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState<number>(0);
+  const [showTrainingToast, setShowTrainingToast] = useState<{message: string, shortcut: string} | null>(null);
+
+  React.useEffect(() => {
+    localStorage.setItem('saas_training_mode_active', String(isTrainingMode));
+  }, [isTrainingMode]);
+
+  React.useEffect(() => {
+    localStorage.setItem('saas_used_shortcuts_keys', JSON.stringify(usedShortcuts));
+  }, [usedShortcuts]);
+
+  const triggerShortcutTutorial = (key: string) => {
+    if (!isTrainingMode) return;
+    const lowercaseKey = key.toLowerCase();
+    const isFirstTime = !usedShortcuts.includes(lowercaseKey);
+    
+    if (isFirstTime) {
+      setUsedShortcuts(prev => [...prev, lowercaseKey]);
+    }
+
+    setActiveTutorialKey(lowercaseKey);
+    setTutorialStepIndex(0);
+
+    setShowTrainingToast({
+      message: isFirstTime 
+        ? `🎓 Primeiro uso do atalho detectado! Iniciando tutorial passo a passo...`
+        : `🎓 Carregando tutorial interativo de atalho...`,
+      shortcut: lowercaseKey
+    });
+
+    setTimeout(() => {
+      setShowTrainingToast(null);
+    }, 4500);
+  };
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -141,6 +290,7 @@ function AppContent() {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('open-new-os'));
         }, 80);
+        triggerShortcutTutorial('n');
         return;
       }
 
@@ -149,6 +299,7 @@ function AppContent() {
         e.preventDefault();
         setActiveRoute('stock');
         setMobileSidebarOpen(false);
+        triggerShortcutTutorial('s');
         return;
       }
 
@@ -157,6 +308,7 @@ function AppContent() {
         e.preventDefault();
         setActiveRoute('dashboard');
         setMobileSidebarOpen(false);
+        triggerShortcutTutorial('d');
         return;
       }
 
@@ -165,6 +317,7 @@ function AppContent() {
         e.preventDefault();
         setActiveRoute('pdv');
         setMobileSidebarOpen(false);
+        triggerShortcutTutorial('p');
         return;
       }
 
@@ -173,6 +326,7 @@ function AppContent() {
         e.preventDefault();
         setActiveRoute('finance');
         setMobileSidebarOpen(false);
+        triggerShortcutTutorial('f');
         return;
       }
 
@@ -181,6 +335,7 @@ function AppContent() {
         e.preventDefault();
         setActiveRoute('crm');
         setMobileSidebarOpen(false);
+        triggerShortcutTutorial('c');
         return;
       }
 
@@ -189,6 +344,7 @@ function AppContent() {
         e.preventDefault();
         setActiveRoute('settings');
         setMobileSidebarOpen(false);
+        triggerShortcutTutorial('g');
         return;
       }
 
@@ -204,7 +360,7 @@ function AppContent() {
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
     };
-  }, [user]);
+  }, [user, isTrainingMode, usedShortcuts]);
   
   // Email & Password Auth State
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
@@ -224,6 +380,7 @@ function AppContent() {
       case 'dashboard': return <DashboardView />;
       case 'pdv': return <PDVView />;
       case 'stock': return <EstoqueView />;
+      case 'tools': return <FerramentasView />;
       case 'services': return <ServicosView />;
       case 'os': return <OSView initialSearchPlate={globalSearchPlate} onClearInitialSearch={() => setGlobalSearchPlate('')} />;
       case 'crm': return <CRMView />;
@@ -794,6 +951,24 @@ function AppContent() {
             );
           })()}
 
+          {/* Training Mode Onboarding Button */}
+          <button 
+            type="button"
+            onClick={() => {
+              setIsTrainingMode(prev => !prev);
+              setActiveTutorialKey(null);
+            }}
+            title="Ativar/Desativar modo de treinamento interativo com dicas pop-up nos atalhos"
+            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-[10px] font-bold font-mono transition-all cursor-pointer shadow-inner active:scale-95 ${
+              isTrainingMode 
+                ? 'bg-rose-950/35 border-rose-900/60 text-rose-400 hover:bg-rose-950/50' 
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            <GraduationCap className={`w-3.5 h-3.5 ${isTrainingMode ? 'text-rose-400 animate-bounce' : 'text-slate-400'}`} />
+            MODO TREINAMENTO: {isTrainingMode ? 'ATIVO 🎓' : 'INATIVO'}
+          </button>
+
           {/* Keyboard Shortcuts Trigger Button */}
           <button 
             onClick={() => setIsShortcutModalOpen(true)}
@@ -908,6 +1083,13 @@ function AppContent() {
                   {criticalProductsCount}
                 </span>
               )}
+            </button>
+
+            <button 
+              onClick={() => { setActiveRoute('tools'); setMobileSidebarOpen(false); }}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'tools' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Wrench className="w-4 h-4 shrink-0" /> Controle de Ferramentas
             </button>
 
             <button 
@@ -1115,6 +1297,7 @@ function AppContent() {
                       setActiveRoute('dashboard');
                       setMobileSidebarOpen(false);
                       setIsShortcutModalOpen(false);
+                      triggerShortcutTutorial('d');
                     }}
                     className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-cyan-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
                     title="Clique para acessar o Dashboard de Indicadores"
@@ -1138,6 +1321,7 @@ function AppContent() {
                       setTimeout(() => {
                         window.dispatchEvent(new CustomEvent('open-new-os'));
                       }, 80);
+                      triggerShortcutTutorial('n');
                     }}
                     className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-red-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
                     title="Clique para abrir nova Ordem de Serviço"
@@ -1161,6 +1345,7 @@ function AppContent() {
                       setActiveRoute('stock');
                       setMobileSidebarOpen(false);
                       setIsShortcutModalOpen(false);
+                      triggerShortcutTutorial('s');
                     }}
                     className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-amber-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
                     title="Clique para acessar o Estoque"
@@ -1181,6 +1366,7 @@ function AppContent() {
                       setActiveRoute('pdv');
                       setMobileSidebarOpen(false);
                       setIsShortcutModalOpen(false);
+                      triggerShortcutTutorial('p');
                     }}
                     className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-emerald-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
                     title="Clique para acessar o PDV"
@@ -1201,6 +1387,7 @@ function AppContent() {
                       setActiveRoute('finance');
                       setMobileSidebarOpen(false);
                       setIsShortcutModalOpen(false);
+                      triggerShortcutTutorial('f');
                     }}
                     className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-green-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
                     title="Clique para ver o Fluxo Financeiro"
@@ -1221,6 +1408,7 @@ function AppContent() {
                       setActiveRoute('crm');
                       setMobileSidebarOpen(false);
                       setIsShortcutModalOpen(false);
+                      triggerShortcutTutorial('c');
                     }}
                     className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-blue-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
                     title="Clique para ir ao CRM"
@@ -1241,6 +1429,7 @@ function AppContent() {
                       setActiveRoute('settings');
                       setMobileSidebarOpen(false);
                       setIsShortcutModalOpen(false);
+                      triggerShortcutTutorial('g');
                     }}
                     className="flex items-center justify-between p-3 rounded-xl bg-gray-950/40 border border-gray-900 hover:border-slate-500/30 hover:bg-slate-900/40 cursor-pointer transition-all active:scale-[99%]"
                     title="Clique para ir às Configurações"
@@ -1280,6 +1469,170 @@ function AppContent() {
                   <span>💡 Pressione <kbd className="px-1 py-0.5 border border-gray-800 bg-gray-950 font-mono font-bold rounded text-[9px]">Esc</kbd> em qualquer momento para sair de campos de digitação.</span>
                 </div>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* TRAINING MODE STEP-BY-STEP TUTORIAL POPUP */}
+      <AnimatePresence>
+        {activeTutorialKey && SHORTCUT_TUTORIALS[activeTutorialKey] && (() => {
+          const tutorial = SHORTCUT_TUTORIALS[activeTutorialKey];
+          return (
+            <div className="fixed bottom-6 right-6 z-[9999] max-w-sm sm:max-w-md w-full px-4 sm:px-0">
+              <motion.div
+                initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 30, scale: 0.95 }}
+                className="bg-[#0c1223] border-2 border-rose-600/60 rounded-3xl overflow-hidden shadow-[0_15px_45px_rgba(0,0,0,0.8)] text-left flex flex-col relative"
+              >
+                {/* Glow bar top */}
+                <div className="h-1 bg-gradient-to-r from-rose-500 via-amber-500 to-indigo-500 w-full" />
+                
+                {/* Header */}
+                <div className="p-4 bg-[#0a0f1d] border-b border-gray-850 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-rose-500/10 text-rose-400">
+                      <GraduationCap className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-widest font-mono">Modo de Treinamento</span>
+                      <h4 className="text-xs font-bold text-gray-300 font-mono leading-none">{tutorial.badge}</h4>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTutorialKey(null)}
+                    className="p-1.5 rounded-lg hover:bg-slate-900 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Content Body */}
+                <div className="p-5 flex flex-col gap-4">
+                  <div>
+                    <h3 className="font-display font-medium text-white text-sm tracking-tight mb-1">
+                      {tutorial.title}
+                    </h3>
+                    <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                      {tutorial.description}
+                    </p>
+                  </div>
+
+                  {/* Highlights Step List */}
+                  <div className="flex flex-col gap-2.5">
+                    <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider font-mono">
+                      Dicas Importantes ({tutorialStepIndex + 1}/3):
+                    </span>
+                    
+                    {tutorial.highlights.map((highlight, index) => {
+                      const isActive = index === tutorialStepIndex;
+                      return (
+                        <motion.div
+                          key={index}
+                          animate={{ 
+                            opacity: isActive ? 1 : 0.45,
+                            scale: isActive ? 1.01 : 0.98,
+                            x: isActive ? 4 : 0
+                          }}
+                          className={`p-3 rounded-xl border transition-all text-xs flex gap-2.5 items-start ${
+                            isActive 
+                              ? 'bg-[#150f1d] border-rose-500/40 text-rose-200 font-medium' 
+                              : 'bg-gray-950/20 border-gray-900/50 text-gray-400'
+                          }`}
+                        >
+                          <span className={`w-5 h-5 rounded-full text-[10px] font-mono flex items-center justify-center shrink-0 font-bold ${
+                            isActive ? 'bg-rose-500 text-white' : 'bg-gray-900 text-gray-500'
+                          }`}>
+                            {index + 1}
+                          </span>
+                          <span className="leading-snug">{highlight}</span>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Control Action Footer */}
+                <div className="p-4 bg-[#080d1a] border-t border-gray-850 flex justify-between items-center">
+                  <div className="flex gap-1">
+                    {tutorial.highlights.map((_, index) => (
+                      <span 
+                        key={index} 
+                        className={`block h-1.5 rounded-full transition-all duration-300 ${
+                          index === tutorialStepIndex ? 'w-5 bg-rose-500' : 'w-1.5 bg-gray-850'
+                        }`} 
+                      />
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    {tutorialStepIndex > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTutorialStepIndex(prev => prev - 1)}
+                        className="px-3 py-1.5 rounded-xl border border-gray-850 bg-slate-900 text-xs font-mono text-gray-300 cursor-pointer"
+                      >
+                        Anterior
+                      </button>
+                    )}
+                    
+                    {tutorialStepIndex < 2 ? (
+                      <button
+                        type="button"
+                        onClick={() => setTutorialStepIndex(prev => prev + 1)}
+                        className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-xs font-bold font-mono text-white cursor-pointer transition-all shadow-md"
+                      >
+                        Próximo
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveTutorialKey(null);
+                        }}
+                        className="px-4 py-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:brightness-110 active:scale-95 text-xs font-bold font-mono text-white cursor-pointer transition-all shadow-md"
+                      >
+                        Pronto! 🚀
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
+      </AnimatePresence>
+
+      {/* TRAINING MODE FIRST-TIME SUCCESS TOAST */}
+      <AnimatePresence>
+        {showTrainingToast && (
+          <div className="fixed top-20 right-6 z-[99999] max-w-sm w-full px-4 sm:px-0">
+            <motion.div
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.9 }}
+              className="p-4 rounded-2xl bg-[#0e172a] border border-rose-500/40 shadow-2xl flex items-center gap-3.5 text-left text-xs font-mono"
+            >
+              <div className="w-7 h-7 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0 animate-bounce">
+                <GraduationCap className="w-5 h-5" />
+              </div>
+              <div className="flex-grow min-w-0">
+                <p className="text-white font-bold truncate leading-snug">
+                  {showTrainingToast.message}
+                </p>
+                <span className="text-[10px] text-gray-400">
+                  Dica de atalho: clique nos itens ou use o teclado!
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTrainingToast(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </motion.div>
           </div>
         )}
