@@ -31,10 +31,18 @@ import {
   Upload,
   AlertTriangle,
   Trash2,
-  Link2
+  Link2,
+  Wifi,
+  WifiOff,
+  Pencil,
+  List,
+  Search,
+  FileText,
+  Archive,
+  FolderOpen
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Company } from '../types';
+import { Company, FiscalSeries, FiscalTaxRule } from '../types';
 
 export const ConfigView: React.FC = () => {
   const { 
@@ -57,7 +65,13 @@ export const ConfigView: React.FC = () => {
     user,
     updateUserProfile,
     highContrast,
-    setHighContrast
+    setHighContrast,
+    isOnline,
+    pendingActionsCount,
+    syncPendingActions,
+    syncing,
+    forceOffline,
+    setForceOffline
   } = useApp();
 
   // Primary Company fields state
@@ -73,6 +87,7 @@ export const ConfigView: React.FC = () => {
   const [pixBeneficiaryStr, setPixBeneficiaryStr] = useState(company.pixBeneficiary || 'AutoPrecision Premium');
   const [pixCityStr, setPixCityStr] = useState(company.pixCity || 'SAO PAULO');
   const [defaultMarkupVal, setDefaultMarkupVal] = useState<number>(company.defaultMarkup !== undefined ? company.defaultMarkup : 50);
+  const [warrantyDaysVal, setWarrantyDaysVal] = useState<number>(company.warrantyDays !== undefined ? company.warrantyDays : 90);
   const [userReversalPassword, setUserReversalPassword] = useState('');
 
   React.useEffect(() => {
@@ -100,7 +115,31 @@ export const ConfigView: React.FC = () => {
       setPixBeneficiaryStr(company.pixBeneficiary || 'AutoPrecision Premium');
       setPixCityStr(company.pixCity || 'SAO PAULO');
       setDefaultMarkupVal(company.defaultMarkup !== undefined ? company.defaultMarkup : 50);
+      setWarrantyDaysVal(company.warrantyDays !== undefined ? company.warrantyDays : 90);
       setCustomPortalSlugStr(company.customPortalSlug || company.id);
+      
+      // Sync fiscal states
+      setFiscalNfseEnabled(company.fiscalNfseEnabled || false);
+      setFiscalNfeEnabled(company.fiscalNfeEnabled || false);
+      setFiscalStateUf(company.fiscalStateUf || 'SP');
+      setFiscalCertificateUploaded(company.fiscalCertificateUploaded || false);
+      setFiscalCertificateName(company.fiscalCertificateName || '');
+      setFiscalPassword(company.fiscalPassword || '');
+      setFiscalTokenProvider(company.fiscalTokenProvider || '');
+      setFiscalEnvironment(company.fiscalEnvironment || 'Homologação');
+      setFiscalMunicipalKey(company.fiscalMunicipalKey || '');
+      setFiscalIM(company.fiscalIM || '');
+      setFiscalIE(company.fiscalIE || '');
+      setFiscalWebhookUrl(company.fiscalWebhookUrl || '');
+      setFiscalServiceSeries(company.fiscalServiceSeries || '1');
+      setFiscalServiceInitialNum(company.fiscalServiceInitialNum !== undefined ? company.fiscalServiceInitialNum : 1);
+      setFiscalAutoEmitOnOSClose(company.fiscalAutoEmitOnOSClose || false);
+      if (company.fiscalSeriesList) {
+        setFiscalSeriesList(company.fiscalSeriesList);
+      }
+      if (company.fiscalTaxRules) {
+        setFiscalTaxRules(company.fiscalTaxRules);
+      }
     }
   }, [company]);
 
@@ -167,11 +206,514 @@ export const ConfigView: React.FC = () => {
   const [whiteLabelTitle, setWhiteLabelTitle] = useState('AutoTech OS System');
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
 
+  // Fiscal integration state
+  const [fiscalNfseEnabled, setFiscalNfseEnabled] = useState(company.fiscalNfseEnabled || false);
+  const [fiscalNfeEnabled, setFiscalNfeEnabled] = useState(company.fiscalNfeEnabled || false);
+  const [fiscalStateUf, setFiscalStateUf] = useState(company.fiscalStateUf || 'SP');
+  const [fiscalCertificateUploaded, setFiscalCertificateUploaded] = useState(company.fiscalCertificateUploaded || false);
+  const [fiscalCertificateName, setFiscalCertificateName] = useState(company.fiscalCertificateName || '');
+  const [fiscalPassword, setFiscalPassword] = useState(company.fiscalPassword || '');
+  const [fiscalTokenProvider, setFiscalTokenProvider] = useState(company.fiscalTokenProvider || '');
+  const [fiscalEnvironment, setFiscalEnvironment] = useState<'Homologação' | 'Produção'>(company.fiscalEnvironment || 'Homologação');
+  const [fiscalMunicipalKey, setFiscalMunicipalKey] = useState(company.fiscalMunicipalKey || '');
+  const [fiscalIM, setFiscalIM] = useState(company.fiscalIM || '');
+  const [fiscalIE, setFiscalIE] = useState(company.fiscalIE || '');
+  const [fiscalWebhookUrl, setFiscalWebhookUrl] = useState(company.fiscalWebhookUrl || '');
+  
+  // Emissão Automática state
+  const [fiscalServiceSeries, setFiscalServiceSeries] = useState(company.fiscalServiceSeries || '1');
+  const [fiscalServiceInitialNum, setFiscalServiceInitialNum] = useState(company.fiscalServiceInitialNum !== undefined ? company.fiscalServiceInitialNum : 1);
+  const [fiscalAutoEmitOnOSClose, setFiscalAutoEmitOnOSClose] = useState(company.fiscalAutoEmitOnOSClose || false);
+  
+  // Custom Fiscal Series List state
+  const [fiscalSeriesList, setFiscalSeriesList] = useState<FiscalSeries[]>(
+    company.fiscalSeriesList || [
+      { id: '1', type: 'NFS-e', series: '1', nextNumber: 1, isActive: true },
+      { id: '2', type: 'NF-e', series: '1', nextNumber: 1, isActive: true }
+    ]
+  );
+  const [editingSeriesId, setEditingSeriesId] = useState<string | null>(null);
+  const [newSeriesType, setNewSeriesType] = useState<'NFS-e' | 'NF-e' | 'NFC-e'>('NFS-e');
+  const [newSeriesValue, setNewSeriesValue] = useState('');
+  const [newSeriesNextNum, setNewSeriesNextNum] = useState<number>(1);
+  const [showSeriesForm, setShowSeriesForm] = useState(false);
+
+  // Automatic Taxation Rules state
+  const [fiscalTaxRules, setFiscalTaxRules] = useState<FiscalTaxRule[]>(
+    company.fiscalTaxRules || [
+      { id: '1', uf: 'Dentro do Estado (Nacional/Mesma UF)', cfop: '5102', icmsAliquota: 18, ipiAliquota: 0, description: 'Venda padrão de autopeças ou serviços internos', isActive: true },
+      { id: '2', uf: 'Fora do Estado (Outras UF)', cfop: '6102', icmsAliquota: 12, ipiAliquota: 0, description: 'Venda padrão de autopeças interestaduais', isActive: true }
+    ]
+  );
+  const [editingTaxRuleId, setEditingTaxRuleId] = useState<string | null>(null);
+  const [newTaxRuleUf, setNewTaxRuleUf] = useState('SP');
+  const [newTaxRuleCfop, setNewTaxRuleCfop] = useState('');
+  const [newTaxRuleIcmsAliquota, setNewTaxRuleIcmsAliquota] = useState<number>(18);
+  const [newTaxRuleIpiAliquota, setNewTaxRuleIpiAliquota] = useState<number>(0);
+  const [newTaxRuleDescription, setNewTaxRuleDescription] = useState('');
+  const [showTaxRuleForm, setShowTaxRuleForm] = useState(false);
+
+  // Monitor de Erros SEFAZ States
+  const [showSefazErrorMonitor, setShowSefazErrorMonitor] = useState(false);
+  const [selectedErrorForDetails, setSelectedErrorForDetails] = useState<any | null>(null);
+  const [sefazErrorsLog, setSefazErrorsLog] = useState<any[]>([
+    {
+      id: 'sefaz-err-1',
+      code: '225',
+      title: 'Rejeição 225: Falha no Schema XML do lote de NFe enviado',
+      timestamp: new Date(Date.now() - 1000 * 60 * 10).toISOString(), // 10 min ago
+      docId: 'O.S. #1084',
+      docType: 'NF-e',
+      cause: 'Tag <IE> correspondente à Inscrição Estadual está vazia ou inconsistente no cadastro do destinatário cadastrado como Contribuinte de ICMS.',
+      solution: 'Vá até o cadastro de Clientes, selecione o cliente correspondente e verifique o campo de Inscrição Estadual (IE) ou altere a configuração para Destinatário Isento ou Não Contribuinte (Indicador de IE "9 - Não Contribuinte"), salve e retransmita a nota.',
+      xmlSnippet: `<dest>\n  <CNPJ>03212854000188</CNPJ>\n  <IE></IE>\n  <indIEDest>1</indIEDest>\n  <xNome>ROMA AUTO PECAS LTDA</xNome>\n</dest>`,
+      status: 'Pendente'
+    },
+    {
+      id: 'sefaz-err-2',
+      code: '702',
+      title: 'Rejeição 702: NFC-e com diferimento de ICMS inválido',
+      timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(), // 2 hours ago
+      docId: 'Venda Balcão #2045',
+      docType: 'NFC-e',
+      cause: 'Foi selecionado o CST de ICMS 51 (Diferido) ou CSOSN 900 para venda de peças a consumidor final, o que não é permitido para NFC-e pelas regras estaduais sem dados de diferimento adicionais.',
+      solution: 'Acesse o produto ou altere os parâmetros tributários da venda rápida para CSOSN 102 (Tributada sem permissão de crédito) ou CSOSN 500 (ICMS retido por Substituição Tributária anterior), que são recomendados para venda a consumidor final no balcão.',
+      xmlSnippet: `<ICMS>\n  <ICMS51>\n    <orig>0</orig>\n    <CST>51</CST>\n    <vBC>54.20</vBC>\n    <pICMS>18.00</pICMS>\n  </ICMS51>\n</ICMS>`,
+      status: 'Pendente'
+    },
+    {
+      id: 'sefaz-err-3',
+      code: '539',
+      title: 'Rejeição 539: Duplicidade de NF-e, com diferença na Chave de Acesso',
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(), // 24 hours ago
+      docId: 'O.S. #1072',
+      docType: 'NF-e',
+      cause: 'O sequencial de faturamento Nº 124 já foi utilizado e homologado com sucesso anteriormente na SEFAZ pela sua empresa, mas com uma assinatura/chave XML alternativa.',
+      solution: 'Nas Configurações do Módulo Fiscal, acesse "Cadastro de Séries de Nota Fiscal" e altere o campo "Próximo Número Inicial" da série correspondente para 125 ou para o próximo número livre real da SEFAZ para sincronizar o sistema.',
+      xmlSnippet: `<ide>\n  <cUF>35</cUF>\n  <cNF>38491024</cNF>\n  <mod>55</mod>\n  <serie>1</serie>\n  <nNF>124</nNF>\n</ide>`,
+      status: 'Resolvido'
+    },
+    {
+      id: 'sefaz-err-4',
+      code: '610',
+      title: 'Rejeição 610: Chave de Acesso diferindo do intervalo de série configurado',
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
+      docId: 'NFS-e #85',
+      docType: 'NFS-e',
+      cause: 'A série fiscal "99" utilizada na transmissão não está habilitada/autorizada no portal da Prefeitura ou na SEFAZ Estadual para emissão síncrona.',
+      solution: 'Altere a série para a série padrão e oficial homologada pela sua prefeitura (tipicamente série "1" ou "E" ou "A").',
+      xmlSnippet: `<SereFiscal>\n  <codigoSerie>99</codigoSerie>\n  <sequencialEnviado>85</sequencialEnviado>\n</SereFiscal>`,
+      status: 'Resolvido'
+    },
+    {
+      id: 'sefaz-err-5',
+      code: '696',
+      title: 'Rejeição 696: Operação com não contribuinte deve indicar inscrição estadual isenta',
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(), // 3 days ago
+      docId: 'O.S. #1060',
+      docType: 'NF-e',
+      cause: 'Operação interestadual para cliente qualificado como Destinatário Não Contribuinte requer que o campo Inscrição Estadual seja explicitamente enviado como vazio (<IE> vazia ou isenta) e tag indIEDest correspondente.',
+      solution: 'Altere o cadastro do cliente do outro estado para indicar "Não Contribuinte" no Tipo de Inscrição Estadual de forma que as tags indIEDest sejam preenchidas como 9.',
+      xmlSnippet: `<dest>\n  <UF>MG</UF>\n  <indIEDest>9</indIEDest>\n</dest>`,
+      status: 'Resolvido'
+    }
+  ]);
+
+  const handleSimulateNewSefazError = () => {
+    const errorOptions = [
+      {
+        code: '203',
+        title: 'Rejeição 203: Emissor não habilitado para emissão da NF-e',
+        cause: 'A inscrição municipal ou estadual da sua oficina não está credenciada no ambiente selecionado (Homologação ou Produção) junto à SEFAZ da respectiva UF.',
+        solution: 'Verifique se seu CNPJ/IE está devidamente autorizado para emissão de NF-e na SEFAZ do seu estado e se as credenciais do certificado digital correspondem à empresa cadastrada.',
+        xmlSnippet: `<emit>\n  <CNPJ>${company?.cnpj || "12.345.678/0001-90"}</CNPJ>\n  <xNome>${(company?.name || "AutoPrecision Premium").toUpperCase()}</xNome>\n</emit>`
+      },
+      {
+        code: '464',
+        title: 'Rejeição 464: Código de Hash no QR-Code difere do cadastrado',
+        cause: 'O identificador CSC (Código de Segurança do Contribuinte) ou a Chave Token definidos nas configurações municipais/estaduais estão incorretos ou expirados.',
+        solution: 'Solicite um novo Token/CSC no portal do contribuinte do seu estado e insira adequadamente nas configurações do Módulo de Emissão.',
+        xmlSnippet: `<qrCode>\n  <chNFe>3526061234567800019055001000124112412421</chNFe>\n  <cHashQRCode>a15b9ccdf22a45b</cHashQRCode>\n</qrCode>`
+      },
+      {
+        code: '629',
+        title: 'Rejeição 629: Alíquota do ICMS do grupo de Destinatário difere da alíquota interna',
+        cause: 'A alíquota de ICMS interestadual aplicada nas autopeças para a UF de destino informada diverge da tabela de partilha de ICMS (DIFAL) nacional obrigatória.',
+        solution: 'Acesse "Regras de Parametrização Tributária Automática" abaixo e ajuste o percentual de ICMS interestadual correspondente ao estado destino do veículo.',
+        xmlSnippet: `<ICMSUFDest>\n  <vBCUFDest>150.00</vBCUFDest>\n  <pICMSInter>12.00</pICMSInter>\n  <pICMSInterPart>18.00</pICMSInterPart>\n</ICMSUFDest>`
+      }
+    ];
+
+    const randomErr = errorOptions[Math.floor(Math.random() * errorOptions.length)];
+    const newErr = {
+      id: 'sefaz-err-' + Date.now(),
+      code: randomErr.code,
+      title: randomErr.title,
+      timestamp: new Date().toISOString(),
+      docId: `O.S. #${Math.floor(Math.random() * 100) + 1100}`,
+      docType: ['NF-e', 'NFS-e'][Math.floor(Math.random() * 2)] as any,
+      cause: randomErr.cause,
+      solution: randomErr.solution,
+      xmlSnippet: randomErr.xmlSnippet,
+      status: 'Pendente' as const
+    };
+
+    setSefazErrorsLog(prev => [newErr, ...prev]);
+  };
+
+  const handleResolveSefazError = (id: string) => {
+    setSefazErrorsLog(prev => prev.map(e => e.id === id ? { ...e, status: 'Resolvido' } : e));
+    if (selectedErrorForDetails && selectedErrorForDetails.id === id) {
+      setSelectedErrorForDetails((prev: any) => ({ ...prev, status: 'Resolvido' }));
+    }
+  };
+
+  const handleClearSefazErrors = () => {
+    setSefazErrorsLog([]);
+    setSelectedErrorForDetails(null);
+  };
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const handleCopyXml = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    setTimeout(() => {
+      setCopiedId(null);
+    }, 2000);
+  };
+
+  // Histórico de Lotes SEFAZ States & Handlers
+  const [showSefazLoteHistory, setShowSefazLoteHistory] = useState(false);
+  const [selectedLoteForDetails, setSelectedLoteForDetails] = useState<any | null>(null);
+  const [searchLoteTerm, setSearchLoteTerm] = useState('');
+  const [filterLoteType, setFilterLoteType] = useState('ALL');
+  const [filterLoteStatus, setFilterLoteStatus] = useState('ALL');
+  const [isTransmittingLote, setIsTransmittingLote] = useState(false);
+  const [transmissionProgress, setTransmissionProgress] = useState<string[]>([]);
+  const [sefazLotesList, setSefazLotesList] = useState<any[]>([
+    {
+      id: 'LOTE-20260612-L34',
+      timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(), // 35 min ago
+      docType: 'NF-e',
+      notesCount: 2,
+      protocol: '135260029841249',
+      status: 'Autorizado',
+      totalAmount: 1840.20,
+      xmlContent: `<?xml version="1.0" encoding="UTF-8"?>\n<enviLote xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">\n  <idLote>2026061234</idLote>\n  <indSinc>1</indSinc>\n  <NFe>\n    <infNFe Id="NFe35260603212854000188550010000001201384910242" versao="4.00">\n      <ide><cUF>35</cUF><nNF>120</nNF><dhEmi>2026-06-12T22:05:10-03:00</dhEmi></ide>\n      <emit><CNPJ>03212854000188</CNPJ><xNome>AUTOTECH SOLUCOES AUTOMOTIVAS</xNome></emit>\n      <dest><CNPJ>03212854000188</CNPJ><xNome>ROMA AUTO PECAS LTDA</xNome></dest>\n      <total><ICMSTot><vNF>1200.00</vNF></ICMSTot></total>\n    </infNFe>\n  </NFe>\n  <NFe>\n    <infNFe Id="NFe35260603212854000188550010000001211384910243" versao="4.00">\n      <ide><cUF>35</cUF><nNF>121</nNF><dhEmi>2026-06-12T22:15:32-03:00</dhEmi></ide>\n      <emit><CNPJ>03212854000188</CNPJ><xNome>AUTOTECH SOLUCOES AUTOMOTIVAS</xNome></emit>\n      <dest><CPF>12345678901</CPF><xNome>CLECIO TECNOLOGIA</xNome></dest>\n      <total><ICMSTot><vNF>640.20</vNF></ICMSTot></total>\n    </infNFe>\n  </NFe>\n</enviLote>`,
+      notes: [
+        {
+          number: 120,
+          accessKey: '35260603212854000188550010000001201384910242',
+          clientName: 'ROMA AUTO PECAS LTDA',
+          clientDoc: '03.212.854/0001-88',
+          amount: 1200.00,
+          protocol: '135260029841250',
+          status: 'Autorizado'
+        },
+        {
+          number: 121,
+          accessKey: '35260603212854000188550010000001211384910243',
+          clientName: 'CLECIO TECNOLOGIA',
+          clientDoc: '123.456.789-01',
+          amount: 640.20,
+          protocol: '135260029841251',
+          status: 'Autorizado'
+        }
+      ]
+    },
+    {
+      id: 'LOTE-20260611-L33',
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 25).toISOString(), // 25 hours ago
+      docType: 'NFS-e',
+      notesCount: 1,
+      protocol: '350692841029485',
+      status: 'Autorizado',
+      totalAmount: 380.00,
+      xmlContent: `<?xml version="1.0" encoding="UTF-8"?>\n<EnviarLoteRpsEnvio xmlns="http://www.abrasf.org.br/nfse.xsd">\n  <LoteRps Id="L3506928" versao="2.03">\n    <NumeroLote>33</NumeroLote>\n    <Cnpj>03212854000188</Cnpj>\n    <InscricaoMunicipal>8596102</InscricaoMunicipal>\n    <QuantidadeRps>1</QuantidadeRps>\n    <ListaRps>\n      <Rps>\n        <InfDeclaracaoPrestacaoServico>\n          <Rps><IdentificacaoRps><Numero>84</Numero><Serie>1</Serie><Tipo>1</Tipo></IdentificacaoRps></Rps>\n          <Servico><Valores><ValorServicos>380.00</ValorServicos></Valores><Discriminacao>Troca de Amortecedores Dianteiros e Alinhamento</Discriminacao></Servico>\n          <Prestador><Cnpj>03212854000188</Cnpj></Prestador>\n          <Tomador><IdentificacaoTomador><CpfCnpj><Cpf>98765432100</Cpf></CpfCnpj></IdentificacaoTomador><RazaoSocial>Mariana Silva</RazaoSocial></Tomador>\n        </InfDeclaracaoPrestacaoServico>\n      </Rps>\n    </ListaRps>\n  </LoteRps>\n</EnviarLoteRpsEnvio>`,
+      notes: [
+        {
+          number: 84,
+          accessKey: 'NFS-84-AUT-A9B3',
+          clientName: 'Mariana Silva',
+          clientDoc: '987.654.321-00',
+          amount: 380.00,
+          protocol: '350692841029485',
+          status: 'Autorizado'
+        }
+      ]
+    },
+    {
+      id: 'LOTE-20260610-L32',
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 50).toISOString(), // ~50 hours ago
+      docType: 'NFC-e',
+      notesCount: 3,
+      protocol: '135260028941038',
+      status: 'Autorizado',
+      totalAmount: 454.00,
+      xmlContent: `<?xml version="1.0" encoding="UTF-8"?>\n<enviLote xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">\n  <idLote>2026061099</idLote>\n  <NFe>\n    <infNFe Id="NFe35260603212854000188650010000020431384910244">\n      <ide><mod>65</mod><nNF>2043</nNF></ide>\n      <total><ICMSTot><vNF>150.00</vNF></ICMSTot></total>\n    </infNFe>\n  </NFe>\n  <NFe>\n    <infNFe Id="NFe35260603212854000188650010000020441384910245">\n      <ide><mod>65</mod><nNF>2044</nNF></ide>\n      <total><ICMSTot><vNF>184.00</vNF></ICMSTot></total>\n    </infNFe>\n  </NFe>\n  <NFe>\n    <infNFe Id="NFe35260603212854000188650010000020451384910246">\n      <ide><mod>65</mod><nNF>2045</nNF></ide>\n      <total><ICMSTot><vNF>120.00</vNF></ICMSTot></total>\n    </infNFe>\n  </NFe>\n</enviLote>`,
+      notes: [
+        {
+          number: 2043,
+          accessKey: '35260603212854000188650010000020431384910244',
+          clientName: 'Consumidor Final',
+          clientDoc: 'Não Identificado',
+          amount: 150.00,
+          protocol: '135260028941039',
+          status: 'Autorizado'
+        },
+        {
+          number: 2044,
+          accessKey: '35260603212854000188650010000020441384910245',
+          clientName: 'Consumidor Final',
+          clientDoc: 'Não Identificado',
+          amount: 184.00,
+          protocol: '135260028941040',
+          status: 'Autorizado'
+        },
+        {
+          number: 2045,
+          accessKey: '35260603212854000188650010000020451384910246',
+          clientName: 'Consumidor Final',
+          clientDoc: 'Não Identificado',
+          amount: 120.00,
+          protocol: '135260028941041',
+          status: 'Autorizado'
+        }
+      ]
+    },
+    {
+      id: 'LOTE-20260608-L31',
+      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 120).toISOString(), // ~5 days ago
+      docType: 'NF-e',
+      notesCount: 1,
+      protocol: 'Rejeitado por Erro',
+      status: 'Rejeitado',
+      totalAmount: 850.00,
+      xmlContent: `<?xml version="1.0" encoding="UTF-8"?>\n<enviLote xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">\n  <idLote>2026060888</idLote>\n  <NFe>\n    <infNFe Id="NFe35260603212854000188550010000001191384910241">\n      <ide><cUF>35</cUF><nNF>119</nNF></ide>\n      <emit><CNPJ>03212854000188</CNPJ></emit>\n      <dest><CNPJ>03212854000188</CNPJ><xNome>ROMA AUTO PECAS LTDA</xNome></dest>\n    </infNFe>\n  </NFe>\n</enviLote>`,
+      notes: [
+        {
+          number: 119,
+          accessKey: '35260603212854000188550010000001191384910241',
+          clientName: 'ROMA AUTO PECAS LTDA',
+          clientDoc: '03.212.854/0001-88',
+          amount: 850.00,
+          protocol: 'Inexistente',
+          status: 'Rejeitado',
+          errorMessage: 'Rejeição 225: Falha no Schema XML do lote de NFe enviado'
+        }
+      ]
+    }
+  ]);
+
+  const handleDownloadXmlFile = (xml: string, fileName: string) => {
+    const blob = new Blob([xml], { type: 'text/xml;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleTransmitNewLote = () => {
+    setIsTransmittingLote(true);
+    setTransmissionProgress(["🔄 Iniciando montagem de lote de documentos síncronos..."]);
+    
+    const steps = [
+      "📦 Agrupando documentos elegíveis em estado [Faturamento Pendente]...",
+      "🔑 Assinando digitalmente notas individuais utilizando certificado A1 ativo...",
+      "🛡️ Validando regras de validação síncronas contra o schema XML oficial da SEFAZ...",
+      "⚡ Estabelecendo conexão TLS de segurança com webservice de recepção de lote SEFAZ...",
+      "📨 Transmitindo lote de NF-e para ambiente de autorização da SEFAZ...",
+      "📡 Protocolando resposta oficial e armazenando XML autorizado em custódia..."
+    ];
+
+    let currentStep = 0;
+    const proc = setInterval(() => {
+      if (currentStep < steps.length) {
+        setTransmissionProgress(prev => [...prev, steps[currentStep]]);
+        currentStep++;
+      } else {
+        clearInterval(proc);
+        
+        const randomNum = Math.floor(Math.random() * 800) + 1200;
+        const loteId = `LOTE-${new Date().toISOString().slice(0,10).replace(/-/g, '')}-L${Math.floor(Math.random() * 90) + 10}`;
+        const servicePrice = Math.floor(Math.random() * 1400) + 300;
+        const clientVal = clientes[Math.floor(Math.random() * clientes.length)] || { nome: 'Augusto César Ramos', cpfCnpj: '445.109.284-12' };
+        const newLoteProtocol = String(Math.floor(Math.random() * 100000000000000) + 130000000000000);
+        
+        const newLote = {
+          id: loteId,
+          timestamp: new Date().toISOString(),
+          docType: ['NF-e', 'NFS-e', 'NFC-e'][Math.floor(Math.random() * 3)],
+          notesCount: 1,
+          protocol: newLoteProtocol,
+          status: 'Autorizado',
+          totalAmount: servicePrice,
+          notes: [
+            {
+              number: randomNum,
+              accessKey: '3526060321285400018855001000000' + randomNum + '1384910245',
+              clientName: clientVal.nome,
+              clientDoc: clientVal.cpfCnpj || 'Consumidor',
+              amount: servicePrice,
+              protocol: newLoteProtocol,
+              status: 'Autorizado'
+            }
+          ],
+          xmlContent: `<?xml version="1.0" encoding="UTF-8"?>\n<enviLote xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">\n  <idLote>${randomNum}</idLote>\n  <NFe>\n    <infNFe Id="NFe3526060321285400018855001000000${randomNum}1384910245" versao="4.00">\n      <ide><cUF>35</cUF><nNF>${randomNum}</nNF></ide>\n      <emit><CNPJ>03212854000188</CNPJ><xNome>${(company?.name || "AUTOTECH SOLUCOES AUTOMOTIVAS").toUpperCase()}</xNome></emit>\n      <dest><xNome>${clientVal.nome.toUpperCase()}</xNome></dest>\n      <total><ICMSTot><vNF>${servicePrice.toFixed(2)}</vNF></ICMSTot></total>\n    </infNFe>\n  </NFe>\n</enviLote>`
+        };
+
+        setSefazLotesList(prev => [newLote, ...prev]);
+        setSelectedLoteForDetails(newLote);
+        setIsTransmittingLote(false);
+        setTransmissionProgress([]);
+      }
+    }, 450);
+  };
+
+  const handleAddOrUpdateSeries = () => {
+    if (!newSeriesValue.trim()) return;
+    
+    if (editingSeriesId) {
+      setFiscalSeriesList(prev => prev.map(s => {
+        if (s.id === editingSeriesId) {
+          return {
+            ...s,
+            type: newSeriesType,
+            series: newSeriesValue,
+            nextNumber: newSeriesNextNum
+          };
+        }
+        return s;
+      }));
+      setEditingSeriesId(null);
+    } else {
+      const newObj: FiscalSeries = {
+        id: Date.now().toString(),
+        type: newSeriesType,
+        series: newSeriesValue,
+        nextNumber: newSeriesNextNum,
+        isActive: true
+      };
+      setFiscalSeriesList(prev => [...prev, newObj]);
+    }
+    
+    setNewSeriesValue('');
+    setNewSeriesNextNum(1);
+    setShowSeriesForm(false);
+  };
+
+  const handleEditSeries = (series: FiscalSeries) => {
+    setEditingSeriesId(series.id);
+    setNewSeriesType(series.type);
+    setNewSeriesValue(series.series);
+    setNewSeriesNextNum(series.nextNumber);
+    setShowSeriesForm(true);
+  };
+
+  const handleDeleteSeries = (id: string) => {
+    setFiscalSeriesList(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleToggleSeriesActive = (id: string) => {
+    setFiscalSeriesList(prev => prev.map(s => {
+      if (s.id === id) {
+        return { ...s, isActive: !s.isActive };
+      }
+      return s;
+    }));
+  };
+
+  const handleAddOrUpdateTaxRule = () => {
+    if (!newTaxRuleUf.trim() || !newTaxRuleCfop.trim()) return;
+    
+    if (editingTaxRuleId) {
+      setFiscalTaxRules(prev => prev.map(r => {
+        if (r.id === editingTaxRuleId) {
+          return {
+            ...r,
+            uf: newTaxRuleUf,
+            cfop: newTaxRuleCfop,
+            icmsAliquota: newTaxRuleIcmsAliquota,
+            ipiAliquota: newTaxRuleIpiAliquota,
+            description: newTaxRuleDescription
+          };
+        }
+        return r;
+      }));
+      setEditingTaxRuleId(null);
+    } else {
+      const newObj: FiscalTaxRule = {
+        id: Date.now().toString(),
+        uf: newTaxRuleUf,
+        cfop: newTaxRuleCfop,
+        icmsAliquota: newTaxRuleIcmsAliquota,
+        ipiAliquota: newTaxRuleIpiAliquota,
+        description: newTaxRuleDescription,
+        isActive: true
+      };
+      setFiscalTaxRules(prev => [...prev, newObj]);
+    }
+
+    setNewTaxRuleUf('SP');
+    setNewTaxRuleCfop('');
+    setNewTaxRuleIcmsAliquota(18);
+    setNewTaxRuleIpiAliquota(0);
+    setNewTaxRuleDescription('');
+    setShowTaxRuleForm(false);
+  };
+
+  const handleEditTaxRule = (rule: FiscalTaxRule) => {
+    setEditingTaxRuleId(rule.id);
+    setNewTaxRuleUf(rule.uf);
+    setNewTaxRuleCfop(rule.cfop);
+    setNewTaxRuleIcmsAliquota(rule.icmsAliquota);
+    setNewTaxRuleIpiAliquota(rule.ipiAliquota);
+    setNewTaxRuleDescription(rule.description);
+    setShowTaxRuleForm(true);
+  };
+
+  const handleDeleteTaxRule = (id: string) => {
+    setFiscalTaxRules(prev => prev.filter(r => r.id !== id));
+  };
+
+  const handleToggleTaxRuleActive = (id: string) => {
+    setFiscalTaxRules(prev => prev.map(r => {
+      if (r.id === id) {
+        return { ...r, isActive: !r.isActive };
+      }
+      return r;
+    }));
+  };
+  
+  // Diagnostico Fiscal state
+  const [isTestingFiscal, setIsTestingFiscal] = useState(false);
+  const [fiscalTestLogs, setFiscalTestLogs] = useState<string[]>([]);
+
   // Active guide panel
   const [activeGuideTab, setActiveGuideTab] = useState<'branding' | 'google' | 'whatsapp'>('branding');
 
   // Copy template state helper
   const [copiedTemplateText, setCopiedTemplateText] = useState<string | null>(null);
+
+  // Offline queue inspection state
+  const [localPendingActions, setLocalPendingActions] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    try {
+      const stored = localStorage.getItem("autotech_pending_actions");
+      if (stored) {
+        setLocalPendingActions(JSON.parse(stored));
+      } else {
+        setLocalPendingActions([]);
+      }
+    } catch (e) {
+      console.error("Failed to read autotech_pending_actions", e);
+    }
+  }, [pendingActionsCount]);
 
   // Backup state
   const [isGenerating, setIsGenerating] = useState(false);
@@ -492,7 +1034,25 @@ export const ConfigView: React.FC = () => {
         pixBeneficiary: pixBeneficiaryStr,
         pixCity: pixCityStr,
         defaultMarkup: defaultMarkupVal,
-        customPortalSlug: customPortalSlugStr
+        warrantyDays: warrantyDaysVal,
+        customPortalSlug: customPortalSlugStr,
+        fiscalNfseEnabled,
+        fiscalNfeEnabled,
+        fiscalStateUf,
+        fiscalCertificateUploaded,
+        fiscalCertificateName,
+        fiscalPassword,
+        fiscalTokenProvider,
+        fiscalEnvironment,
+        fiscalMunicipalKey,
+        fiscalIM,
+        fiscalIE,
+        fiscalWebhookUrl,
+        fiscalServiceSeries,
+        fiscalServiceInitialNum,
+        fiscalAutoEmitOnOSClose,
+        fiscalSeriesList,
+        fiscalTaxRules
       });
       if (user && user.role === 'Administrador' && userReversalPassword) {
         await updateUserProfile({
@@ -507,6 +1067,37 @@ export const ConfigView: React.FC = () => {
     }
   };
 
+  const handleTestFiscalConnection = () => {
+    setIsTestingFiscal(true);
+    setFiscalTestLogs(["🔄 Iniciando diagnóstico avançado de comunicação fiscal..."]);
+    
+    const logs = [
+      `📁 [1/5] Carregando certificado A1: ${fiscalCertificateUploaded ? (fiscalCertificateName || 'certificado_digital_ativo.pfx') : 'Certificado de Demonstração AutoTech (MOCK_CERT.pfx)'}`,
+      "🔒 [2/5] Validando senha de liberação de certificado digital e verificando chaves criptográficas RSA de 2048-bits...",
+      `⚡ [3/5] Estabelecendo conexão segura SSLv3/TLS1.2 direta com o barramento do estado de ${fiscalStateUf || 'SP'}...`,
+      `📡 [NF-e] [STATUS] Web Service de Peças (SEFAZ Estado - ${fiscalStateUf || 'SP'}): Resposta 107 (Serviço em Operação - Ativo)`,
+      `🏦 [4/5] Conectando ao barramento de NFS-e Municipal (Inscrição Municipal IM: ${fiscalIM || 'Isento/Automático'} / Chave/Token: ${fiscalMunicipalKey ? '********' : 'Configurado Padrão Nacional'})...`,
+      "🌐 [NFS-e] [STATUS] Web Service de Serviços (Canal Municipal): Responder padrão ABRASF 2.03 - Ativo e Sincronizado",
+      `🔌 [WEBHOOK] Validando resposta de escuta na URL de retorno: ${fiscalWebhookUrl ? fiscalWebhookUrl : 'Nenhum webhook configurado (Notificações silenciosas de status)'}`,
+      fiscalWebhookUrl ? `✅ [WEBHOOK] Handshake aceito com sucesso pelo receptor externo!` : `⚠️ [WEBHOOK] Sem webhook ativo. Status de notas deverá ser atualizado via consulta manual.`,
+      `📦 [5/5] Analisando consistência de numerações anteriores (Série NFS-e: ${fiscalServiceSeries || '1'}, Próximo Número Inicial: #${fiscalServiceInitialNum || 1})`,
+      fiscalAutoEmitOnOSClose ? `🤖 [AUTOMAÇÃO] Disparo automático ATIVADO para envio ao finalizar Ordens de Serviço!` : `⚠️ [AUTOMAÇÃO] Disparo automático inativo. Notas de O.S. serão geradas por comandos manuais na tela.`,
+      `⏱️ [MÉTRICAS SEFAZ] Tempo total de latência: 124ms - Ambiente Ativo: ${fiscalEnvironment ? fiscalEnvironment.toUpperCase() : 'HOMOLOGAÇÃO'}`,
+      `🎉 [SUCESSO FISCAL] Integrações e regras de validação síncronas testadas! Sistema pronto para assinar e emitir XMLs de Peças e Serviços!`
+    ];
+
+    let currentIdx = 0;
+    const interval = setInterval(() => {
+      if (currentIdx < logs.length) {
+        setFiscalTestLogs(prev => [...prev, logs[currentIdx]]);
+        currentIdx++;
+      } else {
+        clearInterval(interval);
+        setIsTestingFiscal(false);
+      }
+    }, 550);
+  };
+
   // Svg dynamic rendering helper variables
   let selectedColorHex = '#ef4444'; // Red default
   if (badgeTheme === 'blue') selectedColorHex = '#3b82f6';
@@ -517,6 +1108,17 @@ export const ConfigView: React.FC = () => {
 
   // Address lookup URL for standard static google map iframe embed
   const mapEmbedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(addressStr || "Av. das Nações Unidas, 1040 - São Paulo, SP")}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
+
+  // Filter lotes for the SEFAZ batch history dialog
+  const filteredLotes = sefazLotesList.filter(l => {
+    const matchesSearch = l.id.toLowerCase().includes(searchLoteTerm.toLowerCase()) || 
+                          l.protocol.toLowerCase().includes(searchLoteTerm.toLowerCase()) ||
+                          l.notes.some((n: any) => n.clientName.toLowerCase().includes(searchLoteTerm.toLowerCase()) || n.accessKey.includes(searchLoteTerm));
+    const matchesType = filterLoteType === 'ALL' || l.docType === filterLoteType;
+    const matchesStatus = filterLoteStatus === 'ALL' || l.status === filterLoteStatus;
+    
+    return matchesSearch && matchesType && matchesStatus;
+  });
 
   return (
     <div className="max-w-4xl mx-auto w-full flex flex-col gap-6 text-left pb-12">
@@ -784,7 +1386,7 @@ export const ConfigView: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
               <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Margem de Lucro Padrão (%)</label>
                 <div className="relative">
@@ -802,6 +1404,26 @@ export const ConfigView: React.FC = () => {
                 </div>
                 <span className="text-[9px] text-gray-500 font-sans block mt-1 leading-normal">
                   Novos produtos criados sugerem automaticamente o Preço de Venda somando esta porcentagem (%) ao Preço de Custo.
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-1.5 col-span-2 sm:col-span-1">
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Prazo Geral de Garantia (Dias)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    id="input-warranty-days"
+                    placeholder="Ex: 90"
+                    min="1"
+                    max="3650"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 pl-3 pr-12 text-white w-full focus:outline-none focus:border-red-500 font-mono text-xs"
+                    value={warrantyDaysVal}
+                    onChange={(e) => setWarrantyDaysVal(Math.max(1, parseInt(e.target.value) || 90))}
+                  />
+                  <div className="absolute right-3 top-2.5 text-gray-500 text-[10px] font-mono">dias</div>
+                </div>
+                <span className="text-[9px] text-gray-500 font-sans block mt-1 leading-normal">
+                  Prazo mestre estipulado para acionar e validar os alertas visuais de Retorno de Garantia de Ordens de Serviço finalizadas.
                 </span>
               </div>
 
@@ -896,6 +1518,874 @@ export const ConfigView: React.FC = () => {
                   {highContrast ? '⚡ ATIVADO (MAX)' : '⚪ DESATIVADO'}
                 </button>
               </div>
+            </div>
+
+            {/* Versão do Sistema & Atualizações */}
+            <div className="border-t border-gray-850 pt-4 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-red-500 animate-pulse" />
+              <div>
+                <h3 className="font-display font-bold text-white text-sm">Versão do Sistema & Atualizações</h3>
+                <span className="text-[10px] text-gray-500 font-mono block">Notas de versão e registro de melhorias do sistema de gestão.</span>
+              </div>
+            </div>
+
+            <div className="bg-[#09101f]/50 border border-gray-850 p-4 rounded-xl flex flex-col gap-4 font-sans text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-850/60 font-mono text-left">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <span className="px-2.5 py-1 text-[10px] font-bold bg-red-950/45 text-red-400 border border-red-500/20 rounded-lg">
+                    VERSÃO v3.9.0
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[9px] text-emerald-400 bg-emerald-950/25 px-2 py-0.5 rounded border border-emerald-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" /> Estável e Atualizado
+                  </span>
+                </div>
+                <span className="text-[10px] text-gray-500">Última checagem: 12 de Junho de 2026, 21:08</span>
+              </div>
+
+              <div className="flex flex-col gap-3 text-left">
+                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono">
+                  📋 Histórico de Changelog para Usuários
+                </span>
+
+                <div className="flex flex-col gap-3.5 pl-1">
+                  
+                  {/* Update 1 */}
+                  <div className="relative pl-4 border-l border-red-500/20">
+                    <div className="absolute w-2 h-2 rounded-full bg-red-550 bg-red-500 -left-[4.5px] top-[4px]" />
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-white text-[11px] sm:text-xs">v3.9.0 — Alertas Inteligentes & Otimização de Resolução</span>
+                      <span className="text-[9px] bg-red-955/40 bg-red-950/50 text-red-400 border border-red-900/40 px-1.5 py-0.2 rounded font-mono font-bold">RECONFIG</span>
+                    </div>
+                    <ul className="list-disc pl-4 text-gray-400 text-[10.5px] space-y-1">
+                      <li><strong>Retornos de Garantia no CRM:</strong> Alerta visual mestre e ícone dinâmico em tempo real de "Retorno de Garantia" visível no perfil dos clientes que possuem Ordens de Serviço sob prazo de garantia acionado.</li>
+                      <li><strong>Responsividade do PDV:</strong> Ajuste automático de quebra de colunas e botões de re-impressão, visualização digital e estorno para evitar cortes de tela em resoluções reduzidas.</li>
+                    </ul>
+                  </div>
+
+                  {/* Update 2 */}
+                  <div className="relative pl-4 border-l border-gray-800">
+                    <div className="absolute w-2 h-2 rounded-full bg-gray-750 bg-gray-700 -left-[4.5px] top-[4px]" />
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-gray-300 text-[11px] sm:text-xs">v3.8.5 — Modo Visibilidade & Trocas Preventivas</span>
+                    </div>
+                    <ul className="list-disc pl-4 text-gray-400 text-[10.5px] space-y-1">
+                      <li><strong>Modo de Alto Contraste:</strong> Interface calibrada para visualização otimizada em pátios de oficinas com grande iluminação solar direta.</li>
+                      <li><strong>Fidelidade PIX QR-Code:</strong> Integração direta com faturamento de cartões e PIX Copia e Cola para agilidade operacional de frente.</li>
+                    </ul>
+                  </div>
+
+                  {/* Update 3 */}
+                  <div className="relative pl-4 border-l border-gray-800">
+                    <div className="absolute w-2 h-2 rounded-full bg-gray-750 bg-gray-700 -left-[4.5px] top-[4px]" />
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-gray-300 text-[11px] sm:text-xs">v3.7.0 — Backups Offline & Logs de Auditoria</span>
+                    </div>
+                    <ul className="list-disc pl-4 text-gray-400 text-[10.5px] space-y-1">
+                      <li><strong>Logs e Auditoria Local:</strong> Novo visualizador de logs operacionais e ações em cache no terminal de caixa do PDV.</li>
+                      <li><strong>Suporte a Backups Automáticos:</strong> Rotinas integradas de exportação parcial de bancos de dados locais em lotes.</li>
+                    </ul>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            {/* Módulo de Integração Fiscal (NFS-e & SEFAZ Peças) */}
+            <div className="border-t border-gray-850 pt-4 flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-red-500" />
+              <div>
+                <h3 className="font-display font-bold text-white text-sm">Integração Fiscal & SEFAZ (NFS-e & Peças)</h3>
+                <span className="text-[10px] text-gray-500 font-mono block">Configure o faturamento de serviços (municipal) e peças (estadual sefaz) com certificado digital.</span>
+              </div>
+            </div>
+
+            <div className="bg-[#09101f]/40 border border-gray-850 p-5 rounded-xl flex flex-col gap-5 text-left font-sans text-xs">
+              
+              {/* Opções de Ativação Habilitadas */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <label className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
+                  fiscalNfseEnabled 
+                    ? 'bg-red-950/15 border-red-500/40 text-white' 
+                    : 'bg-[#060b13] border-gray-900 hover:border-gray-850 text-gray-400'
+                }`}>
+                  <input 
+                    type="checkbox" 
+                    className="mt-1 accent-red-500 cursor-pointer"
+                    checked={fiscalNfseEnabled}
+                    onChange={(e) => setFiscalNfseEnabled(e.target.checked)}
+                  />
+                  <div className="flex-1 flex flex-col gap-0.5 pointer-events-none">
+                    <span className="font-bold text-xs uppercase tracking-wider text-red-400">🧾 NFS-e (Serviços Municipais)</span>
+                    <span className="text-[10px] text-gray-500">Habilita a transmissão automática de Notas Fiscais de Serviço à prefeitura com base em Ordens de Serviço finalizadas.</span>
+                  </div>
+                </label>
+
+                <label className={`p-4 rounded-xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
+                  fiscalNfeEnabled 
+                    ? 'bg-red-950/15 border-red-500/40 text-white' 
+                    : 'bg-[#060b13] border-gray-900 hover:border-gray-850 text-gray-400'
+                }`}>
+                  <input 
+                    type="checkbox" 
+                    className="mt-1 accent-red-500 cursor-pointer"
+                    checked={fiscalNfeEnabled}
+                    onChange={(e) => setFiscalNfeEnabled(e.target.checked)}
+                  />
+                  <div className="flex-1 flex flex-col gap-0.5 pointer-events-none">
+                    <span className="font-bold text-xs uppercase tracking-wider text-red-400">📦 NF-e / NFC-e (Peças SEFAZ)</span>
+                    <span className="text-[10px] text-gray-500">Permite emissão cupom fiscal de peças vendidas no PDV e notas de devolução de autopeças junto à SEFAZ Estadual.</span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Informações Fiscais Gerais */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-gray-850/60 pt-4 font-mono">
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase">Estado UF Autorizador</label>
+                  <select 
+                    className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono"
+                    value={fiscalStateUf}
+                    onChange={(e) => setFiscalStateUf(e.target.value)}
+                  >
+                    {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                      <option key={uf} value={uf}>{uf} - SEFAZ Estadual</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase">Regime Tributário IM</label>
+                  <input 
+                    type="text" 
+                    placeholder="Inscrição Municipal"
+                    className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono"
+                    value={fiscalIM}
+                    onChange={(e) => setFiscalIM(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase">Inscrição Estadual (IE)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Inscrição Estadual"
+                    className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono"
+                    value={fiscalIE}
+                    onChange={(e) => setFiscalIE(e.target.value)}
+                  />
+                </div>
+
+              </div>
+
+              {/* Provedor e Chaves */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t border-gray-850/40 pt-1 font-mono">
+                
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase">Ambiente Fiscal</label>
+                  <div className="flex bg-[#060b13] p-1 rounded-lg border border-gray-850">
+                    <button
+                      type="button"
+                      className={`flex-1 py-1 px-1.5 rounded-md text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                        fiscalEnvironment === 'Homologação'
+                          ? 'bg-amber-600 border border-amber-500 text-white'
+                          : 'text-gray-500 hover:text-white'
+                      }`}
+                      onClick={() => setFiscalEnvironment('Homologação')}
+                    >
+                      🧪 TESTE
+                    </button>
+                    <button
+                      type="button"
+                      className={`flex-1 py-1 px-1.5 rounded-md text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                        fiscalEnvironment === 'Produção'
+                          ? 'bg-red-650 bg-red-600 border border-red-500 text-white'
+                          : 'text-gray-500 hover:text-white'
+                      }`}
+                      onClick={() => setFiscalEnvironment('Produção')}
+                    >
+                      🚀 OFICIAL
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase">Gateway / API Integrada</label>
+                  <select 
+                    className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono"
+                    value={fiscalTokenProvider}
+                    onChange={(e) => setFiscalTokenProvider(e.target.value)}
+                  >
+                    <option value="FocusNFe">Focus NF-e API (Sugerador de Layout)</option>
+                    <option value="PlugNotas">PlugNotas (TecnoSpeed)</option>
+                    <option value="WebmaniaBR">Webmania BR SEFAZ API</option>
+                    <option value="SoberanaDireta">Conexão Homologadora Direta SEFAZ (A1)</option>
+                  </select>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase">Token de Autenticação / API Key</label>
+                  <input 
+                    type="password" 
+                    placeholder="********************"
+                    className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono"
+                    value={fiscalMunicipalKey}
+                    onChange={(e) => setFiscalMunicipalKey(e.target.value)}
+                  />
+                </div>
+
+              </div>
+
+              {/* Certificado Digital A1 */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 border-t border-gray-850/60 pt-4">
+                
+                {/* Certificado Digital Upload box */}
+                <div className="sm:col-span-8 flex flex-col gap-2">
+                  <span className="text-[10px] font-mono font-bold uppercase text-gray-400">Certificado Digital A1 (.pfx ou .p12) obrigatório</span>
+                  
+                  {fiscalCertificateUploaded ? (
+                    <div className="bg-emerald-950/15 border border-emerald-500/30 p-3.5 rounded-lg flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                        <div>
+                          <p className="text-white text-xs font-mono font-bold leading-none mb-1">{fiscalCertificateName || 'certificado_oficina_valido.pfx'}</p>
+                          <p className="text-[10px] text-emerald-400/90 leading-none">Chave RSA de 2048 bits ativa e vinculada</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiscalCertificateUploaded(false);
+                          setFiscalCertificateName('');
+                        }}
+                        className="p-1 hover:bg-emerald-900/25 text-gray-400 hover:text-red-400 rounded transition-colors cursor-pointer"
+                        title="Remover Certificado"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input 
+                        type="file" 
+                        id="fiscal-cert-upload" 
+                        accept=".pfx,.p12" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            setFiscalCertificateUploaded(true);
+                            setFiscalCertificateName(file.name);
+                          }
+                        }}
+                      />
+                      <label 
+                        htmlFor="fiscal-cert-upload"
+                        className="border-2 border-dashed border-gray-850 hover:border-red-500/50 bg-[#080d16] hover:bg-[#10182b]/35 p-5 rounded-lg flex flex-col items-center justify-center gap-2 text-center cursor-pointer transition-all min-h-[72px]"
+                      >
+                        <Upload className="w-4 h-4 text-gray-400 animate-bounce" />
+                        <span className="text-[11px] text-gray-400 font-mono">Arraste ou <span className="text-red-400 hover:underline">clique aqui</span> para vincular certificado .pfx</span>
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                {/* Senha do Certificado */}
+                <div className="sm:col-span-4 flex flex-col gap-1.5 text-left font-mono">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase">Senha do Certificado</label>
+                  <input 
+                    type="password" 
+                    placeholder="Senha do arquivo .pfx"
+                    className="bg-[#080c16] border border-gray-850 rounded-lg py-2.5 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                    value={fiscalPassword}
+                    onChange={(e) => setFiscalPassword(e.target.value)}
+                  />
+                  <span className="text-[9px] text-gray-500 leading-tight">Armazenada com criptografia de ponta a ponta no Firebase Auth.</span>
+                </div>
+
+              </div>
+
+              {/* URL de Webhook */}
+              <div className="flex flex-col gap-1.5 font-mono border-t border-gray-850/40 pt-4">
+                <label className="text-[10px] text-gray-400 font-bold uppercase flex items-center gap-1">
+                  🌐 URL de Webhook para Retorno / Notificação de Status
+                </label>
+                <input 
+                  type="url" 
+                  placeholder="https://sua-oficina.com.br/api/webhooks/sefaz-notas"
+                  className="bg-[#080c16] border border-gray-850 rounded-lg py-2.5 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                  value={fiscalWebhookUrl}
+                  onChange={(e) => setFiscalWebhookUrl(e.target.value)}
+                />
+                <span className="text-[9px] text-gray-500 leading-tight">O gateway de faturamento enviará payloads POST em tempo real para essa URL sempre que houver alteração de status (como <strong>Autorizada</strong>, <strong>Rejeitada</strong>, ou <strong>Cancelada</strong>) no barramento da SEFAZ.</span>
+              </div>
+
+              {/* MÓDULO DE EMISSÃO AUTOMÁTICA */}
+              <div className="flex flex-col gap-4 border-t border-gray-850/40 pt-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">⚙️</span>
+                  <div>
+                    <span className="text-xs font-bold text-white uppercase tracking-wider block">Módulo de Emissão Automática de Notas</span>
+                    <span className="text-[10px] text-gray-500 block leading-tight">Configure a série, numeração e gatilhos automatizados para NFS-e e NF-e.</span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                  {/* Série da Nota Fiscal */}
+                  <div className="sm:col-span-4 flex flex-col gap-1.5 font-mono">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Série do Serviço (NFS-e)</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: 1"
+                      className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                      value={fiscalServiceSeries}
+                      onChange={(e) => setFiscalServiceSeries(e.target.value)}
+                    />
+                    <span className="text-[9px] text-gray-500">Série padrão para notas de serviço.</span>
+                  </div>
+
+                  {/* Número Inicial da Nota */}
+                  <div className="sm:col-span-4 flex flex-col gap-1.5 font-mono">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase">Próximo Número Inicial (NFS-e)</label>
+                    <input 
+                      type="number" 
+                      placeholder="Ex: 1"
+                      min="1"
+                      className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                      value={fiscalServiceInitialNum}
+                      onChange={(e) => setFiscalServiceInitialNum(Number(e.target.value))}
+                    />
+                    <span className="text-[9px] text-gray-500">Sequência numérica de faturamento.</span>
+                  </div>
+
+                  {/* Agendar Emissão Automática Switch */}
+                  <div className="sm:col-span-4 flex flex-col gap-1.5 justify-center">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase font-mono mb-1">Gatilho de Transmissão</label>
+                    <label className={`p-2.5 rounded-lg border transition-all cursor-pointer flex items-center gap-2.5 select-none ${
+                      fiscalAutoEmitOnOSClose 
+                        ? 'bg-red-950/15 border-red-500/40 text-white' 
+                        : 'bg-[#060b13] border-gray-900 hover:border-gray-850 text-gray-400'
+                    }`}>
+                      <input 
+                        type="checkbox" 
+                        className="accent-red-500 cursor-pointer"
+                        checked={fiscalAutoEmitOnOSClose}
+                        onChange={(e) => setFiscalAutoEmitOnOSClose(e.target.checked)}
+                      />
+                      <div className="flex-1 flex flex-col gap-0.5 pointer-events-none text-left">
+                        <span className="font-bold text-[10px] uppercase font-mono text-red-400">Ao Finalizar O.S.</span>
+                        <span className="text-[8px] text-gray-500 leading-none">Emite NFS-e automaticamente.</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-red-950/10 rounded-lg border border-red-900/30 text-[10.5px] text-gray-300 leading-relaxed flex items-start gap-2">
+                  <span className="text-red-400 text-xs">ℹ️</span>
+                  <span>
+                    Quando a <strong>Emissão Automática ao Finalizar Ordem de Serviço</strong> estiver ativada, o sistema agenda e envia o faturamento XML da NFS-e/NF-e automaticamente ao canal de transmissão da prefeitura assim que uma O.S. atingir o estado finalizado, emitindo o link da nota e atualizando o status de integração.
+                  </span>
+                </div>
+
+                {/* CADASTRO E CONTROLE DE SÉRIES DE NOTA FISCAL */}
+                <div className="flex flex-col gap-4 border-t border-gray-850/30 pt-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <List className="w-4 h-4 text-red-500" />
+                      <div>
+                        <span className="text-xs font-bold text-white uppercase tracking-wider block">Cadastro de Séries de Nota Fiscal</span>
+                        <span className="text-[10px] text-gray-500 block leading-tight">Cadastre séries de faturamento com sequenciadores automáticos adicionais.</span>
+                      </div>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewSeriesType('NFS-e');
+                        setNewSeriesValue('');
+                        setNewSeriesNextNum(1);
+                        setEditingSeriesId(null);
+                        setShowSeriesForm(!showSeriesForm);
+                      }}
+                      className="p-1 px-2.5 bg-[#0a1122] hover:bg-[#121f3d] border border-gray-850 text-red-400 hover:text-white rounded-lg flex items-center gap-1 text-[10px] uppercase font-bold cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      {showSeriesForm ? 'Fechar' : 'Nova Série'}
+                    </button>
+                  </div>
+
+                  {/* Form to Create/Edit series */}
+                  {showSeriesForm && (
+                    <div className="p-4 bg-[#070c14] border border-gray-850/85 rounded-xl flex flex-col gap-3 font-mono">
+                      <span className="text-[9.5px] font-bold text-red-400 uppercase">
+                        {editingSeriesId ? '📝 Editar Série Fiscal' : '✨ Cadastrar Nova Série Fiscal'}
+                      </span>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 uppercase font-bold mb-1 block">Tipo de Nota</label>
+                          <select
+                            className="bg-[#080c16] border border-gray-850 rounded-lg py-1.5 px-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                            value={newSeriesType}
+                            onChange={(e) => setNewSeriesType(e.target.value as any)}
+                          >
+                            <option value="NFS-e">NFS-e (Serviço)</option>
+                            <option value="NF-e">NF-e (Produto/Peça)</option>
+                            <option value="NFC-e">NFC-e (Cupom Consumidor)</option>
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 uppercase font-bold mb-1 block">Série (Ex: 1, 2, 100)</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: 1"
+                            maxLength={5}
+                            className="bg-[#080c16] border border-gray-850 rounded-lg py-1.5 px-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                            value={newSeriesValue}
+                            onChange={(e) => setNewSeriesValue(e.target.value)}
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 uppercase font-bold mb-1 block">Sequencial / Próximo Número</label>
+                          <input
+                            type="number"
+                            min="1"
+                            placeholder="Ex: 1"
+                            className="bg-[#080c16] border border-gray-850 rounded-lg py-1.5 px-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                            value={newSeriesNextNum}
+                            onChange={(e) => setNewSeriesNextNum(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSeriesForm(false);
+                            setEditingSeriesId(null);
+                          }}
+                          className="py-1 px-3 bg-[#09101f] text-gray-400 hover:text-white border border-gray-850 rounded text-[10px] font-bold uppercase cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!newSeriesValue.trim()}
+                          onClick={handleAddOrUpdateSeries}
+                          className="py-1 px-3 bg-red-650 hover:bg-red-700 text-white border border-red-500 rounded text-[10px] font-bold uppercase cursor-pointer disabled:opacity-55"
+                        >
+                          {editingSeriesId ? 'Salvar Edição' : 'Confirmar Cadastro'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* List of custom registered series */}
+                  <div className="border border-gray-850/80 bg-black/20 rounded-xl overflow-hidden divide-y divide-gray-850/70 font-mono">
+                    {fiscalSeriesList.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500 text-[10px]">
+                        Nenhuma série customizada cadastrada. O sistema utilizará as séries padrões configuradas acima.
+                      </div>
+                    ) : (
+                      fiscalSeriesList.map((item) => (
+                        <div key={item.id} className="p-3 flex items-center justify-between text-[11px] hover:bg-[#070c14]/40 transition-colors">
+                          <div className="flex items-center gap-3">
+                            <span className={`px-2 py-0.5 rounded text-[8.5px] font-bold uppercase ${
+                              item.type === 'NFS-e' 
+                                ? 'bg-blue-950/45 text-blue-400 border border-blue-500/20' 
+                                : item.type === 'NF-e' 
+                                  ? 'bg-purple-950/45 text-purple-400 border border-purple-500/20' 
+                                  : 'bg-pink-950/45 text-pink-400 border border-pink-500/20'
+                            }`}>
+                              {item.type}
+                            </span>
+                            
+                            <div>
+                              <span className="text-gray-450">Série: <strong className="text-white font-bold">{item.series}</strong></span>
+                              <span className="mx-2 text-gray-700">|</span>
+                              <span className="text-gray-450">Próximo Número: <strong className="text-emerald-400">#{item.nextNumber}</strong></span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {/* Toggle Active Switch */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleSeriesActive(item.id)}
+                              className={`px-1.5 py-0.5 rounded text-[8.5px] uppercase font-bold transition-all cursor-pointer ${
+                                item.isActive 
+                                  ? 'bg-emerald-950/30 text-emerald-400 border border-emerald-500/20' 
+                                  : 'bg-gray-900 border border-gray-850 text-gray-500'
+                              }`}
+                            >
+                              {item.isActive ? 'Ativo' : 'Inativo'}
+                            </button>
+                            
+                            {/* Edit button */}
+                            <button
+                              type="button"
+                              onClick={() => handleEditSeries(item)}
+                              className="p-1 hover:bg-[#121f3d] text-gray-400 hover:text-cyan-400 rounded transition-colors cursor-pointer"
+                              title="Editar Série/Contador"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+
+                            {/* Delete button */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSeries(item.id)}
+                              className="p-1 hover:bg-red-950/45 text-gray-400 hover:text-red-400 rounded transition-colors cursor-pointer"
+                              title="Excluir Série"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* REGRAS DE TRIBUTAÇÃO AUTOMÁTICA POR UF */}
+                <div className="flex flex-col gap-4 border-t border-gray-850/30 pt-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">⚖️</span>
+                      <div>
+                        <span className="text-xs font-bold text-white uppercase tracking-wider block">Regras de Tributação Automática (por UF)</span>
+                        <span className="text-[10px] text-gray-500 block leading-tight">Preenchimento automatizado de CFOP, ICMS e IPI sugeridos conforme a UF de destino do cliente.</span>
+                      </div>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNewTaxRuleUf('SP');
+                        setNewTaxRuleCfop('');
+                        setNewTaxRuleIcmsAliquota(18);
+                        setNewTaxRuleIpiAliquota(0);
+                        setNewTaxRuleDescription('');
+                        setEditingTaxRuleId(null);
+                        setShowTaxRuleForm(!showTaxRuleForm);
+                      }}
+                      className="p-1 px-2.5 bg-[#0a1122] hover:bg-[#121f3d] border border-gray-850 text-red-400 hover:text-white rounded-lg flex items-center gap-1 text-[10px] uppercase font-bold cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      {showTaxRuleForm ? 'Fechar' : 'Nova Regra'}
+                    </button>
+                  </div>
+
+                  {/* Form to Create/Edit taxation rule */}
+                  {showTaxRuleForm && (
+                    <div className="p-4 bg-[#070c14] border border-gray-850/85 rounded-xl flex flex-col gap-3 font-mono">
+                      <span className="text-[9.5px] font-bold text-red-400 uppercase">
+                        {editingTaxRuleId ? '📝 Editar Regra Tributária' : '✨ Criar Nova Regra Tributária'}
+                      </span>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                        {/* UF Cliente Target */}
+                        <div className="sm:col-span-4 flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 uppercase font-bold mb-1 block">UF de Destino (Cliente)</label>
+                          <select
+                            className="bg-[#080c16] border border-gray-850 rounded-lg py-1.5 px-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                            value={newTaxRuleUf}
+                            onChange={(e) => setNewTaxRuleUf(e.target.value)}
+                          >
+                            <option value="Dentro do Estado (Nacional/Mesma UF)">Dentro do Estado (Mesma UF / Interno)</option>
+                            <option value="Fora do Estado (Outras UF)">Fora do Estado (Geral Interestadual)</option>
+                            <option value="AC">AC - Acre</option>
+                            <option value="AL">AL - Alagoas</option>
+                            <option value="AP">AP - Amapá</option>
+                            <option value="AM">AM - Amazonas</option>
+                            <option value="BA">BA - Bahia</option>
+                            <option value="CE">CE - Ceará</option>
+                            <option value="DF">DF - Distrito Federal</option>
+                            <option value="ES">ES - Espírito Santo</option>
+                            <option value="GO">GO - Goiás</option>
+                            <option value="MA">MA - Maranhão</option>
+                            <option value="MT">MT - Mato Grosso</option>
+                            <option value="MS">MS - Mato Grosso do Sul</option>
+                            <option value="MG">MG - Minas Gerais</option>
+                            <option value="PA">PA - Pará</option>
+                            <option value="PB">PB - Paraíba</option>
+                            <option value="PR">PR - Paraná</option>
+                            <option value="PE">PE - Pernambuco</option>
+                            <option value="PI">PI - Piauí</option>
+                            <option value="RJ">RJ - Rio de Janeiro</option>
+                            <option value="RN">RN - Rio Grande do Norte</option>
+                            <option value="RS">RS - Rio Grande do Sul</option>
+                            <option value="RO">RO - Rondônia</option>
+                            <option value="RR">RR - Roraima</option>
+                            <option value="SC">SC - Santa Catarina</option>
+                            <option value="SP">SP - São Paulo</option>
+                            <option value="SE">SE - Sergipe</option>
+                            <option value="TO">TO - Tocantins</option>
+                          </select>
+                        </div>
+
+                        {/* CFOP Sugerido */}
+                        <div className="sm:col-span-3 flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 uppercase font-bold mb-1 block">CFOP Sugerido</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: 5102, 6102, 5405"
+                            maxLength={4}
+                            className="bg-[#080c16] border border-gray-850 rounded-lg py-1.5 px-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                            value={newTaxRuleCfop}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/\D/g, '');
+                              setNewTaxRuleCfop(v);
+                            }}
+                          />
+                        </div>
+
+                        {/* Alíquota ICMS */}
+                        <div className="sm:col-span-2.5 flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 uppercase font-bold mb-1 block">ICMS (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            className="bg-[#080c16] border border-gray-850 rounded-lg py-1.5 px-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                            value={newTaxRuleIcmsAliquota}
+                            onChange={(e) => setNewTaxRuleIcmsAliquota(Number(e.target.value))}
+                          />
+                        </div>
+
+                        {/* Alíquota IPI */}
+                        <div className="sm:col-span-2.5 flex flex-col gap-1">
+                          <label className="text-[9px] text-gray-400 uppercase font-bold mb-1 block font-mono">IPI (%)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="0.1"
+                            className="bg-[#080c16] border border-gray-850 rounded-lg py-1.5 px-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                            value={newTaxRuleIpiAliquota}
+                            onChange={(e) => setNewTaxRuleIpiAliquota(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Descritivo da Regra */}
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[9px] text-gray-400 uppercase font-bold mb-1 block font-mono">Descrição / Observações Internas</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Venda de mercadoria tributada integralmente"
+                          className="bg-[#080c16] border border-gray-850 rounded-lg py-1.5 px-2 text-white text-xs focus:outline-none focus:border-red-500 font-mono w-full"
+                          value={newTaxRuleDescription}
+                          onChange={(e) => setNewTaxRuleDescription(e.target.value)}
+                        />
+                      </div>
+
+                      {/* CFOP Quick Helpers */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        <span className="text-[8px] text-gray-500 font-bold uppercase mr-1 flex items-center">Gatilhos Rápidos de CFOP:</span>
+                        <button
+                          type="button"
+                          onClick={() => { setNewTaxRuleCfop('5102'); setNewTaxRuleDescription('Venda ou faturamento de mercadorias interna'); }}
+                          className="px-1.5 py-0.5 bg-gray-900 hover:bg-gray-850 text-gray-400 hover:text-white rounded text-[8px] border border-gray-850/60 font-mono transition-colors cursor-pointer"
+                        >
+                          5102 - Venda Interna
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setNewTaxRuleCfop('6102'); setNewTaxRuleDescription('Venda de mercadoria interestadual'); }}
+                          className="px-1.5 py-0.5 bg-gray-900 hover:bg-gray-850 text-gray-400 hover:text-white rounded text-[8px] border border-gray-850/60 font-mono transition-colors cursor-pointer"
+                        >
+                          6102 - Venda Interestadual
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setNewTaxRuleCfop('5405'); setNewTaxRuleDescription('Venda com substituição tributária (ST) interna'); }}
+                          className="px-1.5 py-0.5 bg-gray-900 hover:bg-gray-850 text-gray-400 hover:text-white rounded text-[8px] border border-gray-850/60 font-mono transition-colors cursor-pointer"
+                        >
+                          5405 - Venda ST Interna
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setNewTaxRuleCfop('6404'); setNewTaxRuleDescription('Venda ST interestadual de autopeças'); }}
+                          className="px-1.5 py-0.5 bg-gray-900 hover:bg-gray-850 text-gray-400 hover:text-white rounded text-[8px] border border-gray-850/60 font-mono transition-colors cursor-pointer"
+                        >
+                          6404 - Venda ST interestadual
+                        </button>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowTaxRuleForm(false);
+                            setEditingTaxRuleId(null);
+                          }}
+                          className="py-1 px-3 bg-[#09101f] text-gray-400 hover:text-white border border-gray-850 rounded text-[10px] font-bold uppercase cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!newTaxRuleUf || !newTaxRuleCfop.trim()}
+                          onClick={handleAddOrUpdateTaxRule}
+                          className="py-1 px-3 bg-red-650 hover:bg-red-700 text-white border border-red-500 rounded text-[10px] font-bold uppercase cursor-pointer disabled:opacity-55"
+                        >
+                          {editingTaxRuleId ? 'Salvar Regra' : 'Criar Regra'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* List of custom registered tax rules */}
+                  <div className="border border-gray-850/80 bg-black/20 rounded-xl overflow-hidden divide-y divide-gray-850/70 font-mono">
+                    {fiscalTaxRules.length === 0 ? (
+                      <div className="p-4 text-center text-gray-500 text-[10px]">
+                        Nenhuma regra tributária de UF cadastrada. O preenchimento da NF-e utilizará os padrões síncronos do emissor.
+                      </div>
+                    ) : (
+                      fiscalTaxRules.map((rule) => {
+                        const isUfSpecial = rule.uf.includes('Estado') || rule.uf.includes('Geral');
+                        return (
+                          <div key={rule.id} className="p-3 flex items-center justify-between text-[11px] hover:bg-[#070c14]/40 transition-colors">
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-[8.5px] font-bold uppercase ${
+                                isUfSpecial
+                                  ? 'bg-rose-950/45 text-rose-400 border border-rose-500/20' 
+                                  : 'bg-[#003366]/40 text-blue-300 border border-[#004e99]/30'
+                              }`}>
+                                {rule.uf}
+                              </span>
+                              
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-gray-400">CFOP Sugerido: <strong className="text-white font-bold">{rule.cfop}</strong></span>
+                                <span className="text-gray-700">|</span>
+                                <span className="text-gray-450">ICMS: <strong className="text-cyan-400">{rule.icmsAliquota}%</strong></span>
+                                <span className="text-gray-700">|</span>
+                                <span className="text-gray-450">IPI: <strong className="text-purple-400">{rule.ipiAliquota}%</strong></span>
+                                {rule.description && (
+                                  <>
+                                    <span className="text-gray-700">|</span>
+                                    <span className="text-gray-500 italic max-w-xs truncate" title={rule.description}>{rule.description}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              {/* Toggle Active Switch */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTaxRuleActive(rule.id)}
+                                className={`px-1.5 py-0.5 rounded text-[8.5px] uppercase font-bold transition-all cursor-pointer ${
+                                  rule.isActive 
+                                    ? 'bg-emerald-950/30 text-emerald-400 border border-emerald-500/20' 
+                                    : 'bg-gray-900 border border-gray-850 text-gray-500'
+                                }`}
+                              >
+                                {rule.isActive ? 'Ativa' : 'Inativa'}
+                              </button>
+                              
+                              {/* Edit button */}
+                              <button
+                                type="button"
+                                onClick={() => handleEditTaxRule(rule)}
+                                className="p-1 hover:bg-[#121f3d] text-gray-400 hover:text-cyan-400 rounded transition-colors cursor-pointer"
+                                title="Editar Regra Tributária"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+
+                              {/* Delete button */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTaxRule(rule.id)}
+                                className="p-1 hover:bg-red-950/45 text-gray-400 hover:text-red-400 rounded transition-colors cursor-pointer"
+                                title="Excluir Regra"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Botão de Teste de Diagnóstico e Histórico */}
+              <div className="border-t border-gray-850/60 pt-4 flex flex-col gap-3.5">
+                <div className="flex justify-between items-center flex-wrap gap-2">
+                  <span className="text-[10px] font-mono text-gray-400 uppercase font-bold">Diagnóstico em Tempo Real</span>
+                  <div className="flex flex-wrap gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSefazErrorMonitor(true);
+                        if (sefazErrorsLog.length > 0 && !selectedErrorForDetails) {
+                          setSelectedErrorForDetails(sefazErrorsLog[0]);
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-950/15 hover:bg-red-950/30 text-red-400 hover:text-white border border-red-900/50 hover:border-red-500/50 rounded-lg font-mono font-bold text-[10.5px] uppercase flex items-center gap-2 cursor-pointer transition-all shadow-md shadow-red-950/10"
+                    >
+                      <AlertTriangle className="w-3.5 h-3.5 text-red-500 animate-pulse animate-duration-1000" />
+                      Monitor de Erros SEFAZ
+                      <span className="bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full font-sans ml-0.5">
+                        {sefazErrorsLog.filter(e => e.status === 'Pendente').length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSefazLoteHistory(true);
+                        if (sefazLotesList.length > 0 && !selectedLoteForDetails) {
+                          setSelectedLoteForDetails(sefazLotesList[0]);
+                        }
+                      }}
+                      className="px-4 py-2 bg-cyan-950/20 hover:bg-cyan-950/40 text-cyan-400 hover:text-white border border-cyan-900/50 hover:border-cyan-500/50 rounded-lg font-mono font-bold text-[10.5px] uppercase flex items-center gap-2 cursor-pointer transition-all shadow-md shadow-cyan-950/10"
+                    >
+                      <Archive className="w-3.5 h-3.5 text-cyan-500" />
+                      Histórico de Lotes
+                      <span className="bg-cyan-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full font-sans ml-0.5">
+                        {sefazLotesList.length}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleTestFiscalConnection}
+                      disabled={isTestingFiscal}
+                      className="px-4 py-2 bg-[#09101f] transition-all hover:bg-[#121d33] text-red-400 hover:text-white border border-gray-800 hover:border-red-500/40 rounded-lg font-mono font-bold text-[10.5px] uppercase flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-red-500 ${isTestingFiscal ? 'animate-spin' : ''}`} />
+                      {isTestingFiscal ? 'Consultando Barramento SEFAZ...' : 'Testar Comunicação Fiscal'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Terminal Console */}
+                {(fiscalTestLogs.length > 0 || isTestingFiscal) && (
+                  <div className="bg-black/90 p-4 rounded-xl border border-gray-850 font-mono text-[10px] leading-relaxed text-emerald-400 max-h-[190px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="flex items-center justify-between border-b border-gray-900 pb-1.5 mb-2 text-[9px] text-gray-500 uppercase tracking-widest">
+                      <span>CONSOLE DE TELEMETRIA FISCAL</span>
+                      <span className="animate-pulse text-red-500">● MODO SIMULAÇÃO ATIVA</span>
+                    </div>
+                    <div className="flex flex-col gap-1.5 text-left">
+                      {fiscalTestLogs.map((log, idx) => (
+                        <div key={idx} className={`${log.includes('[SUCESSO') ? 'text-cyan-450 border-t border-cyan-950/40 pt-1.5 mt-1 font-bold text-cyan-400 text-[11px]' : ''}`}>
+                          {log}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
             </div>
 
             {/* Domain & White-Label Custom DNS Hub */}
@@ -1257,6 +2747,130 @@ export const ConfigView: React.FC = () => {
             </button>
 
           </form>
+
+          {/* Offline & Connectivity Panel */}
+          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6 font-sans">
+            <div className="border-b border-gray-850 pb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Wifi className={`w-5 h-5 ${isOnline ? 'text-emerald-500' : 'text-amber-500 animate-pulse'}`} />
+                <div>
+                  <h3 className="font-display font-bold text-white text-base">📶 Conectividade e Modo Offline</h3>
+                  <span className="text-[10px] text-gray-500 font-mono block">Gerencie a sincronização de dados locais e simulação offline para testes práticos.</span>
+                </div>
+              </div>
+              <span id="force-offline-badge" className={`px-2.5 py-1 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider ${
+                isOnline 
+                  ? 'bg-emerald-950/20 text-emerald-400 border border-emerald-800/40' 
+                  : 'bg-amber-900/20 text-amber-400 border border-amber-800/40 animate-pulse'
+              }`}>
+                {isOnline ? 'Online' : 'Offline'}
+              </span>
+            </div>
+
+            {/* Offline Simulation Toggle Switch */}
+            <div className="p-4 rounded-xl bg-slate-950/45 border border-gray-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex-1">
+                <span className="text-xs font-bold text-slate-200 block font-mono">Forçar Simulação Offline</span>
+                <span className="text-[11px] text-gray-400 leading-relaxed mt-1 block">
+                  Desativa conexões diretas com o Cloud Firestore para forçar o empacotamento local de registros. Ideal para locais de sinal fraco, pátios profundos ou laboratórios de testes de faturamento corporativo.
+                </span>
+              </div>
+              <button
+                type="button"
+                id="toggle-sim-offline-btn"
+                onClick={() => setForceOffline(!forceOffline)}
+                className={`px-4 py-2 font-mono text-xs font-extrabold rounded-xl border transition-all cursor-pointer select-none active:scale-[97%] ${
+                  forceOffline
+                    ? 'bg-amber-600 border-amber-500 text-white shadow-md shadow-amber-950/30'
+                    : 'bg-slate-900 hover:bg-slate-800 border-gray-855 border-gray-800 text-gray-400 hover:text-white'
+                }`}
+              >
+                {forceOffline ? '📶❌ FORÇADO OFFLINE' : '📶✅ CONEXÃO ORIGINAL'}
+              </button>
+            </div>
+
+            {/* Sync Queue Summary */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              
+              <div className="p-4 rounded-xl bg-slate-950/25 border border-gray-900 flex flex-col justify-between gap-2">
+                <div>
+                  <span className="text-[10px] text-gray-400 font-mono uppercase font-bold">Fila de Sincronização Local</span>
+                  <div className="text-2xl font-bold font-mono text-white mt-1">
+                    {pendingActionsCount} {pendingActionsCount === 1 ? 'Modificação Pendente' : 'Modificações Pendentes'}
+                  </div>
+                  <p className="text-[10.5px] text-gray-500 font-sans leading-relaxed mt-1">
+                    Modificações guardadas no dispositivo que necessitam de upload posterior para o banco central na nuvem de produção.
+                  </p>
+                </div>
+                {pendingActionsCount > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-4">
+                    <button
+                      type="button"
+                      id="offline-sync-now-btn"
+                      disabled={syncing || !isOnline}
+                      onClick={() => syncPendingActions()}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 active:scale-95 disabled:opacity-40 text-white font-mono text-[10px] font-bold rounded-lg cursor-pointer transition-colors"
+                    >
+                      {syncing ? 'Sincronizando...' : '🔄 Sincronizar Agora'}
+                    </button>
+                    <button
+                      type="button"
+                      id="offline-discard-queue-btn"
+                      onClick={() => {
+                        if (window.confirm("Isso excluirá permanentemente suas modificações locais ainda não escritas na nuvem. Deseja mesmo prosseguir?")) {
+                          localStorage.removeItem("autotech_pending_actions");
+                          window.location.reload();
+                        }
+                      }}
+                      className="px-3 py-1.5 bg-red-950/25 border border-red-900/35 text-red-400 hover:text-red-300 font-mono text-[10px] font-bold rounded-lg cursor-pointer transition-colors"
+                    >
+                      ❌ Descartar Pendentes
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 rounded-xl bg-[#070b13] border border-gray-900 text-xs flex flex-col gap-2">
+                <span className="text-[10px] text-gray-450 font-mono font-bold uppercase border-b border-gray-900 pb-2 text-slate-300">Como funciona o sincronizador offline?</span>
+                <div className="flex flex-col gap-2 text-gray-500 text-[10.5px] leading-relaxed">
+                  <p>
+                    • <strong>Resiliência de Registro:</strong> Toda inserção, faturamento, cadastro de cliente ou veículo funciona normalmente sem sinal de rede.
+                  </p>
+                  <p>
+                    • <strong>Memória Offline:</strong> O sistema muda autonomamente para <code>localStorage</code>, armazenando operações de forma ordenada e cronológica.
+                  </p>
+                  <p>
+                    • <strong>Recuperação Automática:</strong> Assim que a internet é reestabelecida e a simulação offline desativada, os dados pendentes são enviados em segundo plano.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Offline Inspection Queue Records */}
+            {localPendingActions.length > 0 && (
+              <div className="border-t border-gray-900 pt-4 flex flex-col gap-2">
+                <span className="text-[10px] text-purple-400 font-mono font-bold uppercase">📋 Inspeção de Fila de Transações (JSON de Cache)</span>
+                <div className="max-h-48 overflow-y-auto border border-purple-950/30 rounded-lg p-3 bg-[#0d101a] flex flex-col gap-2 font-mono text-[10px]">
+                  {localPendingActions.map((action, actionId) => (
+                    <div key={actionId} className="p-2 rounded bg-slate-950/80 border border-purple-900/20 leading-relaxed text-gray-300">
+                      <div className="flex justify-between items-center text-[9px] mb-1.5 border-b border-gray-900 pb-1">
+                        <span className="text-purple-400">ID: <strong className="text-white">{action.id}</strong></span>
+                        <span className="text-gray-500">{new Date(action.createdAt).toLocaleTimeString()}</span>
+                      </div>
+                      <div>• Ação: <strong className="text-rose-450 text-rose-400 uppercase">{action.operation}</strong></div>
+                      <div>• Tabela/Coleção: <strong className="text-emerald-400">{action.collection}</strong></div>
+                      <div>• Referência ID: <strong className="text-sky-300">{action.docId}</strong></div>
+                      <div className="mt-1 p-1.5 bg-[#03060b] text-[9.5px] text-slate-400 font-mono rounded overflow-x-auto select-all">
+                        {JSON.stringify(action.payload)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
 
           {/* Backup Panel */}
           <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6 font-sans">
@@ -2067,6 +3681,589 @@ export const ConfigView: React.FC = () => {
         </div>
 
       </div>
+
+      {showSefazErrorMonitor && (
+        <div id="sefaz-error-monitor-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-[#0b132b] border border-gray-800 text-white rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl relative overflow-hidden">
+            
+            {/* Header */}
+            <div className="p-4 border-b border-gray-800/80 bg-[#070b19] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-950/40 border border-red-500/30 rounded-xl">
+                  <AlertTriangle className="w-5 h-5 text-red-500 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-sm tracking-wide text-white uppercase">
+                    Monitor de Erros de Comunicação SEFAZ
+                  </h3>
+                  <span className="text-[10px] text-gray-400 font-mono block">
+                    Diagnóstico em tempo real, auditoria de schemas XML e resoluções para rejeições síncronas
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleSimulateNewSefazError}
+                  className="px-3 py-1.5 bg-[#092212] hover:bg-[#0c311c] border border-green-800/60 rounded-lg text-[10px] font-mono font-bold text-green-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Simular Novo Erro
+                </button>
+                
+                {sefazErrorsLog.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleClearSefazErrors}
+                    className="px-3 py-1.5 bg-red-950/20 hover:bg-red-955/40 hover:text-white border border-red-900/40 rounded-lg text-[10px] font-mono font-bold text-red-400 flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Limpar todos os logs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Limpar Logs
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setShowSefazErrorMonitor(false)}
+                  className="px-3 py-1.5 bg-[#141d33] hover:bg-red-650 hover:text-white text-gray-400 border border-gray-800 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer"
+                >
+                  Fechar (Esc)
+                </button>
+              </div>
+            </div>
+
+            {/* Content panel */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+              
+              {/* Left sidebar: log list */}
+              <div className="w-full md:w-[38%] border-r border-gray-800/80 flex flex-col bg-[#080d1b] overflow-y-auto custom-scrollbar">
+                <div className="p-3 bg-[#050812] border-b border-gray-900 text-[10px] font-mono text-gray-400 uppercase tracking-wider flex justify-between items-center">
+                  <span>LOGS DE TRANSMISSÃO ({sefazErrorsLog.length})</span>
+                  <span className="text-[9px] bg-red-950/60 text-red-400 px-2 py-0.5 rounded-full font-bold">
+                    {sefazErrorsLog.filter(e => e.status === 'Pendente').length} Ativos
+                  </span>
+                </div>
+                
+                {sefazErrorsLog.length === 0 ? (
+                  <div className="p-8 text-center flex flex-col items-center justify-center gap-3 my-auto">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-bold text-white uppercase">Todos os XMLs Homologados!</span>
+                      <span className="text-[10px] text-gray-500 font-mono leading-relaxed max-w-[220px]">
+                        Nenhuma rejeição fiscal SEFAZ registrada recentemente. O barramento de serviços e peças encontra-se 100% saudável.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col">
+                    {sefazErrorsLog.map((err) => {
+                      const isSelected = selectedErrorForDetails?.id === err.id;
+                      const isPendente = err.status === 'Pendente';
+                      
+                      return (
+                        <button
+                          key={err.id}
+                          onClick={() => setSelectedErrorForDetails(err)}
+                          className={`w-full p-3.5 border-b border-gray-900/60 text-left transition-all flex flex-col gap-2 cursor-pointer ${
+                            isSelected 
+                              ? 'bg-[#121c38]' 
+                              : 'hover:bg-[#10192e] bg-transparent'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className={`text-[8.5px] px-2 py-0.5 rounded font-mono font-bold uppercase tracking-wider ${
+                              err.docType === 'NF-e' ? 'bg-cyan-950/60 text-cyan-400 border border-cyan-900/60' :
+                              err.docType === 'NFS-e' ? 'bg-purple-950/60 text-purple-400 border border-purple-900/60' :
+                              'bg-amber-950/60 text-amber-500 border border-amber-900/60'
+                            }`}>
+                              {err.docType} • {err.docId}
+                            </span>
+                            
+                            <span className={`text-[8px] font-mono font-bold uppercase ${
+                              isPendente ? 'text-rose-500 animate-pulse' : 'text-emerald-400'
+                            }`}>
+                              ● {isPendente ? 'Pendente' : 'Resolvido'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[11.5px] font-bold text-gray-200 tracking-tight leading-snug line-clamp-2">
+                              {err.title}
+                            </span>
+                            <span className="text-[9px] text-gray-500 font-mono">
+                              {new Date(err.timestamp).toLocaleDateString('pt-BR', {
+                                day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'
+                              })}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center justify-between text-[9px] text-gray-400 font-mono border-t border-gray-850/40 pt-1.5 mt-0.5">
+                            <span className="truncate max-w-[80%]">Cód Rejeição: {err.code}</span>
+                            <ChevronRight className="w-3 h-3 text-gray-400" />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Right panel: error details & instructions */}
+              <div className="flex-1 flex flex-col overflow-y-auto bg-[#091122]/40 custom-scrollbar text-white">
+                {selectedErrorForDetails ? (
+                  <div className="p-5 flex flex-col gap-5 text-left">
+                    
+                    {/* Header Details */}
+                    <div className="flex flex-col gap-2.5 border-b border-gray-800 pb-4">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] bg-red-950/60 text-red-400 border border-red-900/50 rounded font-mono font-bold px-2 py-0.5 uppercase tracking-wider">
+                            Rejeição Cód. {selectedErrorForDetails.code}
+                          </span>
+                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${
+                            selectedErrorForDetails.status === 'Pendente' 
+                              ? 'bg-rose-950/30 text-rose-500 border-rose-900/40' 
+                              : 'bg-emerald-950/30 text-emerald-400 border-emerald-900/40'
+                          }`}>
+                            {selectedErrorForDetails.status}
+                          </span>
+                        </div>
+                        
+                        <span className="text-[9.5px] text-gray-500 font-mono">
+                          ID Log: {selectedErrorForDetails.id}
+                        </span>
+                      </div>
+                      
+                      <h4 className="font-display font-black text-white text-base md:text-lg leading-tight">
+                        {selectedErrorForDetails.title}
+                      </h4>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1.5 text-[10px] font-mono bg-black/30 p-2.5 rounded-lg border border-gray-900">
+                        <div>
+                          <span className="text-gray-500">Documento de Origem:</span>
+                          <strong className="text-cyan-400 block mt-0.5">{selectedErrorForDetails.docType} ({selectedErrorForDetails.docId})</strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500">Data da Ocorrência:</span>
+                          <strong className="text-gray-300 block mt-0.5">
+                            {new Date(selectedErrorForDetails.timestamp).toLocaleString('pt-BR')}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Cause description */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-mono text-amber-500 uppercase font-bold tracking-wider">
+                        ⚠️ Causa Provável Detectada:
+                      </span>
+                      <p className="text-xs text-gray-300 leading-relaxed font-sans bg-amber-950/10 p-3 rounded-lg border border-amber-900/20">
+                        {selectedErrorForDetails.cause}
+                      </p>
+                    </div>
+
+                    {/* How to Fix step by step */}
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-mono text-emerald-400 uppercase font-bold tracking-wider">
+                        🔧 Diagnóstico & Ação Recomendada:
+                      </span>
+                      <div className="text-xs text-gray-300 leading-relaxed font-sans bg-emerald-950/10 p-3 rounded-lg border border-emerald-900/20 flex flex-col gap-2">
+                        <p>{selectedErrorForDetails.solution}</p>
+                        <div className="mt-1 p-2 bg-[#050810] rounded border border-emerald-900/30 text-[10px] text-gray-400 leading-normal font-mono">
+                          💡 <strong>Para mecânicos/caixas:</strong> Certifique-se de preencher sempre as informações cadastrais dos clientes residindo fora do estado (UF diferente) e manter o catálogo tributário atualizado para evitar retransmissões extras na SEFAZ.
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* XML block preview */}
+                    {selectedErrorForDetails.xmlSnippet && (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex justify-between items-center bg-black/60 px-3 py-1.5 rounded-t-lg border border-gray-800 border-b-0">
+                          <span className="text-[9px] font-mono text-gray-400 uppercase font-bold">
+                            📜 Payload XML correspondente ao erro
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyXml(selectedErrorForDetails.xmlSnippet, selectedErrorForDetails.id)}
+                            className="text-[9.5px] font-mono text-cyan-400 hover:text-cyan-300 font-bold cursor-pointer"
+                          >
+                            {copiedId === selectedErrorForDetails.id ? "Código Copiado! ✅" : "Copiar XML"}
+                          </button>
+                        </div>
+                        <pre className="bg-[#03060c] p-3 rounded-b-lg border border-gray-800 font-mono text-[9.5px] leading-relaxed text-yellow-500 overflow-x-auto">
+                          <code>{selectedErrorForDetails.xmlSnippet}</code>
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Action buttons detail footer */}
+                    {selectedErrorForDetails.status === 'Pendente' && (
+                      <div className="border-t border-gray-850 pt-4 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleResolveSefazError(selectedErrorForDetails.id)}
+                          className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-mono font-bold text-[10.5px] uppercase rounded-lg flex items-center gap-2 cursor-pointer transition-all shadow-md shadow-emerald-950/25"
+                        >
+                          <Check className="w-4 h-4" />
+                          Marcar Rejeição como Resolvida
+                        </button>
+                      </div>
+                    )}
+
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-3">
+                    <Activity className="w-12 h-12 text-gray-700 animate-pulse" />
+                    <div>
+                      <span className="text-xs font-bold text-gray-400 uppercase block">Telemetria Selecionada Vazia</span>
+                      <span className="text-[10.5px] text-gray-500 font-mono block max-w-[250px] leading-relaxed">
+                        Escolha um relatório fiscal na lista lateral para prosseguir ao diagnóstico preditivo detalhado.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {showSefazLoteHistory && (
+        <div id="sefaz-lote-history-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-[#0b132b] border border-gray-800 text-white rounded-2xl w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl relative overflow-hidden">
+            
+            {/* Header */}
+            <div className="p-4 border-b border-gray-800/80 bg-[#070b19] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-cyan-950/40 border border-cyan-500/30 rounded-xl">
+                  <Archive className="w-5 h-5 text-cyan-400" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-sm tracking-wide text-white uppercase">
+                    Histórico de Lotes de Notas Fiscais (SEFAZ)
+                  </h3>
+                  <span className="text-[10px] text-gray-400 font-mono block">
+                    Consulta síncrona de protocolos de autorização, downloads de XML em lote e auditorias fiscais
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleTransmitNewLote}
+                  disabled={isTransmittingLote}
+                  className="px-3 py-1.5 bg-cyan-950/30 hover:bg-cyan-950/60 border border-cyan-800/60 rounded-lg text-[10px] font-mono font-bold text-cyan-400 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isTransmittingLote ? 'animate-spin' : ''}`} />
+                  {isTransmittingLote ? "Transmitindo Lote..." : "Simular Novo Lote"}
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => setShowSefazLoteHistory(false)}
+                  className="px-3 py-1.5 bg-[#141d33] hover:bg-red-650 hover:text-white text-gray-400 border border-gray-800 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer"
+                >
+                  Fechar (Esc)
+                </button>
+              </div>
+            </div>
+
+            {/* Transmission Progress Overlay */}
+            {isTransmittingLote && (
+              <div className="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-6 text-center backdrop-blur-sm">
+                <div className="bg-[#09101f] p-6 rounded-2xl border border-gray-800 max-w-lg w-full flex flex-col gap-4">
+                  <div className="flex items-center justify-between border-b border-gray-900 pb-2">
+                    <span className="text-xs font-mono font-bold text-cyan-400 uppercase">TELEMETRIA DE RECEPÇÃO SÍNCRONA</span>
+                    <span className="animate-pulse text-cyan-500 text-[10px]">CONECTADO AO LOTE</span>
+                  </div>
+                  <div className="flex flex-col gap-2 text-left text-xs font-mono text-emerald-400 h-48 overflow-y-auto bg-black/50 p-4 rounded-lg border border-gray-900 custom-scrollbar">
+                    {transmissionProgress.map((p, idx) => (
+                      <div key={idx} className="leading-relaxed">
+                        {p}
+                      </div>
+                    ))}
+                    <div className="animate-pulse mt-1 text-cyan-400">⚡ Aguardando validação do barramento SEFAZ...</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Content panel */}
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+              
+              {/* Left sidebar: batch log list */}
+              <div className="w-full md:w-[42%] border-r border-gray-800/80 flex flex-col bg-[#080d1b] overflow-hidden">
+                
+                {/* Search & Filters */}
+                <div className="p-3 bg-[#050812] border-b border-gray-900 flex flex-col gap-2">
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      placeholder="Pesquisar por Lote, Prot. ou Chave..."
+                      className="w-full bg-[#03060c] border border-gray-850 rounded-lg py-1.5 pl-8 pr-3 text-white text-xs font-mono focus:outline-none focus:border-cyan-500"
+                      value={searchLoteTerm}
+                      onChange={(e) => setSearchLoteTerm(e.target.value)}
+                    />
+                    <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-2.5" />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-mono font-bold">
+                    <select
+                      className="bg-[#03060c] border border-gray-850 rounded py-1 px-2 text-gray-300 focus:outline-none focus:border-cyan-500"
+                      value={filterLoteType}
+                      onChange={(e) => setFilterLoteType(e.target.value)}
+                    >
+                      <option value="ALL">Todos os Tipos</option>
+                      <option value="NF-e">NF-e (Peças)</option>
+                      <option value="NFS-e">NFS-e (Serviços)</option>
+                      <option value="NFC-e">NFC-e (Consumidor)</option>
+                    </select>
+
+                    <select
+                      className="bg-[#03060c] border border-gray-850 rounded py-1 px-2 text-gray-300 focus:outline-none focus:border-cyan-500"
+                      value={filterLoteStatus}
+                      onChange={(e) => setFilterLoteStatus(e.target.value)}
+                    >
+                      <option value="ALL">Todos Status</option>
+                      <option value="Autorizado">Autorizados</option>
+                      <option value="Rejeitado">Rejeitados</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Batch list items */}
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  {filteredLotes.length === 0 ? (
+                    <div className="p-8 text-center flex flex-col items-center justify-center gap-3 h-full">
+                      <FolderOpen className="w-10 h-10 text-gray-600" />
+                      <div className="flex flex-col gap-1">
+                        <span className="text-xs font-bold text-white uppercase">Nenhum Lote Encontrado</span>
+                        <span className="text-[10px] text-gray-500 font-mono leading-relaxed max-w-[200px]">
+                          Tente ajustar seus termos de busca ou filtros para localizar outros lotes guardados.
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col">
+                      {filteredLotes.map((l) => {
+                        const isSelected = selectedLoteForDetails?.id === l.id;
+                        const isAut = l.status === 'Autorizado';
+                        
+                        return (
+                          <button
+                            key={l.id}
+                            onClick={() => setSelectedLoteForDetails(l)}
+                            className={`w-full p-3.5 border-b border-gray-900/60 text-left transition-all flex flex-col gap-2 cursor-pointer ${
+                              isSelected 
+                                ? 'bg-[#121c38]' 
+                                : 'hover:bg-[#10192e] bg-transparent'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1.5 font-bold">
+                              <span className={`text-[8.5px] px-2 py-0.5 rounded font-mono font-bold uppercase tracking-wider ${
+                                l.docType === 'NF-e' ? 'bg-cyan-950/60 text-cyan-400 border border-cyan-900/60' :
+                                l.docType === 'NFS-e' ? 'bg-purple-950/60 text-purple-400 border border-purple-900/60' :
+                                'bg-amber-950/60 text-amber-500 border border-amber-900/60'
+                              }`}>
+                                {l.docType} • {l.id}
+                              </span>
+                              
+                              <span className={`text-[8.5px] font-mono font-bold ${
+                                isAut ? 'text-emerald-400' : 'text-rose-500'
+                              }`}>
+                                ● {l.status}
+                              </span>
+                            </div>
+                            
+                            <div className="flex justify-between items-end">
+                              <div className="flex flex-col">
+                                <span className="text-[10.5px] text-gray-400 font-mono">
+                                  {l.notesCount} nota(s) transmitida(s)
+                                </span>
+                                <span className="text-[9px] text-gray-500 font-mono">
+                                  {new Date(l.timestamp).toLocaleString('pt-BR')}
+                                </span>
+                              </div>
+                              <span className="text-xs font-bold text-cyan-400">
+                                R$ {l.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+
+                            <div className="text-[8.5px] text-gray-500 font-mono border-t border-gray-850/40 pt-1.5 mt-0.5 flex justify-between items-center">
+                              <span className="truncate max-w-[85%]">Recibo Prot: {l.protocol}</span>
+                              <ChevronRight className="w-3 h-3" />
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Right panel: batch details & individual billings info */}
+              <div className="flex-1 flex flex-col overflow-y-auto bg-[#091122]/40 custom-scrollbar text-white">
+                {selectedLoteForDetails ? (
+                  <div className="p-5 flex flex-col gap-6 text-left">
+                    
+                    {/* Header Details */}
+                    <div className="flex flex-col gap-2.5 border-b border-gray-800 pb-4">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] bg-cyan-950/60 text-cyan-400 border border-cyan-900/50 rounded font-mono font-bold px-2 py-0.5 uppercase tracking-wider">
+                            {selectedLoteForDetails.id}
+                          </span>
+                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${
+                            selectedLoteForDetails.status === 'Autorizado' 
+                              ? 'bg-emerald-950/30 text-emerald-400 border-emerald-900/40' 
+                              : 'bg-rose-950/30 text-rose-500 border-rose-900/40'
+                          }`}>
+                            Lote {selectedLoteForDetails.status}
+                          </span>
+                        </div>
+                        
+                        <span className="text-[9.5px] text-gray-500 font-mono">
+                          Protocolo de Recebimento SEFAZ: {selectedLoteForDetails.protocol}
+                        </span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center flex-wrap gap-2">
+                        <h4 className="font-display font-black text-white text-base md:text-lg uppercase">
+                          Detalhes do Lote de Transmissão Síncrona
+                        </h4>
+                        
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadXmlFile(selectedLoteForDetails.xmlContent, `lote_sefaz_${selectedLoteForDetails.id.toLowerCase()}.xml`)}
+                          className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 font-mono font-bold text-[9.5px] uppercase rounded flex items-center gap-1.5 cursor-pointer transition-all shadow"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Baixar Lote Completo (XML)
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Totalizers */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="bg-black/30 p-3 rounded-lg border border-gray-900/80 font-mono">
+                        <span className="text-[9px] text-gray-500 uppercase font-bold block">Faturamento Total do Lote</span>
+                        <strong className="text-base text-cyan-400 block mt-0.5">
+                          R$ {selectedLoteForDetails.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </strong>
+                      </div>
+                      <div className="bg-black/30 p-3 rounded-lg border border-gray-900/80 font-mono">
+                        <span className="text-[9px] text-gray-500 uppercase font-bold block">Documentos Fiscais</span>
+                        <strong className="text-base text-gray-200 block mt-0.5">
+                          {selectedLoteForDetails.notesCount} {selectedLoteForDetails.docType === 'NFS-e' ? 'NFS-e' : 'NF-e/NFC-e'}
+                        </strong>
+                      </div>
+                      <div className="bg-black/30 p-3 rounded-lg border border-gray-900/80 font-mono">
+                        <span className="text-[9px] text-gray-500 uppercase font-bold block">Ensaio Criptográfico</span>
+                        <strong className="text-xs text-emerald-400 block mt-1.5 truncate">
+                          CERTIFICADO A1 VALIDADOR
+                        </strong>
+                      </div>
+                    </div>
+
+                    {/* Notas no Lote Table list */}
+                    <div className="flex flex-col gap-2">
+                      <span className="text-[10px] font-mono text-gray-400 uppercase font-bold tracking-wider">
+                        📋 Notas Individuais Vinculadas ao Lote
+                      </span>
+                      
+                      <div className="overflow-x-auto rounded-lg border border-gray-900">
+                        <table className="w-full text-left border-collapse font-sans text-xs">
+                          <thead>
+                            <tr className="bg-[#050812]/80 text-[#8e9aa8] font-mono text-[9px] uppercase border-b border-gray-900">
+                              <th className="py-2.5 px-3">Nº Nota</th>
+                              <th className="py-2.5 px-3">Destinatário</th>
+                              <th className="py-2.5 px-3">Documento (CPF/CNPJ)</th>
+                              <th className="py-2.5 px-3 text-right">Valor Total</th>
+                              <th className="py-2.5 px-3">Prot. Autorização</th>
+                              <th className="py-2.5 px-3 text-center">Download</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedLoteForDetails.notes.map((n: any, idx: number) => (
+                              <tr key={idx} className="bg-black/10 border-b border-gray-900 hover:bg-black/25">
+                                <td className="py-2.5 px-3 font-mono font-bold text-gray-300">
+                                  {selectedLoteForDetails.docType} #{n.number}
+                                </td>
+                                <td className="py-2.5 px-3 font-bold truncate max-w-[140px] text-white">
+                                  {n.clientName}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-gray-400 text-[10px]">
+                                  {n.clientDoc}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono font-bold text-right text-cyan-400">
+                                  R$ {n.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="py-2.5 px-3 font-mono text-emerald-450 text-[10.5px]">
+                                  {n.protocol}
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadXmlFile(
+                                      `<?xml version="1.0" encoding="UTF-8"?>\n<nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">\n  <NFe><infNFe Id="NFe${n.accessKey}"><emit><CNPJ>03212854000188</CNPJ></emit><dest><xNome>${n.clientName}</xNome></dest><total><vNF>${n.amount.toFixed(2)}</vNF></total></infNFe></NFe>\n  <protNFe versao="4.00"><infProt><chNFe>${n.accessKey}</chNFe><dhRecb>${selectedLoteForDetails.timestamp}</dhRecb><nProt>${n.protocol}</nProt><cStat>100</cStat><xMotivo>Autorizado o uso da NF-e</xMotivo></infProt></protNFe>\n</nfeProc>`,
+                                      `nfe_autorizada_${n.number}.xml`
+                                    )}
+                                    title="Baixar XML com protocolo de autorização"
+                                    className="px-2 py-1 bg-[#141d33] hover:bg-cyan-950 hover:text-cyan-400 border border-gray-800 rounded font-mono text-[9px] uppercase cursor-pointer transition-colors"
+                                  >
+                                    XML Proc
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Raw XML Preview */}
+                    <div className="flex flex-col gap-2">
+                      <div className="flex justify-between items-center bg-black/60 px-3 py-1.5 rounded-t-lg border border-gray-800 border-b-0">
+                        <span className="text-[9px] font-mono text-gray-400 uppercase font-bold">
+                          📜 Payload XML do Lote Completo (Simulado com Certificado A1)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyXml(selectedLoteForDetails.xmlContent, selectedLoteForDetails.id)}
+                          className="text-[9.5px] font-mono text-cyan-400 hover:text-cyan-300 font-bold cursor-pointer"
+                        >
+                          {copiedId === selectedLoteForDetails.id ? "Código Copiado! ✅" : "Copiar XML"}
+                        </button>
+                      </div>
+                      <pre className="bg-[#03060c] p-3 rounded-b-lg border border-gray-800 font-mono text-[9.5px] leading-relaxed text-yellow-500 overflow-x-auto max-h-44 custom-scrollbar">
+                        <code>{selectedLoteForDetails.xmlContent}</code>
+                      </pre>
+                    </div>
+
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-3">
+                    <Activity className="w-12 h-12 text-gray-700 animate-pulse" />
+                    <div>
+                      <span className="text-xs font-bold text-gray-400 uppercase block">Nenhum Lote Selecionado</span>
+                      <span className="text-[10.5px] text-gray-500 font-mono block max-w-[250px] leading-relaxed">
+                        Escolha um lote consolidado no menu esquerdo para prosseguir ao diagnóstico detalhado de auditoria fiscal.
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

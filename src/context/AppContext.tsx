@@ -120,6 +120,8 @@ interface AppContextType {
   pendingActionsCount: number;
   syncPendingActions: () => Promise<void>;
   syncing: boolean;
+  forceOffline: boolean;
+  setForceOffline: (v: boolean) => void;
 
   // Daily Automatic Backups
   autoBackups: AutoBackupItem[];
@@ -172,7 +174,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Network, Sync and Pending Offline Queues
-  const [isOnline, setIsOnline] = useState<boolean>(typeof window !== 'undefined' ? navigator.onLine : true);
+  const [forceOffline, setForceOfflineState] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('pref-force-offline') === 'true';
+    }
+    return false;
+  });
+
+  const setForceOffline = (v: boolean) => {
+    setForceOfflineState(v);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('pref-force-offline', String(v));
+    }
+    setIsOnline(v ? false : (typeof window !== 'undefined' ? navigator.onLine : true));
+    addLocalAuditLog("Conectividade", `Simulação de Modo Offline ${v ? 'ATIVADA 📶❌' : 'DESACTIVADA 📶✅'}.`);
+    if (!v && typeof window !== 'undefined' && navigator.onLine) {
+      setTimeout(() => {
+        syncPendingActions();
+      }, 200);
+    }
+  };
+
+  const [isOnline, setIsOnline] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('pref-force-offline') === 'true';
+      return stored ? false : navigator.onLine;
+    }
+    return true;
+  });
   const [syncing, setSyncing] = useState<boolean>(false);
   const [pendingActionsCount, setPendingActionsCount] = useState<number>(0);
 
@@ -277,8 +306,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     payload: any,
     operation: 'set' | 'merge' = 'set'
   ): Promise<boolean> => {
-    // If online, write to Firestore
-    if (navigator.onLine && auth.currentUser) {
+    // If online and not simulated offline, write to Firestore
+    if (navigator.onLine && !forceOffline && auth.currentUser) {
       try {
         const docRef = doc(db, collectionName, docId);
         if (operation === 'merge') {
@@ -324,7 +353,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // 2. Synchronize all operations in context
   const syncPendingActions = async () => {
     if (syncing) return;
-    if (!navigator.onLine) return; // Halt if offline
+    if (!navigator.onLine || forceOffline) return; // Halt if offline or simulated offline
 
     setSyncing(true);
     try {
@@ -395,8 +424,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const handleOnline = () => {
-      setIsOnline(true);
-      syncPendingActions();
+      setIsOnline(forceOffline ? false : true);
+      if (!forceOffline) {
+        syncPendingActions();
+      }
     };
 
     const handleOffline = () => {
@@ -407,7 +438,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.addEventListener('offline', handleOffline);
 
     // Initial check triggers
-    if (navigator.onLine && firebaseUser) {
+    if (navigator.onLine && !forceOffline && firebaseUser) {
       syncPendingActions();
     }
 
@@ -415,7 +446,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [firebaseUser]);
+  }, [firebaseUser, forceOffline]);
 
   // Authenticate user changes and sync profile and company
   useEffect(() => {
@@ -1737,6 +1768,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pendingActionsCount,
       syncPendingActions,
       syncing,
+      forceOffline,
+      setForceOffline,
 
       // Daily Automatic Backups
       autoBackups,

@@ -137,6 +137,42 @@ export const CRMView: React.FC = () => {
     user
   } = useApp();
 
+  // Helper to check if an OS is a warranty return
+  const isWarrantyReturnOS = (osToCheck: any) => {
+    if (!osToCheck.veiculoId) return false;
+    const warrantyDays = company?.warrantyDays !== undefined ? company.warrantyDays : 90;
+    
+    // Find all finalized/delivered OSs for this vehicle, excluding current OS
+    const priorOss = (ordensServico || []).filter(os => 
+      os.veiculoId === osToCheck.veiculoId && 
+      (os.status === 'Finalizada' || os.status === 'Entregue') && 
+      os.id !== osToCheck.id
+    );
+    
+    if (priorOss.length === 0) return false;
+    
+    // Find prior OSs that were finalised BEFORE this OS was created
+    const createdDate = new Date(osToCheck.createdAt);
+    
+    const finalizedPrior = priorOss.filter(os => 
+      new Date(os.createdAt).getTime() < createdDate.getTime()
+    );
+    
+    if (finalizedPrior.length === 0) return false;
+    
+    // Find the most recent prior finalized/delivered OS
+    const sortedPrior = [...finalizedPrior].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    
+    const latestOS = sortedPrior[0];
+    const latestOSDate = new Date(latestOS.createdAt);
+    const diffTime = Math.abs(createdDate.getTime() - latestOSDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays <= warrantyDays;
+  };
+
   const printSaleReceiptDirect = (v: any, comp: any) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
@@ -853,7 +889,7 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
             </div>
 
             {/* List items */}
-            <div className="flex flex-col gap-3.5 max-h-[500px] overflow-y-auto pr-1">
+            <div className="flex flex-col gap-3.5 max-h-[500px] overflow-y-auto pr-1 pb-10">
               {clientes.filter(cli => 
                 cli.name.toLowerCase().includes(clientQuery.toLowerCase()) ||
                 cli.phone.includes(clientQuery) ||
@@ -863,20 +899,28 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                 const carsCount = getLinkedVehiclesCount(cli.id);
                 const isExpanded = expandedClientId === cli.id;
                 const clientVehicles = veiculos.filter(v => v.clienteId === cli.id);
+                const hasWarrantyReturn = (ordensServico || []).some(os => os.clienteId === cli.id && isWarrantyReturnOS(os));
 
                 return (
                   <div key={cli.id} className="flex flex-col rounded-xl border border-gray-900 bg-[#080d19]/25 hover:border-gray-800 transition-all overflow-hidden divide-y divide-gray-900">
                     <div 
                       onClick={() => setExpandedClientId(isExpanded ? null : cli.id)}
-                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-gray-950/20 transition-all"
+                      className="p-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4 cursor-pointer hover:bg-gray-950/20 transition-all"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 shrink-0">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center border border-slate-800 shrink-0 mt-0.5">
                           <Users className="w-4.5 h-4.5 text-red-500" />
                         </div>
                         <div className="flex flex-col text-left">
-                          <span className="font-semibold text-white text-xs sm:text-sm flex items-center gap-2">
+                          <span className="font-semibold text-white text-xs sm:text-sm flex flex-wrap items-center gap-2">
                             {cli.name}
+                            
+                            {hasWarrantyReturn && (
+                              <span className="inline-flex items-center gap-0.5 text-[8px] sm:text-[9px] bg-purple-500/15 text-purple-400 border border-purple-500/25 px-1.5 py-0.5 rounded font-mono font-bold uppercase animate-pulse" title="Cliente com Retorno de Garantia detectado!">
+                                <BadgeAlert className="w-3 h-3 text-purple-400 shrink-0" /> retorno garantia
+                              </span>
+                            )}
+
                             {clientVehicles.some(vh => {
                               const check = analyzeVehicleOil(vh, ordensServico);
                               return check.status === 'critical';
@@ -1074,6 +1118,20 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                                     CEP {cli.cep}
                                   </span>
                                 )}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        {hasWarrantyReturn && (
+                          <div className="bg-purple-950/25 border-2 border-purple-500/40 p-3.5 rounded-xl flex items-start gap-2.5 text-xs shadow-[0_0_15px_rgba(168,85,247,0.1)]">
+                            <BadgeAlert className="w-5 h-5 text-purple-400 shrink-0 mt-0.5 animate-bounce" />
+                            <div className="flex flex-col gap-1 text-left">
+                              <span className="text-[10px] text-purple-400 font-bold uppercase tracking-wider font-mono flex items-center gap-1.5">
+                                📢 ALERTA TÉCNICO: RETORNO DE GARANTIA DETECTADO
+                              </span>
+                              <p className="text-gray-200 text-xs font-sans leading-normal">
+                                Este cliente possui Ordem de Serviço anterior cujo veículo retornou para revisão técnica dentro da vigência de garantia. Ofereça atendimento prioritário para mitigar inconformidades e priorize a qualidade técnica de montagens!
                               </p>
                             </div>
                           </div>
@@ -1452,7 +1510,7 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-1 pb-10">
               {veiculos.filter(veh => 
                 veh.plate.toLowerCase().includes(vehicleQuery.toLowerCase()) ||
                 veh.model.toLowerCase().includes(vehicleQuery.toLowerCase()) ||
@@ -1668,7 +1726,7 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                 ⏱️ ÚLTIMAS 5 ORDENS DE SERVIÇO
               </h4>
 
-              <div className="flex flex-col gap-3.5 max-h-[480px] overflow-y-auto pr-1">
+              <div className="flex flex-col gap-3.5 max-h-[480px] overflow-y-auto pr-1 pb-10">
                 {(() => {
                   const vehicleOrders = ordensServico
                     .filter(os => 
@@ -2197,7 +2255,7 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
               </div>
 
               {/* Table / List representation */}
-              <div className="flex flex-col gap-3.5 max-h-[480px] overflow-y-auto pr-1">
+              <div className="flex flex-col gap-3.5 max-h-[480px] overflow-y-auto pr-1 pb-10">
                 {(() => {
                   const compileTemplateMessage = (templateText: string, clientName: string, vehicleModel: string, plateStr: string, kmRodadosVal: number | string, currentKmVal: string | number, lastChangeKmVal: string | number) => {
                     return templateText

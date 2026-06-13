@@ -14,7 +14,10 @@ import {
   PiggyBank,
   Percent,
   ArrowRight,
-  Sparkles
+  Sparkles,
+  RotateCcw,
+  Trophy,
+  Award
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
@@ -41,7 +44,7 @@ export const DashboardView: React.FC = () => {
     localAuditLogs
   } = useApp();
 
-  const [selectedMetric, setSelectedMetric] = React.useState<'diario' | 'mensal' | 'despesas' | 'lucro' | 'ordens' | 'estoque'>('mensal');
+  const [selectedMetric, setSelectedMetric] = React.useState<'diario' | 'mensal' | 'despesas' | 'lucro' | 'ordens' | 'estoque' | 'garantia'>('mensal');
 
   // Load administrative support suggestions for this workshop from localStorage with reactive status toggles
   const [sugList, setSugList] = React.useState<any[]>([]);
@@ -197,6 +200,149 @@ export const DashboardView: React.FC = () => {
 
   const servicesInProgress = ordensServico.filter(os => os.status === 'Em execução').length;
 
+  // Helper to check if a vehicle is within warranty return period
+  const isWarrantyReturnOS = (osToCheck: any) => {
+    if (!osToCheck.veiculoId) return false;
+    const warrantyDays = company?.warrantyDays !== undefined ? company.warrantyDays : 90;
+    
+    // Find all finalized/delivered OSs for this vehicle, excluding current OS
+    const priorOss = ordensServico.filter(os => 
+      os.veiculoId === osToCheck.veiculoId && 
+      (os.status === 'Finalizada' || os.status === 'Entregue') && 
+      os.id !== osToCheck.id
+    );
+    
+    if (priorOss.length === 0) return false;
+    
+    // Find prior OSs that were finalised BEFORE this OS was created
+    const createdDate = new Date(osToCheck.createdAt);
+    
+    const finalizedPrior = priorOss.filter(os => 
+      new Date(os.createdAt).getTime() < createdDate.getTime()
+    );
+    
+    if (finalizedPrior.length === 0) return false;
+    
+    // Find the most recent prior finalized/delivered OS
+    const sortedPrior = [...finalizedPrior].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    
+    const latestOS = sortedPrior[0];
+    const latestOSDate = new Date(latestOS.createdAt);
+    const diffTime = Math.abs(createdDate.getTime() - latestOSDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    return diffDays <= warrantyDays;
+  };
+
+  const getWarrantyStats = () => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    // Total OSs finalized or delivered in the current month
+    const finalizedInMonth = ordensServico.filter(os => {
+      const osDate = new Date(os.createdAt);
+      const isThisMonth = osDate.getMonth() === currentMonth && osDate.getFullYear() === currentYear;
+      const isFinalized = os.status === 'Finalizada' || os.status === 'Entregue';
+      return isThisMonth && isFinalized;
+    });
+
+    // Total OSs with warranty return badge created in the current month
+    const warrantyReturnInMonth = ordensServico.filter(os => {
+      const osDate = new Date(os.createdAt);
+      const isThisMonth = osDate.getMonth() === currentMonth && osDate.getFullYear() === currentYear;
+      const isReturn = isWarrantyReturnOS(os);
+      return isThisMonth && isReturn;
+    });
+
+    const rateMonth = finalizedInMonth.length > 0 
+      ? (warrantyReturnInMonth.length / finalizedInMonth.length) * 100 
+      : 0;
+
+    // Direct all-time stats as additional context fallback
+    const totalFinalizedAllTime = ordensServico.filter(os => os.status === 'Finalizada' || os.status === 'Entregue');
+    const allWarrantyReturns = ordensServico.filter(os => isWarrantyReturnOS(os));
+    const rateAllTime = totalFinalizedAllTime.length > 0
+      ? (allWarrantyReturns.length / totalFinalizedAllTime.length) * 100
+      : 0;
+
+    return {
+      finalizedInMonth: finalizedInMonth.length,
+      warrantyReturnInMonth: warrantyReturnInMonth.length,
+      rateMonth,
+      totalFinalizedAllTime: totalFinalizedAllTime.length,
+      allWarrantyReturns: allWarrantyReturns.length,
+      rateAllTime
+    };
+  };
+
+  const getMechanicRanking = () => {
+    const baseNames = ["Marcio Rezende", "Gerson 'Geleia' Souza", "Clécio Santos (Administrador)"];
+    const allNamesSet = new Set(baseNames);
+    
+    ordensServico.forEach(os => {
+      if (os.mechanicName) {
+        allNamesSet.add(os.mechanicName);
+      }
+    });
+
+    const warrantyDays = company?.warrantyDays !== undefined ? company.warrantyDays : 90;
+
+    const ranking = Array.from(allNamesSet).map(name => {
+      const mechanicFinalized = ordensServico.filter(os => 
+        os.mechanicName === name && 
+        (os.status === 'Finalizada' || os.status === 'Entregue')
+      );
+
+      const totalFinalized = mechanicFinalized.length;
+      let returnsCount = 0;
+
+      mechanicFinalized.forEach(oldOs => {
+        const subsequent = ordensServico.find(newOs => {
+          if (newOs.veiculoId !== oldOs.veiculoId || newOs.id === oldOs.id) return false;
+          
+          const oldTime = new Date(oldOs.createdAt).getTime();
+          const newTime = new Date(newOs.createdAt).getTime();
+          
+          if (newTime <= oldTime) return false;
+
+          const diffDays = Math.ceil((newTime - oldTime) / (1000 * 60 * 60 * 24));
+          return diffDays <= warrantyDays;
+        });
+
+        if (subsequent) {
+          returnsCount++;
+        }
+      });
+
+      const returnRate = totalFinalized > 0 ? (returnsCount / totalFinalized) * 100 : 0;
+      const efficiencyRate = 100 - returnRate;
+
+      return {
+        name,
+        totalFinalized,
+        returnsCount,
+        returnRate,
+        efficiencyRate
+      };
+    });
+
+    return ranking.sort((a, b) => {
+      if (a.totalFinalized > 0 && b.totalFinalized === 0) return -1;
+      if (a.totalFinalized === 0 && b.totalFinalized > 0) return 1;
+      if (a.totalFinalized === 0 && b.totalFinalized === 0) return a.name.localeCompare(b.name);
+      
+      if (a.returnRate !== b.returnRate) {
+        return a.returnRate - b.returnRate;
+      }
+      return b.totalFinalized - a.totalFinalized;
+    });
+  };
+
+  const warrantyStats = getWarrantyStats();
+
   // 2. chart data configurations
   const cashFlowData = [
     { name: 'Jan', Entradas: 8400, Saídas: 4200 },
@@ -333,7 +479,7 @@ export const DashboardView: React.FC = () => {
             }
           }
         }}
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4"
       >
         
         {/* Card 1: Faturamento Diário */}
@@ -548,6 +694,41 @@ export const DashboardView: React.FC = () => {
           </div>
         </motion.div>
 
+        {/* Card 7: Taxa de Retorno de Garantia */}
+        <motion.div 
+          variants={{
+            hidden: { opacity: 0, y: 15, scale: 0.98 },
+            visible: { opacity: 1, y: 0, scale: 1 },
+            exit: { opacity: 0, y: -15, scale: 0.98, transition: { duration: 0.2 } }
+          }}
+          whileHover={{ y: -4, scale: 1.015 }}
+          whileTap={{ scale: 0.985 }}
+          transition={{ type: "spring", stiffness: 120, damping: 16 }}
+          onClick={() => setSelectedMetric('garantia')}
+          className={`cursor-pointer rounded-2xl border p-4 flex flex-col justify-between transition-colors duration-300 ${
+            selectedMetric === 'garantia' 
+              ? 'bg-[#210f2c]/40 border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.15)] ring-1 ring-purple-500/20' 
+              : 'bg-[#0c1223] border-gray-800/80 hover:border-purple-800/50 hover:bg-[#0c1223]/80'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] text-gray-400 font-mono font-medium tracking-wider">RETORNO GARANTIA</span>
+            <div className={`p-2 rounded-lg transition-colors ${
+              selectedMetric === 'garantia' ? 'bg-purple-600 text-white font-extrabold' : 'bg-purple-950/40 text-purple-400 border border-purple-900/30'
+            }`}>
+              <RotateCcw className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-xl font-display font-extrabold text-white">
+              {warrantyStats.rateMonth.toFixed(1)}%
+            </div>
+            <div className="text-[9px] text-purple-400 font-mono mt-1">
+              {warrantyStats.warrantyReturnInMonth} ret. / {warrantyStats.finalizedInMonth} concl. (mês)
+            </div>
+          </div>
+        </motion.div>
+
       </motion.div>
 
       {/* DETAILED INTERACTIVE DRAWER CONTEXTUAL */}
@@ -566,7 +747,8 @@ export const DashboardView: React.FC = () => {
             selectedMetric === 'mensal' ? 'bg-cyan-500' :
             selectedMetric === 'despesas' ? 'bg-rose-500' :
             selectedMetric === 'lucro' ? 'bg-emerald-500' :
-            selectedMetric === 'ordens' ? 'bg-amber-500' : 'bg-red-500'
+            selectedMetric === 'ordens' ? 'bg-amber-500' :
+            selectedMetric === 'estoque' ? 'bg-red-500' : 'bg-purple-500'
           }`} />
 
           {selectedMetric === 'diario' && (
@@ -769,6 +951,94 @@ export const DashboardView: React.FC = () => {
               </div>
             </div>
           )}
+
+          {selectedMetric === 'garantia' && (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch font-sans">
+              <div className="md:col-span-8 space-y-2 flex flex-col justify-between">
+                <div>
+                  <span className="text-[9px] font-mono tracking-widest bg-purple-950/50 border border-purple-800 text-purple-400 px-2 py-0.5 rounded font-bold uppercase">
+                    Métrica Ativa: Retorno de Garantia (Refugo Técnico)
+                  </span>
+                  <h3 className="text-white font-extrabold text-lg flex items-center gap-1.5 font-display pt-1">
+                    🛡️ Índice / Taxa de Retorno de Garantia
+                  </h3>
+                  <p className="text-xs text-gray-400 leading-relaxed font-sans">
+                    Reflete a qualidade técnica da oficina. Calculado dividindo o número no mês de ordens de serviço marcadas com badge de retorno de garantia (veículos que realizaram serviço anterior similar dentro de {company?.warrantyDays || 90} dias) pelo número total de ordens finalizadas/entregues no mesmo período.
+                  </p>
+                </div>
+
+                {/* Sub-list of return OSs detected this month */}
+                <div className="space-y-1.5 mt-2 max-h-48 overflow-y-auto pr-1">
+                  <div className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">
+                    OSs em Retorno Detectadas este Mês:
+                  </div>
+                  {(() => {
+                    const now = new Date();
+                    const currentMonth = now.getMonth();
+                    const currentYear = now.getFullYear();
+                    const returnsThisMonth = ordensServico.filter(os => {
+                      const osDate = new Date(os.createdAt);
+                      const isThisMonth = osDate.getMonth() === currentMonth && osDate.getFullYear() === currentYear;
+                      return isThisMonth && isWarrantyReturnOS(os);
+                    });
+
+                    if (returnsThisMonth.length === 0) {
+                      return (
+                        <div className="text-[10.5px] font-mono text-green-500 bg-green-950/20 px-3 py-2 border border-green-950/55 rounded-xl">
+                          🎉 Excelente! Nenhuma OS retornou em garantia este mês.
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="flex flex-col gap-1.5">
+                        {returnsThisMonth.map(os => (
+                          <div key={os.id} className="p-2 border border-purple-950/65 bg-[#0e0c15] rounded-xl flex justify-between items-center text-[10.5px] font-mono text-slate-350">
+                            <div>
+                              <strong className="text-purple-300">#{os.id}</strong> - {os.veiculoInfo || os.plate} ({os.clienteName})
+                              <div className="text-[9px] text-gray-500">
+                                Diagnóstico atual: "{os.diagnosis || os.problem}" • Criada em: {new Date(os.createdAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <span className="text-[8.5px] font-bold bg-purple-900/35 border border-purple-800 text-purple-400 px-2 py-0.5 rounded">
+                              REVISÃO VINCULADA
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="md:col-span-4 flex flex-col justify-center bg-[#070b14] border border-purple-950 p-4 rounded-xl space-y-3.5">
+                <div className="space-y-1">
+                  <div className="text-[10px] text-purple-400 font-mono font-bold tracking-wider uppercase">
+                    TAXA DE RETORNO DO MÊS:
+                  </div>
+                  <div className="text-3xl font-display font-extrabold text-[#c084fc]">
+                    {warrantyStats.rateMonth.toFixed(1)}%
+                  </div>
+                </div>
+
+                <div className="space-y-1 bg-slate-900/40 p-2.5 rounded-lg border border-slate-800/60 leading-normal font-mono text-[10px] text-gray-400">
+                  <div className="flex justify-between">
+                    <span>Retornos no Mês:</span>
+                    <strong className="text-white">{warrantyStats.warrantyReturnInMonth} OS</strong>
+                  </div>
+                  <div className="flex justify-between border-t border-gray-850/45 pt-1 mt-1">
+                    <span>Finalizadas no Mês:</span>
+                    <strong className="text-white">{warrantyStats.finalizedInMonth} OS</strong>
+                  </div>
+                </div>
+
+                <div className="border-t border-purple-950/45 pt-2 flex flex-col gap-0.5 text-[8.5px] text-gray-500 font-mono leading-relaxed">
+                  <div>* Limite saudável ideal tolerado: &lt; 5%</div>
+                  <div>* Histórico acumulado geral: {warrantyStats.rateAllTime.toFixed(1)}% ({warrantyStats.allWarrantyReturns} retornos de {warrantyStats.totalFinalizedAllTime} OSs)</div>
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
 
@@ -953,7 +1223,7 @@ export const DashboardView: React.FC = () => {
       )}
 
       {/* LOW STOCK & RECENT SERVICES ROW */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         
         {/* List 1: Alerta Estoque Mínimo */}
         <motion.div 
@@ -1066,6 +1336,93 @@ export const DashboardView: React.FC = () => {
                     <span className="text-xs font-bold text-white block">R$ {os.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     <span className="text-[9px] text-gray-550 block font-mono">{new Date(os.createdAt).toLocaleDateString()}</span>
                   </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </motion.div>
+
+        {/* List 3: Ranking de Mecânicos por Menor Retorno de Garantia */}
+        <motion.div 
+          initial={{ opacity: 0, y: 15, scale: 0.99 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: -15, scale: 0.99 }}
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 text-left"
+        >
+          <div className="flex justify-between items-center border-b border-gray-850 pb-4 mb-4">
+            <div>
+              <h3 className="font-display font-bold text-base text-white flex items-center gap-1.5">
+                <Trophy className="w-4 h-4 text-purple-400 flex-shrink-0" /> Eficiência de Montagem
+              </h3>
+              <p className="text-[10px] text-gray-500 font-mono">Ranking de mecânicos por menor índice de retornos.</p>
+            </div>
+            <span className="text-[10px] font-mono bg-purple-950/40 text-purple-450 border border-purple-900/30 px-2.5 py-1 rounded">
+              Índice de Acertabilidade
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-2.5 max-h-56 overflow-y-auto pr-1">
+            {getMechanicRanking().map((mech, idx) => {
+              const getPositionBadge = (i: number) => {
+                if (i === 0) return { emoji: "🥇", textClass: "text-[#fbbf24]", bgClass: "bg-[#fbbf24]/10 border-[#fbbf24]/20" };
+                if (i === 1) return { emoji: "🥈", textClass: "text-[#cbd5e1]", bgClass: "bg-[#cbd5e1]/10 border-[#cbd5e1]/20" };
+                if (i === 2) return { emoji: "🥉", textClass: "text-[#b45309]", bgClass: "bg-[#b45309]/10 border-[#b45309]/20" };
+                return { emoji: "👤", textClass: "text-slate-400", bgClass: "bg-slate-950/40 border-slate-900" };
+              };
+              const badge = getPositionBadge(idx);
+
+              return (
+                <motion.div 
+                  key={mech.name} 
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25, delay: Math.min(5, idx) * 0.05 }}
+                  className="flex flex-col p-3 rounded-xl border border-gray-900 bg-[#070b14]/45 gap-2"
+                >
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-base px-1 py-0.5 rounded border ${badge.bgClass} flex items-center justify-center`} title={`${idx + 1}º Lugar`}>
+                        {badge.emoji}
+                      </span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-semibold text-white">{mech.name}</span>
+                        <span className="text-[9px] text-gray-550 font-mono">
+                          {mech.totalFinalized} OS {mech.returnsCount > 0 ? `• ${mech.returnsCount} retornos` : '• nenhum retorno'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="text-right">
+                      {mech.totalFinalized > 0 ? (
+                        <>
+                          <span className="text-xs font-bold text-white block">
+                            {mech.efficiencyRate.toFixed(1)}% <span className="text-[9px] text-emerald-400 font-mono font-medium">acerto</span>
+                          </span>
+                          <span className="text-[8px] text-slate-500 block font-mono">
+                            Índice ret: {mech.returnRate.toFixed(1)}%
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-[10px] text-gray-500 font-mono italic">
+                          Sem histórico
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {mech.totalFinalized > 0 && (
+                    <div className="w-full bg-slate-950 rounded-full h-1 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${
+                          mech.efficiencyRate >= 95 ? 'bg-emerald-500' :
+                          mech.efficiencyRate >= 80 ? 'bg-amber-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${mech.efficiencyRate}%` }}
+                      />
+                    </div>
+                  )}
                 </motion.div>
               );
             })}

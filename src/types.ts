@@ -36,6 +36,42 @@ export interface Company {
   pixCity?: string;
   defaultMarkup?: number;
   customPortalSlug?: string;
+  warrantyDays?: number;
+  fiscalNfseEnabled?: boolean;
+  fiscalNfeEnabled?: boolean;
+  fiscalStateUf?: string;
+  fiscalCertificateUploaded?: boolean;
+  fiscalCertificateName?: string;
+  fiscalPassword?: string;
+  fiscalTokenProvider?: string;
+  fiscalEnvironment?: 'Homologação' | 'Produção';
+  fiscalMunicipalKey?: string;
+  fiscalIM?: string;
+  fiscalIE?: string;
+  fiscalWebhookUrl?: string;
+  fiscalServiceSeries?: string;
+  fiscalServiceInitialNum?: number;
+  fiscalAutoEmitOnOSClose?: boolean;
+  fiscalSeriesList?: FiscalSeries[];
+  fiscalTaxRules?: FiscalTaxRule[];
+}
+
+export interface FiscalSeries {
+  id: string;
+  type: 'NFS-e' | 'NF-e' | 'NFC-e';
+  series: string;
+  nextNumber: number;
+  isActive: boolean;
+}
+
+export interface FiscalTaxRule {
+  id: string;
+  uf: string;
+  cfop: string;
+  icmsAliquota: number;
+  ipiAliquota: number;
+  description: string;
+  isActive: boolean;
 }
 
 export interface Cliente {

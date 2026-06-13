@@ -1881,7 +1881,7 @@ export const PDVView: React.FC = () => {
       </div>
 
       {/* 📊 HISTÓRICO DE VENDAS RECENTES & GESTÃO DE ESTORNOS DE CAIXA */}
-      <div id="historico-de-vendas" className="col-span-12 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4 mt-2">
+      <div id="historico-de-vendas" className="col-span-12 bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-4 mt-2 w-full min-w-0 overflow-hidden">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-800 pb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -1910,7 +1910,7 @@ export const PDVView: React.FC = () => {
             <p className="text-xs italic">Nenhuma venda registrada neste terminal operacional de caixa.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto w-full">
             <table className="w-full text-xs text-left border-collapse">
               <thead>
                 <tr className="border-b border-gray-850 font-mono text-[9.5px] uppercase tracking-wider text-gray-400">
@@ -1993,8 +1993,8 @@ export const PDVView: React.FC = () => {
                             </span>
                           )}
                         </td>
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex justify-end gap-1.5">
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          <div className="flex justify-end gap-1.5 whitespace-nowrap">
                             <button
                               type="button"
                               onClick={() => {
@@ -2002,10 +2002,10 @@ export const PDVView: React.FC = () => {
                                 setLastFinishedSale(v);
                                 setSaleFinished(true);
                               }}
-                              className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-gray-800 bg-[#080d16] hover:bg-[#121c33] text-gray-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
+                              className="px-2 py-1 text-[9.5px] font-mono font-bold rounded-lg border border-gray-800 bg-[#080d16] hover:bg-[#121c33] text-gray-300 hover:text-white transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
                               title="Reimprimir Cupom Térmico Não Fiscal"
                             >
-                              <Printer className="w-3.5 h-3.5 text-cyan-450" /> Re-imprimir
+                              <Printer className="w-3.5 h-3.5 text-cyan-400" /> <span className="hidden lg:inline">Re-imprimir</span>
                             </button>
 
                             <button
@@ -2015,10 +2015,10 @@ export const PDVView: React.FC = () => {
                                 setSelectedReceiptSale(v);
                                 setShowDigitalReceiptCardModal(true);
                               }}
-                              className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-emerald-900/40 bg-emerald-950/25 hover:bg-emerald-900 hover:text-white text-emerald-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
+                              className="px-2 py-1 text-[9.5px] font-mono font-bold rounded-lg border border-emerald-900/40 bg-emerald-950/25 hover:bg-emerald-900 hover:text-white text-emerald-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
                               title="Visualizar Comprovante Digital (Card & WhatsApp)"
                             >
-                              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> Digital
+                              <Smartphone className="w-3.5 h-3.5 text-emerald-400" /> <span className="hidden lg:inline">Digital</span>
                             </button>
 
                             {isEstornada && (
@@ -2033,10 +2033,10 @@ export const PDVView: React.FC = () => {
                                   });
                                   setShowReversalReceipt(true);
                                 }}
-                                className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-900 hover:text-white text-red-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
+                                className="px-2 py-1 text-[9.5px] font-mono font-bold rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-900 hover:text-white text-red-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
                                 title="Visualizar Comprovante de Estorno"
                               >
-                                <FileText className="w-3.5 h-3.5 text-red-400" /> Comprovante
+                                <FileText className="w-3.5 h-3.5 text-red-400" /> <span className="hidden lg:inline">Comprovante</span>
                               </button>
                             )}
 
@@ -2050,10 +2050,10 @@ export const PDVView: React.FC = () => {
                                   setReversalAdminPassword('');
                                   setReversalError(null);
                                 }}
-                                className="px-2.5 py-1 text-[10px] font-mono font-bold rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-900 hover:text-white text-red-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
+                                className="px-2 py-1 text-[9.5px] font-mono font-bold rounded-lg border border-red-900/30 bg-red-950/20 hover:bg-red-900 hover:text-white text-red-400 transition-all cursor-pointer flex items-center gap-1 shrink-0 uppercase select-none"
                                 title="Solicitar Reversão / Estorno com Justificativa"
                               >
-                                <RotateCcw className="w-3 text-red-400" /> Estornar
+                                <RotateCcw className="w-3 text-red-400" /> <span className="hidden lg:inline">Estornar</span>
                               </button>
                             )}
                           </div>

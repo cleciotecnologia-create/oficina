@@ -1048,7 +1048,7 @@ function AppContent() {
         <aside className={`
           fixed md:sticky top-[57px] h-[calc(100vh-57px)] z-30
           w-60 bg-[#080d19] border-r border-gray-850 flex flex-col justify-between p-4 shrink-0
-          transition-transform duration-300 md:translate-x-0
+          transition-transform duration-300 md:translate-x-0 overflow-y-auto
           ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}>
           
