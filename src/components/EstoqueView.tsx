@@ -2215,14 +2215,14 @@ export const EstoqueView: React.FC = () => {
                 
                 <div className="flex flex-col gap-1">
                   <span className="text-xs text-slate-200 font-semibold">Arraste o XML da Nota Fiscal aqui</span>
-                  <span className="text-[10px] text-slate-500 font-mono">Formatos suportados: .xml (Padrão SEFAZ NF-e 4.00)</span>
+                  <span className="text-[10px] text-slate-500 font-mono">Formatos suportados: .xml, .tmp (Padrão SEFAZ NF-e 4.00)</span>
                 </div>
 
                 <label className="mt-2 text-xs font-mono font-bold py-2 px-4 rounded border border-gray-800 hover:border-gray-700 bg-slate-950 text-slate-300 hover:text-white transition-colors cursor-pointer relative z-10">
                   {xmlFileSelected ? `📄 ${xmlFileName}` : "Selecionar Arquivo da Nota..."}
                   <input 
                     type="file" 
-                    accept=".xml" 
+                    accept=".xml,.tmp" 
                     onChange={handleXmlFileUpload} 
                     className="sr-only" 
                   />
