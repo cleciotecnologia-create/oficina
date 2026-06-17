@@ -24,8 +24,15 @@ import {
   Trash2,
   ShoppingBag,
   Printer,
-  CreditCard
+  CreditCard,
+  Bot,
+  Send,
+  Sparkles,
+  RefreshCw,
+  QrCode,
+  Download
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import { useApp } from '../context/AppContext';
 import { Cliente, Veiculo, OrdemServico } from '../types';
 import { AUTO_SUGGESTIONS } from '../lib/autoSuggestions';
@@ -246,6 +253,7 @@ export const CRMView: React.FC = () => {
         </head>
         <body>
           <div class="header">
+            ${comp.logoUrl ? `<img src="${comp.logoUrl}" style="max-height: 48px; object-fit: contain; margin-bottom: 6px; aspect-ratio: 1/1; filter: grayscale(100%);" referrerPolicy="no-referrer" /><br/>` : ''}
             <strong style="font-size: 13px;">${comp.name.toUpperCase()}</strong><br/>
             <span>${comp.address || 'Av. das Nações Unidas, 1040'}</span><br/>
             <span>CNPJ: ${comp.cnpj || '12.345.678/0001-90'} • Fone: ${comp.phone || '(11) 98765-4321'}</span>
@@ -302,8 +310,240 @@ export const CRMView: React.FC = () => {
     printWindow.document.close();
   };
 
-  const [activeTab, setActiveTab] = useState<'clientes' | 'veiculos' | 'fidelidade' | 'campanhas' | 'lembretes'>('clientes');
+  const [activeTab, setActiveTab] = useState<'clientes' | 'veiculos' | 'fidelidade' | 'campanhas' | 'lembretes' | 'chatbot'>('clientes');
   const [selectedHistoryVehicle, setSelectedHistoryVehicle] = useState<Veiculo | null>(null);
+
+  // WhatsApp ChatBot Interaction States
+  const [botActive, setBotActive] = useState<boolean>(true);
+  const [botName, setBotName] = useState<string>("Assistente Virtual AutoTech");
+  const [botWelcomeMsg, setBotWelcomeMsg] = useState<string>("Olá! Seja muito bem-vindo à nossa Oficina Mecânica. Como posso ajudar com seu veículo hoje? 🚗💨");
+  const [botMode, setBotMode] = useState<'ai' | 'rules'>('ai');
+  const [isBotTyping, setIsBotTyping] = useState<boolean>(false);
+  const [activeContactId, setActiveContactId] = useState<string>("joao");
+  const [simulatedMessageText, setSimulatedMessageText] = useState<string>("");
+
+  const [chatContacts, setChatContacts] = useState([
+    { id: 'joao', name: 'João Silva', phone: '(11) 98212-0021', vehicle: 'Civic LXS 1.8 2014', avatarColor: 'bg-emerald-500', unread: 1 },
+    { id: 'maria', name: 'Maria Oliveira', phone: '(11) 97412-2930', vehicle: 'Corolla XEI 2018', avatarColor: 'bg-indigo-500', unread: 0 },
+    { id: 'carlos', name: 'Carlos Santos', phone: '(19) 98877-3311', vehicle: 'Fusca 1600 1976', avatarColor: 'bg-amber-500', unread: 0 },
+    { id: 'claudia', name: 'Cláudia Ramos', phone: '(21) 96541-1122', vehicle: 'Onix 1.0 Turbo 2021', avatarColor: 'bg-rose-500', unread: 0 },
+  ]);
+
+  const [chatMessages, setChatMessages] = useState<Record<string, Array<{ id: string; sender: 'client' | 'bot'; text: string; timestamp: Date; read?: boolean }>>>({
+    joao: [
+      { id: 'm1', sender: 'client', text: 'Boa tarde! Qual é o status do reparo do meu Honda Civic?', timestamp: new Date(Date.now() - 120000) },
+    ],
+    maria: [
+      { id: 'm2', sender: 'client', text: 'Olá! Vocês fazem alinhamento 3D aos sábados?', timestamp: new Date(Date.now() - 3600000) },
+      { id: 'm3', sender: 'bot', text: 'Olá Maria! Sim, funcionamos aos sábados das 08:00 às 12:00. O valor do Alinhamento 3D + Balanceamento completo do Corolla fica em R$ 140,00. Deseja agender par este próximo sábado?', timestamp: new Date(Date.now() - 3500000) }
+    ],
+    carlos: [
+      { id: 'm4', sender: 'client', text: 'Tenho um Fusca 76 e está vazando um pouco de óleo pelo retentor do volante. Vocês mexem nessa mecânica?', timestamp: new Date(Date.now() - 7200000) },
+      { id: 'm5', sender: 'bot', text: 'Olá Carlos! Com certeza absoluta. Temos profissionais tarimbados que conhecem bem os motores Boxer refrigerados a ar. Agende uma visita para avaliarmos a folga axial do virabrequim e realizarmos a troca do retentor com segurança!', timestamp: new Date(Date.now() - 7100000) }
+    ],
+    claudia: [
+      { id: 'm6', sender: 'client', text: 'Olá, qual é o endereço de vocês?', timestamp: new Date(Date.now() - 86400000) },
+      { id: 'm7', sender: 'bot', text: 'Olá Cláudia! Nosso endereço é Av. das Nações Unidas, 1040 - Pinheiros, São Paulo - SP. Atendemos de segunda a sexta das 08h às 18h e sábados até 12h. Aguardamos sua visita!', timestamp: new Date(Date.now() - 86300000) }
+    ]
+  });
+
+  // Pre-defined rules state for the WhatsApp ChatBot
+  const [botRules, setBotRules] = useState<Array<{ id: string; title: string; trigger: string; response: string }>>([
+    {
+      id: 'rule_1',
+      title: 'Status & Reparos',
+      trigger: 'status, os, conserto, reparo, servico, serviço',
+      response: 'Olá! Localizei aqui no sistema que a O.S. referente ao seu veículo está sob ordens de execução de nossa equipe técnica interna. O status atual está em processamento preventivo. Deseja aprovar imagens ou o checklist de avarias?'
+    },
+    {
+      id: 'rule_2',
+      title: 'Alinhamento & Balanceamento 3D',
+      trigger: 'alinhamento, balanceamento, geometria, caster, cambagem',
+      response: 'Com certeza! Nosso Alinhamento de Tecnologia 3D + Balanceamento Computadorizado de rodas tem o valor promocional de R$ 140,00 na modalidade combo para este mês. Gostaria de agendar uma vaga?'
+    },
+    {
+      id: 'rule_3',
+      title: 'Localização & Horários de Funcionamento',
+      trigger: 'endereco, endereço, onde, fica, mapa, localizacao, localização, horario, horário, funcionamento, aberto, sabado',
+      response: 'Nossa sede principal fica na Av. das Nações Unidas, 1040 - Pinheiros, São Paulo - SP. Atendemos de segunda a sexta das 08h às 18h e sábados das 08h às 12h. Aguardamos sua visita!'
+    },
+    {
+      id: 'rule_4',
+      title: 'Kit Troca de Óleo Castrol',
+      trigger: 'oleo, óleo, castrol, filtro, lubrificante, lubrificacao',
+      response: 'Excelente escolha! Trabalhamos com toda a linha lubrificante homologada Castrol. Nosso pacote de troca de óleo sintético + filtro original para seu motor sai a partir de R$ 280,00 com mão de obra gratuita e selo de descarte ecológico.'
+    }
+  ]);
+
+  // Editing Rule modal or inline state
+  const [activeBotConfigTab, setActiveBotConfigTab] = useState<'faq' | 'flows'>('faq');
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [ruleTitle, setRuleTitle] = useState<string>("");
+  const [ruleTrigger, setRuleTrigger] = useState<string>("");
+  const [ruleResponse, setRuleResponse] = useState<string>("");
+  const [isRuleFormOpen, setIsRuleFormOpen] = useState<boolean>(false);
+
+  // Pre-defined automation flows state
+  const [botFlows, setBotFlows] = useState<Array<{ id: string; name: string; trigger: string; steps: string[]; isActive: boolean }>>([
+    {
+      id: 'flow_1',
+      name: 'Boas-vindas Rápido 🌐',
+      trigger: 'ola, ola!, oi, bom dia, boa tarde, boa noite, iniciar, comecar, atendimento',
+      steps: [
+        'Olá! Seja muito bem-vindo ao suporte inteligente da AutoTech! ⚡',
+        'Meu sistema já está identificando seu cadastro de oficina. Como podemos ajudar seu carro hoje?',
+        'Diga "status" para andamento de reparos ou digite sua dúvida!'
+      ],
+      isActive: true
+    },
+    {
+      id: 'flow_2',
+      name: 'Agendamento Direto 📅',
+      trigger: 'agendar, horario, agendamento, marcar, vaga, sabado',
+      steps: [
+        'Entendido, quer agendar um horário com nosso time de mecânica de elite! 🔧',
+        'Favor digitar seu VEÍCULO (Marca/Modelo/Ano) e a DATA desejada.',
+        'Excelente escolha. Registramos seu interesse. Em até 2 minutos um analista enviará a confirmação via link seguro!'
+      ],
+      isActive: true
+    }
+  ]);
+
+  const [editingFlowId, setEditingFlowId] = useState<string | null>(null);
+  const [flowName, setFlowName] = useState<string>("");
+  const [flowTrigger, setFlowTrigger] = useState<string>("");
+  const [flowSteps, setFlowSteps] = useState<string[]>(["", ""]);
+  const [isFlowFormOpen, setIsFlowFormOpen] = useState<boolean>(false);
+
+  // Automated custom greeting message state for new clients
+  const [botGreetingMsg, setBotGreetingMsg] = useState<string>("Olá! Seja muito bem-vindo ao suporte AutoTech via WhatsApp. Identificamos que este é o seu primeiro contato conosco. Como nosso depto. técnico pode agilizar a revisão do seu carro hoje? ⚙️🚗");
+  const [isAddingContact, setIsAddingContact] = useState<boolean>(false);
+  const [newContactName, setNewContactName] = useState<string>("");
+  const [newContactPhone, setNewContactPhone] = useState<string>("");
+  const [newContactVehicle, setNewContactVehicle] = useState<string>("");
+
+  // States and dynamic QR Code generation for WhatsApp Suggestions
+  const [suggestionPhone, setSuggestionPhone] = useState<string>("");
+  const [suggestionMessage, setSuggestionMessage] = useState<string>("Olá! Gostaria de deixar uma sugestão de melhoria para a AutoTech: ");
+  const [suggestionQrCodeUrl, setSuggestionQrCodeUrl] = useState<string>("");
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (company?.phone && !suggestionPhone) {
+      setSuggestionPhone(company.phone);
+    }
+  }, [company?.phone]);
+
+  useEffect(() => {
+    const generateQrCode = async () => {
+      try {
+        const cleanPhone = (suggestionPhone || "").replace(/\D/g, "");
+        if (!cleanPhone) {
+          setSuggestionQrCodeUrl("");
+          return;
+        }
+        const whatsappLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(suggestionMessage)}`;
+        const qrUrl = await QRCode.toDataURL(whatsappLink, {
+          width: 256,
+          margin: 2,
+          color: {
+            dark: "#0b0f19",
+            light: "#ffffff"
+          }
+        });
+        setSuggestionQrCodeUrl(qrUrl);
+      } catch (err) {
+        console.error("Erro ao gerar QR Code de Sugestões:", err);
+      }
+    };
+    generateQrCode();
+  }, [suggestionPhone, suggestionMessage]);
+
+  const handleSaveFlow = () => {
+    if (!flowName.trim() || !flowTrigger.trim() || flowSteps.some(step => !step.trim())) {
+      alert("Por favor, preencha todos os campos e certifique-se de preencher todas as mensagens do fluxo.");
+      return;
+    }
+
+    if (editingFlowId) {
+      setBotFlows(prev => prev.map(f => f.id === editingFlowId ? { id: f.id, name: flowName, trigger: flowTrigger, steps: flowSteps, isActive: f.isActive } : f));
+      setEditingFlowId(null);
+    } else {
+      const newFlow = {
+        id: 'flow_' + Date.now(),
+        name: flowName,
+        trigger: flowTrigger,
+        steps: flowSteps,
+        isActive: true
+      };
+      setBotFlows(prev => [...prev, newFlow]);
+    }
+
+    setFlowName("");
+    setFlowTrigger("");
+    setFlowSteps(["", ""]);
+    setIsFlowFormOpen(false);
+  };
+
+  const handleEditFlowClick = (f: { id: string; name: string; trigger: string; steps: string[]; isActive: boolean }) => {
+    setEditingFlowId(f.id);
+    setFlowName(f.name);
+    setFlowTrigger(f.trigger);
+    setFlowSteps([...f.steps]);
+    setIsFlowFormOpen(true);
+  };
+
+  const handleDeleteFlow = (id: string) => {
+    if (confirm("Deseja realmente excluir este fluxo de automação?")) {
+      setBotFlows(prev => prev.filter(f => f.id !== id));
+    }
+  };
+
+  const toggleFlowActive = (id: string) => {
+    setBotFlows(prev => prev.map(f => f.id === id ? { ...f, isActive: !f.isActive } : f));
+  };
+
+  const handleSaveRule = () => {
+    if (!ruleTitle.trim() || !ruleTrigger.trim() || !ruleResponse.trim()) {
+      alert("Por favor, preencha todos os campos da resposta pré-definida.");
+      return;
+    }
+
+    if (editingRuleId) {
+      // Edit existing rule
+      setBotRules(prev => prev.map(r => r.id === editingRuleId ? { id: r.id, title: ruleTitle, trigger: ruleTrigger, response: ruleResponse } : r));
+      setEditingRuleId(null);
+    } else {
+      // Add new rule
+      const newRule = {
+        id: 'rule_' + Date.now(),
+        title: ruleTitle,
+        trigger: ruleTrigger,
+        response: ruleResponse
+      };
+      setBotRules(prev => [...prev, newRule]);
+    }
+
+    // Clean inputs
+    setRuleTitle("");
+    setRuleTrigger("");
+    setRuleResponse("");
+    setIsRuleFormOpen(false);
+  };
+
+  const handleEditRuleClick = (r: { id: string; title: string; trigger: string; response: string }) => {
+    setEditingRuleId(r.id);
+    setRuleTitle(r.title);
+    setRuleTrigger(r.trigger);
+    setRuleResponse(r.response);
+    setIsRuleFormOpen(true);
+  };
+
+  const handleDeleteRule = (id: string) => {
+    if (confirm("Tem certeza que deseja excluir esta resposta pré-definida do robô?")) {
+      setBotRules(prev => prev.filter(r => r.id !== id));
+    }
+  };
 
   // Automated maintenance reminders states
   const [reminderKmThreshold, setReminderKmThreshold] = useState<number>(() => {
@@ -819,6 +1059,138 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
     return veiculos.filter(v => v.clienteId === clientId).length;
   };
 
+  const handleClientSimulatedSend = async (customText?: string) => {
+    const textToSend = customText || simulatedMessageText;
+    if (!textToSend.trim()) return;
+
+    const currentContactId = activeContactId;
+    
+    // 1. Add user message
+    const newUserMsg = {
+      id: 'usr_' + Date.now(),
+      sender: 'client' as const,
+      text: textToSend,
+      timestamp: new Date()
+    };
+    
+    setChatMessages(prev => ({
+      ...prev,
+      [currentContactId]: [...(prev[currentContactId] || []), newUserMsg]
+    }));
+    
+    if (!customText) {
+      setSimulatedMessageText("");
+    }
+    
+    // Clear unread counts for current
+    setChatContacts(prev => prev.map(c => c.id === currentContactId ? { ...c, unread: 0 } : c));
+    
+    if (!botActive) return;
+
+    // 2. Trigger typing delay & bot response
+    setIsBotTyping(true);
+    
+    setTimeout(async () => {
+      let finalResponseText = "";
+      const isFirstMessage = !chatMessages[currentContactId] || chatMessages[currentContactId].length === 0;
+
+      if (isFirstMessage) {
+        const contact = chatContacts.find(c => c.id === currentContactId);
+        finalResponseText = botGreetingMsg.replace('{veiculo}', contact?.vehicle || 'veículo');
+      } else if (botMode === 'rules') {
+        const lower = textToSend.toLowerCase();
+        
+        // 1. Check for matches in custom Automation Flows first
+        const matchedFlow = botFlows.find(f => 
+          f.isActive && f.trigger.split(',').map(kw => kw.trim().toLowerCase()).some(keyword => keyword && lower.includes(keyword))
+        );
+
+        if (matchedFlow) {
+          setIsBotTyping(false);
+          matchedFlow.steps.forEach((stepText, index) => {
+            setTimeout(() => {
+              const contact = chatContacts.find(c => c.id === currentContactId);
+              const cleanedText = stepText.replace('{veiculo}', contact?.vehicle || 'veículo');
+              const newBotStepMsg = {
+                id: `bot_flow_${matchedFlow.id}_${index}_${Date.now()}`,
+                sender: 'bot' as const,
+                text: cleanedText,
+                timestamp: new Date()
+              };
+              setChatMessages(prev => ({
+                ...prev,
+                [currentContactId]: [...(prev[currentContactId] || []), newBotStepMsg]
+              }));
+            }, (index + 1) * 1800);
+          });
+          return;
+        }
+
+        // 2. Fall back to standard FAQ response rule
+        const matchedRule = botRules.find(r => {
+          const keywords = r.trigger.split(',').map(kw => kw.trim().toLowerCase());
+          return keywords.some(keyword => keyword && lower.includes(keyword));
+        });
+
+        if (matchedRule) {
+          const contact = chatContacts.find(c => c.id === currentContactId);
+          finalResponseText = matchedRule.response.replace('{veiculo}', contact?.vehicle || 'veículo');
+        } else {
+          // Dynamic fallback showing options based on defined rule titles + automation flows
+          finalResponseText = `${botWelcomeMsg}\n\nMencione palavras-chaves sobre qualquer um dos tópicos abaixo para acionar o robô:\n` + 
+            botFlows.map(f => `• [FLUXO] *${f.name}* (Ex: "${f.trigger.split(',')[0].trim()}")`).join('\n') + '\n' +
+            botRules.map((rule) => `• [FAQ] *${rule.title}* (Ex: "${rule.trigger.split(',')[0].trim()}")`).join('\n') +
+            `\n\nOu digite uma dúvida direta.`;
+        }
+      } else {
+        // AI Gemini engine
+        try {
+          // Prepare chat messages in {role, text} format for endpoint
+          const currentChatHistory = chatMessages[currentContactId] || [];
+          const testMessagesPayload = [
+            ...currentChatHistory.map(m => ({
+              role: m.sender === 'client' ? 'user' as const : 'assistant' as const,
+              text: m.text
+            })),
+            { role: 'user' as const, text: textToSend } // Add the newly inputted client message
+          ];
+          
+          // Call the server API
+          const response = await fetch('/api/gemini/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: testMessagesPayload })
+          });
+          
+          const data = await response.json();
+          if (data.text) {
+            finalResponseText = data.text;
+          } else {
+            finalResponseText = "Olá! Desculpe pelo transtorno, meu processador virtual de mensagens está recalculando alguns parâmetros mecânicos no momento. Como posso te auxiliar offline?";
+          }
+        } catch (error) {
+          finalResponseText = `Olá! Conexão com nossa base central temporariamente instável. Sobre sua consulta, identificamos seu veículo cadastrado. Posso solicitar para um técnico de suporte ligar diretamente para você neste número?`;
+        }
+      }
+      
+      if (finalResponseText) {
+        const newBotMsg = {
+          id: 'bot_' + Date.now(),
+          sender: 'bot' as const,
+          text: finalResponseText,
+          timestamp: new Date()
+        };
+        
+        setChatMessages(prev => ({
+          ...prev,
+          [currentContactId]: [...(prev[currentContactId] || []), newBotMsg]
+        }));
+      }
+      
+      setIsBotTyping(false);
+    }, 1200);
+  };
+
   return (
     <div className="flex flex-col gap-6 text-left">
       
@@ -832,7 +1204,7 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
         </div>
 
         {/* Tab switcher */}
-        <div className="flex bg-[#080d19] p-1 rounded-xl border border-gray-800 self-stretch sm:self-auto [&>button]:px-3.5 [&>button]:py-1.5 [&>button]:text-xs [&>button]:font-mono [&>button]:rounded-lg">
+        <div className="flex bg-[#080d19] p-1 rounded-xl border border-gray-800 self-stretch sm:self-auto flex-wrap gap-1 [&>button]:px-3.5 [&>button]:py-1.5 [&>button]:text-xs [&>button]:font-mono [&>button]:rounded-lg">
           <button 
             onClick={() => setActiveTab('clientes')}
             className={activeTab === 'clientes' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
@@ -864,6 +1236,13 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
             className={activeTab === 'lembretes' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}
           >
             Lembretes Automáticos
+          </button>
+          <button 
+            type="button"
+            onClick={() => setActiveTab('chatbot')}
+            className={`flex items-center gap-1.5 ${activeTab === 'chatbot' ? 'bg-red-650 bg-red-600 text-white font-semibold' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Bot className="w-3.5 h-3.5 text-green-400" /> WhatsApp ChatBot
           </button>
         </div>
       </div>
@@ -3611,7 +3990,1014 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
         </div>
       )}
 
-      {/* ⚠️ EXCLUIR CLIENTE CONFIRMAÇÃO MODAL */}
+      {activeTab === 'chatbot' && (
+        <div className="flex flex-col gap-6 w-full text-left font-sans animate-fade-in">
+          
+          {/* Header dashboard widgets */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="p-4 bg-[#0c1223] rounded-2xl border border-gray-850 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wide font-mono">STATUS DO BOT</span>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className={`w-2.5 h-2.5 rounded-full ${botActive ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
+                <span className="text-white font-mono font-bold text-sm uppercase">{botActive ? 'Conectado & Ativo' : 'Pausado'}</span>
+              </div>
+              <p className="text-[10px] text-gray-500 font-mono mt-0.5">Capturando eventos wa.me e webhook API.</p>
+            </div>
+
+            <div className="p-4 bg-[#0c1223] rounded-2xl border border-gray-850 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wide font-mono">INTEGRAÇÃO COGNITIVA</span>
+              <div className="flex items-center gap-1.5 mt-1 text-cyan-400 font-mono font-bold text-sm">
+                <Sparkles className="w-4 h-4 text-cyan-400 animate-pulse" />
+                <span className="uppercase">{botMode === 'ai' ? 'Gemini 3.5 AI Core' : 'Fluxo de Regras'}</span>
+              </div>
+              <p className="text-[10px] text-gray-500 font-mono mt-0.5">Mecanismo oficial de respostas automáticas.</p>
+            </div>
+
+            <div className="p-4 bg-[#0c1223] rounded-2xl border border-gray-850 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wide font-mono">CRIPTOGRAFIA DE ENVIO</span>
+              <span className="text-white font-mono font-bold text-sm mt-1 uppercase">HTTPS TLS 1.3</span>
+              <p className="text-[10px] text-gray-500 font-mono mt-0.5">Canais diretos protegidos de ponta a ponta.</p>
+            </div>
+
+            <div className="p-4 bg-[#0c1223] rounded-2xl border border-gray-850 flex flex-col gap-1">
+              <span className="text-[9px] text-gray-400 font-extrabold uppercase tracking-wide font-mono">SESSÕES EM ANDAMENTO</span>
+              <span className="text-emerald-400 font-mono font-extrabold text-sm mt-1 uppercase">
+                {chatContacts.length} Clientes Ativos
+              </span>
+              <p className="text-[10px] text-gray-500 font-mono mt-0.5">Tempo médio de resposta: ~1.2s</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            
+            {/* Left Panel - Configurations & Contact List */}
+            <div className="col-span-12 lg:col-span-4 flex flex-col gap-5">
+              
+              {/* Bot Control Panel Card */}
+              <div className="bg-[#0c1223] rounded-2xl border border-gray-850 p-5 flex flex-col gap-4 text-left">
+                <h3 className="font-display font-black text-xs text-white uppercase tracking-wider border-b border-gray-850 pb-2.5 flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-red-500" /> Configurações do ChatBot
+                </h3>
+
+                {/* Bot Toggle Switch */}
+                <div className="flex justify-between items-center bg-[#070b13] p-3 rounded-xl border border-gray-900">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-xs text-white font-mono font-bold">Habilitar Robô</span>
+                    <span className="text-[10px] text-gray-400">Resposta instantânea ativa</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBotActive(!botActive)}
+                    className={`w-10 h-6 rounded-full p-1 relative transition-colors duration-200 cursor-pointer ${botActive ? 'bg-green-555 bg-green-500' : 'bg-gray-800'}`}
+                  >
+                    <div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-200 ${botActive ? 'translate-x-4' : 'translate-x-0'}`} />
+                  </button>
+                </div>
+
+                {/* Engine Mode Toggle */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Mecanismo de Resposta</label>
+                  <div className="grid grid-cols-2 bg-[#070b13] p-1 rounded-xl border border-gray-900 [&>button]:py-2 [&>button]:text-[11px] [&>button]:font-mono [&>button]:rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setBotMode('ai')}
+                      className={`cursor-pointer font-bold ${botMode === 'ai' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white bg-transparent'}`}
+                    >
+                      🤖 Gemini AI
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBotMode('rules')}
+                      className={`cursor-pointer font-bold ${botMode === 'rules' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white bg-transparent'}`}
+                    >
+                      📋 Regras
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-450 leading-snug">
+                    {botMode === 'ai' 
+                      ? 'Lê o histórico da conversa e formula respostas inteligentes usando nossa inteligência artificial oficial.'
+                      : 'Responde de acordo com palavras-chaves (Status de O.S, Óleo, Endereço e Orçamentos).'}
+                  </p>
+                </div>
+
+                {/* Welcome Message Config */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">Boas-vindas Inicial (FallBack)</label>
+                  <textarea
+                    rows={4}
+                    value={botWelcomeMsg}
+                    onChange={(e) => setBotWelcomeMsg(e.target.value)}
+                    className="w-full bg-[#070b13] border border-gray-900 rounded-xl p-3 font-mono text-[11px] leading-relaxed text-slate-200 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-650"
+                    placeholder="Escreva a mensagem de boas-vindas..."
+                  />
+                </div>
+
+                {/* Auto-Greeting Message for New Clients Config */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-green-450 text-green-400" /> Saudação Automática (Novos Clientes)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={botGreetingMsg}
+                    onChange={(e) => setBotGreetingMsg(e.target.value)}
+                    className="w-full bg-[#070b13] border border-gray-900 rounded-xl p-3 font-mono text-[11px] leading-relaxed text-slate-200 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-650"
+                    placeholder="Escreva a saudação automática para novos clientes..."
+                  />
+                  <p className="text-[9.2px] text-gray-500 font-mono leading-relaxed">
+                    Esta mensagem personalizada será disparada de forma prioritária quando um contato sem histórico prévio iniciar a conversa. Use o modificador <strong className="text-gray-400 font-mono">{`{veiculo}`}</strong> para exibir o modelo de carro do cliente.
+                  </p>
+                </div>
+              </div>
+
+              {/* WhatsApp Suggestions QR Code Card */}
+              <div className="bg-[#0c1223] rounded-2xl border border-gray-850 p-5 flex flex-col gap-4 text-left">
+                <div className="flex justify-between items-center border-b border-gray-850 pb-2.5">
+                  <h3 className="font-display font-black text-xs text-white uppercase tracking-wider flex items-center gap-2">
+                    <QrCode className="w-4 h-4 text-green-400" /> QR Code de Sugestões
+                  </h3>
+                  <span className="bg-[#070b13] border border-gray-900 text-[8.5px] text-green-400 font-bold px-2 py-0.5 rounded font-mono uppercase">
+                    Feedback / SAC
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-3.5">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">
+                      Destinatário (WhatsApp)
+                    </label>
+                    <input
+                      type="text"
+                      value={suggestionPhone}
+                      onChange={(e) => setSuggestionPhone(e.target.value)}
+                      placeholder="Ex: (11) 99999-9999"
+                      className="bg-[#070b13] border border-gray-900 rounded-xl p-3 font-mono text-[11px] leading-relaxed text-slate-200 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-650"
+                    />
+                    <p className="text-[9px] text-gray-500 font-mono leading-tight">
+                      Número do canal de suporte da sua oficina para receber as mensagens de sugestões enviadas por clientes.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider">
+                      Mensagem Pré-Preenchida
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={suggestionMessage}
+                      onChange={(e) => setSuggestionMessage(e.target.value)}
+                      placeholder="Ex: Olá AutoTech! Gostaria de deixar uma sugestão: "
+                      className="bg-[#070b13] border border-gray-900 rounded-xl p-3 font-mono text-[11px] leading-relaxed text-slate-200 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-650"
+                    />
+                    <p className="text-[9px] text-gray-500 font-mono leading-tight">
+                      O texto que aparecerá digitado no celular do cliente quando ele escanear o código com a câmera.
+                    </p>
+                  </div>
+
+                  {/* QR Code Canvas Frame */}
+                  <div className="bg-[#070b13] border border-gray-900 rounded-2xl p-4 flex flex-col items-center justify-center gap-3">
+                    {suggestionQrCodeUrl ? (
+                      <div className="bg-white p-2.5 rounded-xl border border-gray-150 shadow-inner flex items-center justify-center w-[160px] h-[160px]">
+                        <img 
+                          id="whatsapp_suggestions_qr" 
+                          src={suggestionQrCodeUrl} 
+                          alt="QR Code Feedback" 
+                          className="w-full h-full object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-[160px] h-[160px] flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-800 text-gray-600">
+                        <QrCode className="w-8 h-8 animate-pulse text-gray-700" />
+                        <span className="text-[9px] font-mono mt-2">Sem Telefone</span>
+                      </div>
+                    )}
+                    
+                    <div className="flex flex-col items-center gap-1.5 w-full">
+                      <span className="text-[9px] font-mono text-gray-400 font-bold break-all text-center">
+                        {suggestionPhone ? (
+                          `wa.me/${suggestionPhone.replace(/\D/g, "")}`
+                        ) : (
+                          "Configure um telefone acima"
+                        )}
+                      </span>
+                      
+                      <div className="flex gap-2 w-full mt-1 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const cleanPhone = (suggestionPhone || "").replace(/\D/g, "");
+                            if (!cleanPhone) {
+                              alert("Configure o número do WhatsApp primeiro!");
+                              return;
+                            }
+                            const whatsappLink = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(suggestionMessage)}`;
+                            navigator.clipboard.writeText(whatsappLink);
+                            alert("Link do canal de sugestões copiado com sucesso! Você pode enviá-lo para seus clientes.");
+                          }}
+                          className="flex-1 py-2 bg-gray-900 border border-gray-800 hover:bg-gray-800 text-slate-200 font-sans font-bold text-[10px] rounded-lg tracking-wide transition-all cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <Copy className="w-3.5 h-3.5" /> Copiar Link
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={!suggestionQrCodeUrl}
+                          onClick={() => {
+                            if (!suggestionQrCodeUrl) return;
+                            const link = document.createElement('a');
+                            link.href = suggestionQrCodeUrl;
+                            link.download = `qrcode_whatsapp_sugestoes_${suggestionPhone.replace(/\D/g, "") || "geral"}.png`;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                          className="flex-1 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-40 text-white font-sans font-bold text-[10px] rounded-lg tracking-wide transition-all cursor-pointer flex items-center justify-center gap-1"
+                        >
+                          <Download className="w-3.5 h-3.5" /> Baixar PNG
+                        </button>
+                      </div>
+
+                      {/* Printing Helper */}
+                      {suggestionQrCodeUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const printWindow = window.open('', '_blank');
+                            if (!printWindow) {
+                              alert("Por favor, permita pop-ups para imprimir seu totem do QR Code!");
+                              return;
+                            }
+                            const cleanPhone = (suggestionPhone || "").replace(/\D/g, "");
+                            printWindow.document.write(`
+                              <html>
+                                <head>
+                                  <title>Imprimir QR Code de Sugestões</title>
+                                  <style>
+                                    body {
+                                      font-family: system-ui, -apple-system, sans-serif;
+                                      text-align: center;
+                                      padding: 40px;
+                                      background-color: #ffffff;
+                                      color: #0c1223;
+                                    }
+                                    .container {
+                                      max-width: 400px;
+                                      margin: auto;
+                                      border: 3px solid #16a34a;
+                                      padding: 40px;
+                                      border-radius: 24px;
+                                      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                                    }
+                                    h2 {
+                                      margin-top: 0;
+                                      color: #16a34a;
+                                      font-size: 26px;
+                                      font-weight: 800;
+                                      letter-spacing: -0.025em;
+                                    }
+                                    p {
+                                      font-size: 14px;
+                                      color: #4b5563;
+                                      margin-bottom: 30px;
+                                      line-height: 1.5;
+                                    }
+                                    img {
+                                      width: 240px;
+                                      height: 240px;
+                                      margin: 10px 0;
+                                    }
+                                    .footer {
+                                      font-size: 13px;
+                                      color: #64748b;
+                                      margin-top: 30px;
+                                      border-top: 1px solid #f1f5f9;
+                                      padding-top: 20px;
+                                      font-weight: 500;
+                                    }
+                                  </style>
+                                </head>
+                                <body>
+                                  <div class="container">
+                                    <h2>SUGESTÕES & FEEDBACK</h2>
+                                    <p>Sua opinião ajuda a melhorar nosso serviço! Aponte o celular para enviar sua sugestão direto no nosso WhatsApp.</p>
+                                    <img src="${suggestionQrCodeUrl}" alt="QR Code" />
+                                    <div class="footer">
+                                      AutoTech Oficina Premium<br/>
+                                      WhatsApp SAC: ${suggestionPhone}
+                                    </div>
+                                  </div>
+                                  <script>
+                                    window.onload = function() {
+                                      window.print();
+                                    }
+                                  </script>
+                                </body>
+                              </html>
+                            `);
+                            printWindow.document.close();
+                          }}
+                          className="w-full mt-1.5 py-1.5 bg-[#0a0f1d] border border-gray-800 hover:border-green-800 hover:text-green-400 text-slate-400 font-sans text-[10px] rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 font-bold"
+                        >
+                          <Printer className="w-3.5 h-3.5" /> Imprimir Totem de Mesa
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* PREDEFINED BOT RESPONSES & AUTOMATION FLOWS TABBED DASHBOARD */}
+              <div className="bg-[#0c1223] rounded-2xl border border-gray-850 p-5 flex flex-col gap-4 text-left">
+                
+                {/* Unified Tab Headers */}
+                <div className="flex justify-between items-center border-b border-gray-850 pb-2 flex-wrap gap-2">
+                  <div className="flex gap-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveBotConfigTab('faq');
+                        setIsRuleFormOpen(false);
+                        setIsFlowFormOpen(false);
+                      }}
+                      className={`text-xs font-display font-black uppercase tracking-wider pb-1.5 border-b-2 transition-all cursor-pointer ${
+                        activeBotConfigTab === 'faq' ? 'border-red-600 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      Regras FAQ Rápido
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveBotConfigTab('flows');
+                        setIsRuleFormOpen(false);
+                        setIsFlowFormOpen(false);
+                      }}
+                      className={`text-xs font-display font-black uppercase tracking-wider pb-1.5 border-b-2 transition-all cursor-pointer flex items-center gap-1.5 ${
+                        activeBotConfigTab === 'flows' ? 'border-red-600 text-white' : 'border-transparent text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      Fluxos de Automação <span className="bg-red-950/40 text-red-400 px-1 py-0.5 rounded text-[8px] font-mono border border-red-900/40 font-bold animate-pulse">PRO</span>
+                    </button>
+                  </div>
+
+                  {activeBotConfigTab === 'faq' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingRuleId(null);
+                        setRuleTitle("");
+                        setRuleTrigger("");
+                        setRuleResponse("");
+                        setIsRuleFormOpen(true);
+                        setIsFlowFormOpen(false);
+                      }}
+                      className="p-1 px-2.5 text-[9px] font-mono font-bold text-red-400 bg-red-950/20 border border-red-900/40 rounded-lg hover:bg-red-900/30 transition-all cursor-pointer shadow-sm select-none"
+                    >
+                      + NOVO FAQ
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingFlowId(null);
+                        setFlowName("");
+                        setFlowTrigger("");
+                        setFlowSteps(["", ""]);
+                        setIsFlowFormOpen(true);
+                        setIsRuleFormOpen(false);
+                      }}
+                      className="p-1 px-2.5 text-[9px] font-mono font-bold text-red-400 bg-red-950/20 border border-red-900/40 rounded-lg hover:bg-red-900/30 transition-all cursor-pointer shadow-sm select-none"
+                    >
+                      + NOVO FLUXO
+                    </button>
+                  )}
+                </div>
+
+                {/* TAB 1: STANDARD RULES FAQ */}
+                {activeBotConfigTab === 'faq' && (
+                  <>
+                    {/* Inline Form to Add/Edit Rule */}
+                    {isRuleFormOpen && (
+                      <div className="bg-[#070b13] p-4 rounded-xl border border-red-950/40 flex flex-col gap-3 animate-scaleUp">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-mono font-bold text-red-400 uppercase">
+                            {editingRuleId ? '✏️ Editar Resposta' : '⚡ Criar Novo Gatilho'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsRuleFormOpen(false);
+                              setEditingRuleId(null);
+                            }}
+                            className="text-gray-500 hover:text-white text-[10px] font-mono"
+                          >
+                            FECHAR
+                          </button>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-mono text-gray-400 font-bold uppercase">Título do Assunto</label>
+                          <input
+                            type="text"
+                            value={ruleTitle}
+                            onChange={(e) => setRuleTitle(e.target.value)}
+                            placeholder="Ex: Formas de Pagamento"
+                            className="bg-[#0c1223] border border-gray-850 w-full rounded-lg py-1.5 px-3 text-white text-xs font-mono focus:border-red-600 outline-none"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-mono text-gray-400 font-bold uppercase">Palavras-chave (gatilhos)</label>
+                          <input
+                            type="text"
+                            value={ruleTrigger}
+                            onChange={(e) => setRuleTrigger(e.target.value)}
+                            placeholder="Ex: cartao, pix, pagar, desconto"
+                            className="bg-[#0c1223] border border-gray-850 w-full rounded-lg py-1.5 px-3 text-white text-xs font-mono focus:border-red-600 outline-none"
+                          />
+                          <span className="text-[8px] text-gray-500 font-mono">Separadas por vírgula. Se o cliente digitar alguma delas, o robô responderá.</span>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-mono text-gray-400 font-bold uppercase">Resposta Automática</label>
+                          <textarea
+                            rows={3}
+                            value={ruleResponse}
+                            onChange={(e) => setRuleResponse(e.target.value)}
+                            placeholder="Digite a resposta do robô. Use {veiculo} para incluir o veículo do cliente."
+                            className="bg-[#0c1223] border border-gray-850 w-full rounded-lg py-1.5 px-3 text-white text-xs font-mono focus:border-red-600 outline-none leading-relaxed"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveRule}
+                          className="w-full py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] font-mono font-bold cursor-pointer transition-all"
+                        >
+                          SALVAR REGRA DE RESPOSTA
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Active Rules List */}
+                    <div className="flex flex-col gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                      {botRules.map(rule => (
+                        <div key={rule.id} className="bg-[#070b13] p-3 rounded-xl border border-gray-900 flex flex-col gap-1.5 hover:border-gray-800 transition-all">
+                          <div className="flex justify-between items-center">
+                            <span className="text-white font-extrabold text-xs tracking-tight">{rule.title}</span>
+                            <div className="flex gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleEditRuleClick(rule)}
+                                className="text-gray-400 hover:text-white transition-all cursor-pointer"
+                                title="Editar"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRule(rule.id)}
+                                className="text-gray-500 hover:text-red-500 transition-all cursor-pointer"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {/* Keywords trigger tags */}
+                          <div className="flex flex-wrap gap-1 flex-row">
+                            {rule.trigger.split(',').map((kw, i) => (
+                              <span key={i} className="text-[8px] font-mono bg-[#0c1223] text-gray-400 px-1.5 py-0.5 rounded border border-gray-850">
+                                {kw.trim()}
+                              </span>
+                            ))}
+                          </div>
+
+                          <p className="text-[10px] text-gray-400 font-mono italic leading-relaxed truncate-2-lines">
+                            "{rule.response}"
+                          </p>
+                        </div>
+                      ))}
+
+                      {botRules.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-6 text-center text-gray-500 font-mono text-[10px] gap-1">
+                          <span>Nenhum gatilho de FAQ rápido cadastrado.</span>
+                          <span>Adicione seu primeiro gatilho acima!</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* TAB 2: AUTOMATION FLOW BUILDER */}
+                {activeBotConfigTab === 'flows' && (
+                  <>
+                    {/* Inline Form to Add/Edit Flow */}
+                    {isFlowFormOpen && (
+                      <div className="bg-[#070b13] p-4 rounded-xl border border-red-950/40 flex flex-col gap-3 animate-scaleUp">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-mono font-bold text-red-400 uppercase">
+                            {editingFlowId ? '✏️ Editar Fluxo Automatizado' : '⚡ Criar Novo Fluxo'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsFlowFormOpen(false);
+                              setEditingFlowId(null);
+                            }}
+                            className="text-gray-500 hover:text-white text-[10px] font-mono"
+                          >
+                            FECHAR
+                          </button>
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-mono text-gray-400 font-bold uppercase">Nome do Fluxo</label>
+                          <input
+                            type="text"
+                            value={flowName}
+                            onChange={(e) => setFlowName(e.target.value)}
+                            placeholder="Ex: Onboarding Especial ou Clientes Novos"
+                            className="bg-[#0c1223] border border-gray-850 w-full rounded-lg py-1.5 px-3 text-white text-xs font-mono focus:border-red-600 outline-none"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[9px] font-mono text-gray-400 font-bold uppercase">Palavras-chave Ativadoras (Gatilho)</label>
+                          <input
+                            type="text"
+                            value={flowTrigger}
+                            onChange={(e) => setFlowTrigger(e.target.value)}
+                            placeholder="Ex: ola, oi, boa tarde, suporte, agendar"
+                            className="bg-[#0c1223] border border-gray-850 w-full rounded-lg py-1.5 px-3 text-white text-xs font-mono focus:border-red-600 outline-none"
+                          />
+                          <span className="text-[8px] text-gray-500 font-mono">Separadas por vírgula. Quando o cliente enviar qualquer uma delas no chat, o fluxo inicia automaticamente.</span>
+                        </div>
+
+                        {/* Staggered Multi-step Sequence Builder */}
+                        <div className="flex flex-col gap-2 border-t border-gray-850 pt-2 mt-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-mono text-gray-400 font-bold uppercase">Sequência de Mensagens (Fila de Disparos)</span>
+                            <button
+                              type="button"
+                              onClick={() => setFlowSteps(prev => [...prev, ""])}
+                              className="text-[9.5px] font-mono text-red-400 hover:text-red-300 font-black flex items-center gap-1 cursor-pointer"
+                            >
+                              + ADICIONAR MENSAGEM
+                            </button>
+                          </div>
+
+                          <div className="flex flex-col gap-2.5 max-h-[170px] overflow-y-auto pr-1">
+                            {flowSteps.map((stepVal, idx) => (
+                              <div key={idx} className="flex gap-2 items-start bg-[#070b13] p-2 rounded-lg border border-gray-900">
+                                <div className="flex flex-col items-center gap-1 mt-1 shrink-0">
+                                  <span className="bg-red-950/40 text-red-500 font-mono text-[9px] rounded-full w-5 h-5 flex items-center justify-center border border-red-900/30 font-bold">
+                                    {idx + 1}
+                                  </span>
+                                  {idx < flowSteps.length - 1 && (
+                                    <div className="w-0.5 h-6 bg-dashed border-r border-gray-800"></div>
+                                  )}
+                                </div>
+                                <div className="flex-grow flex flex-col gap-1">
+                                  <textarea
+                                    rows={2}
+                                    value={stepVal}
+                                    onChange={(e) => {
+                                      const updated = [...flowSteps];
+                                      updated[idx] = e.target.value;
+                                      setFlowSteps(updated);
+                                    }}
+                                    placeholder={`Mensagem número ${idx + 1} da cadeia automatizada...`}
+                                    className="bg-[#0c1223] border border-gray-850 w-full rounded-lg py-1.5 px-2.5 text-white text-xs font-mono focus:border-red-600 outline-none leading-relaxed resize-none"
+                                  />
+                                </div>
+                                {flowSteps.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setFlowSteps(prev => prev.filter((_, sIdx) => sIdx !== idx))}
+                                    className="p-1 text-gray-500 hover:text-red-500 cursor-pointer self-center"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          
+                          <div className="p-2 bg-red-950/20 border border-red-900/25 rounded-lg mt-1">
+                            <span className="text-[8.5px] text-red-400 font-mono block leading-relaxed">
+                              📝 <strong>Variáveis Suportadas:</strong> Use <strong>{`{veiculo}`}</strong> para injetar dinamicamente a marca/modelo do cliente ativo no conteúdo final.
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveFlow}
+                          className="w-full py-2 bg-red-650 hover:bg-red-700 text-white rounded-lg text-[10px] font-mono font-bold cursor-pointer transition-all mt-1 uppercase"
+                        >
+                          Confirmar e Persistir Fluxo
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Active Flows Display List */}
+                    <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-1">
+                      {botFlows.map(flow => (
+                        <div 
+                          key={flow.id} 
+                          className={`bg-[#070b13] p-4 rounded-xl border transition-all flex flex-col gap-2.5 hover:border-gray-800 ${
+                            flow.isActive ? 'border-gray-900' : 'border-gray-950 opacity-60'
+                          }`}
+                        >
+                          {/* Flow Header with Toggle and Actions */}
+                          <div className="flex justify-between items-center border-b border-gray-900 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-black text-xs uppercase tracking-tight">{flow.name}</span>
+                              <span className={`text-[8px] font-mono py-0.5 px-1.5 rounded-full font-bold border ${
+                                flow.isActive 
+                                  ? 'bg-green-950/20 text-green-400 border-green-900/40' 
+                                  : 'bg-gray-900 text-gray-500 border-gray-800'
+                              }`}>
+                                {flow.isActive ? 'ATIVO' : 'DESATIVADO'}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2.5">
+                              {/* Power Toggle Switch */}
+                              <button
+                                type="button"
+                                onClick={() => toggleFlowActive(flow.id)}
+                                className={`w-8 h-4.5 rounded-full p-0.5 relative transition-colors duration-200 cursor-pointer ${
+                                  flow.isActive ? 'bg-green-500' : 'bg-gray-800'
+                                }`}
+                                title={flow.isActive ? 'Desativar Fluxo' : 'Ativar Fluxo'}
+                              >
+                                <div className={`w-3.5 h-3.5 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                                  flow.isActive ? 'translate-x-3.5' : 'translate-x-0'
+                                }`} />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleEditFlowClick(flow)}
+                                className="text-gray-400 hover:text-white transition-all cursor-pointer"
+                                title="Editar Fluxo"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFlow(flow.id)}
+                                className="text-gray-500 hover:text-red-500 transition-all cursor-pointer"
+                                title="Excluir Fluxo"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Trigger tags */}
+                          <div className="flex flex-wrap gap-1 flex-row">
+                            <span className="text-[7.5px] font-mono text-gray-500 uppercase self-center mr-1">Ativadores:</span>
+                            {flow.trigger.split(',').map((kw, i) => (
+                              <span key={i} className="text-[8px] font-mono bg-[#0c1223] text-gray-300 px-1.5 py-0.5 rounded border border-gray-850">
+                                {kw.trim()}
+                              </span>
+                            ))}
+                          </div>
+
+                          {/* Flow Steps Preview Visualizer */}
+                          <div className="flex flex-col gap-1 text-[9.5px] font-mono text-gray-400 bg-[#0c1223]/60 p-2.5 rounded-lg border border-gray-900/60 leading-relaxed text-left">
+                            <span className="text-[8px] text-red-500 font-bold uppercase tracking-wider block mb-1">Cadeia de Respostas:</span>
+                            {flow.steps.map((step, sIdx) => (
+                              <div key={sIdx} className="flex gap-1.5 text-[9.5px] items-start">
+                                <span className="text-red-400 font-bold shrink-0">#{sIdx + 1}:</span>
+                                <span className="truncate text-gray-300">"{step}"</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+
+                      {botFlows.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-8 text-center text-gray-500 font-mono text-[10px] gap-1">
+                          <span>Nenhum fluxo de automação cadastrado ainda.</span>
+                          <span>Clique em "+ NOVO FLUXO" para desenhar seu primeiro suporte!</span>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Chat Contacts List Card */}
+              <div className="bg-[#0c1223] rounded-2xl border border-gray-850 p-5 flex flex-col gap-4 text-left flex-grow">
+                <h3 className="font-display font-black text-xs text-white uppercase tracking-wider border-b border-gray-850 pb-2.5 flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-green-450 text-green-400" /> Conversas Ativas
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddingContact(!isAddingContact);
+                    }}
+                    className="p-1 px-2 text-[9px] font-mono font-bold text-green-400 bg-green-950/20 border border-green-900/40 rounded-lg hover:bg-green-900/30 transition-all cursor-pointer shadow-sm select-none"
+                  >
+                    {isAddingContact ? 'FECHAR FORM' : '+ MOCK NOVO CLIENTE'}
+                  </button>
+                </h3>
+
+                {isAddingContact && (
+                  <div className="bg-[#070b13] p-3 rounded-xl border border-green-900/40 flex flex-col gap-2 animate-scaleUp">
+                    <span className="text-[9px] font-mono font-bold text-green-400 uppercase">Simular Novo Cliente (WhatsApp)</span>
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[8px] font-mono text-gray-500 uppercase">Nome</label>
+                        <input
+                          type="text"
+                          value={newContactName}
+                          onChange={(e) => setNewContactName(e.target.value)}
+                          placeholder="Ex: Pedro Alvares"
+                          className="bg-[#0c1223] border border-gray-850 rounded p-1 px-2 text-[10px] text-white outline-none focus:border-green-600"
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <label className="text-[8px] font-mono text-gray-500 uppercase">WhatsApp</label>
+                        <input
+                          type="text"
+                          value={newContactPhone}
+                          onChange={(e) => setNewContactPhone(e.target.value)}
+                          placeholder="Ex: (11) 98765-4321"
+                          className="bg-[#0c1223] border border-gray-850 rounded p-1 px-2 text-[10px] text-white outline-none focus:border-green-600"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1 mt-1">
+                      <label className="text-[8px] font-mono text-gray-500 uppercase">Veículo do Cliente</label>
+                      <input
+                        type="text"
+                        value={newContactVehicle}
+                        onChange={(e) => setNewContactVehicle(e.target.value)}
+                        placeholder="Ex: Civic Touring 1.5 T 2021"
+                        className="bg-[#0c1223] border border-gray-850 rounded p-1 px-2 text-[10px] text-white w-full outline-none focus:border-green-600"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!newContactName.trim() || !newContactPhone.trim()) {
+                          alert("Preencha ao menos Nome e WhatsApp para simular.");
+                          return;
+                        }
+                        const testId = 'test_' + Date.now();
+                        const newContactObj = {
+                          id: testId,
+                          name: newContactName,
+                          phone: newContactPhone,
+                          vehicle: newContactVehicle || 'Veículo não cadastrado',
+                          avatarColor: ['bg-emerald-500', 'bg-indigo-500', 'bg-amber-500', 'bg-rose-500', 'bg-sky-500'][Math.floor(Math.random() * 5)],
+                          unread: 0
+                        };
+                        setChatContacts(prev => [newContactObj, ...prev]);
+                        setChatMessages(prev => ({
+                          ...prev,
+                          [testId]: []
+                        }));
+                        setActiveContactId(testId);
+                        setIsAddingContact(false);
+                        setNewContactName("");
+                        setNewContactPhone("");
+                        setNewContactVehicle("");
+                        alert(`Canal WhatsApp aberto com êxito! Digite qualquer mensagem de olá no chat de simulação à direita para testar seu novo gatilho de resposta rápida de boas-vindas!`);
+                      }}
+                      className="w-full mt-1.5 py-1.5 bg-green-600 hover:bg-green-700 text-white font-mono font-bold text-[9px] rounded uppercase cursor-pointer"
+                    >
+                      Iniciar Chat Vazio
+                    </button>
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-2 max-h-[350px] overflow-y-auto pr-1">
+                  {chatContacts.map(c => {
+                    const isSelected = activeContactId === c.id;
+                    const contactMsgs = chatMessages[c.id] || [];
+                    const lastMsg = contactMsgs[contactMsgs.length - 1];
+                    const truncatedText = lastMsg ? (lastMsg.text.length > 45 ? lastMsg.text.substring(0, 45) + '...' : lastMsg.text) : 'Nenhuma mensagem';
+                    
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveContactId(c.id);
+                          // Clear unread
+                          setChatContacts(prev => prev.map(item => item.id === c.id ? { ...item, unread: 0 } : item));
+                        }}
+                        className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left outline-none cursor-pointer ${
+                          isSelected 
+                            ? 'bg-slate-900 border-red-900/45 shadow' 
+                            : 'bg-[#070b13] border-gray-900 hover:border-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-full ${c.avatarColor} text-white font-extrabold flex items-center justify-center text-xs shrink-0 relative uppercase`}>
+                            {c.name.substring(0, 2)}
+                            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-500 border border-slate-950"></span>
+                          </div>
+                          
+                          <div className="min-w-0 flex flex-col">
+                            <span className="font-bold text-xs text-white tracking-tight">{c.name}</span>
+                            <span className="text-[10px] text-gray-400 truncate mt-0.5 font-mono">{c.vehicle}</span>
+                            <p className="text-[9px] text-gray-500 font-mono truncate mt-0.5">{truncatedText}</p>
+                          </div>
+                        </div>
+
+                        {c.unread > 0 && !isSelected && (
+                          <div className="min-w-4 h-4 px-1 rounded-full bg-red-600 text-white font-mono text-[9px] font-extrabold flex items-center justify-center">
+                            {c.unread}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Right Panel - WhatsApp Interface Simulator */}
+            <div className="col-span-12 lg:col-span-8 flex flex-col gap-5">
+              
+              {/* WhatsApp UI Mock Container */}
+              <div className="bg-[#050912] rounded-2xl border border-gray-850 flex flex-col h-[520px] relative overflow-hidden text-left">
+                
+                {/* Whatsapp Header Bar */}
+                {(() => {
+                  const contact = chatContacts.find(c => c.id === activeContactId);
+                  if (!contact) return null;
+                  return (
+                    <div className="bg-[#0d1525] border-b border-gray-800/80 p-3.5 flex justify-between items-center z-10">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-full ${contact.avatarColor} text-white font-extrabold flex items-center justify-center text-xs uppercase relative`}>
+                          {contact.name.substring(0, 2)}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="font-extrabold text-xs text-slate-100">{contact.name} • {contact.phone}</span>
+                          <span className="text-[9.5px] text-emerald-400 font-mono flex items-center gap-1">
+                            {isBotTyping ? (
+                              <>
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce delay-100"></span>
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce delay-200"></span>
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce delay-300"></span>
+                                <span className="font-bold">Cliente digitando...</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block"></span>
+                                <span>WhatsApp On-line • {contact.vehicle}</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#070b13] px-2.5 py-1 rounded-lg border border-gray-900 text-[9px] font-mono font-bold text-gray-500 flex items-center gap-1">
+                        🔒 CONEXÃO CRIPTOGRAFADA
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Messages Body Stream */}
+                <div className="flex-grow p-4 overflow-y-auto flex flex-col gap-3.5" style={{ backgroundImage: 'radial-gradient(rgba(16, 185, 129, 0.02) 1px, transparent 0)', backgroundSize: '16px 16px' }}>
+                  
+                  {/* Encrypted Notice inside Chat */}
+                  <div className="self-center bg-[#070b13] border border-gray-900/60 text-slate-450 font-mono text-[9px] px-3.5 py-1.5 rounded-lg text-center max-w-sm">
+                    🔒 As mensagens nesta conversa são simuladas em tempo real com criptografia TLS. Atendentes físicos podem intervir e responder diretamente no painel inferior.
+                  </div>
+
+                  {/* Messages Mapping */}
+                  {(chatMessages[activeContactId] || []).map((m) => {
+                    const isClient = m.sender === 'client';
+                    return (
+                      <div
+                        key={m.id}
+                        className={`flex flex-col max-w-[85%] ${isClient ? 'self-start' : 'self-end'}`}
+                      >
+                        <div className={`p-3 rounded-2xl relative ${
+                          isClient 
+                            ? 'bg-slate-900 text-slate-200 rounded-tl-none border border-gray-800' 
+                            : 'bg-emerald-900/30 text-emerald-300 rounded-tr-none border border-emerald-950 shadow-[0_2px_12px_rgba(16,185,129,0.05)]'
+                        }`}>
+                          <span className="text-[11.5px] leading-relaxed block whitespace-pre-line font-medium select-text">
+                            {m.text}
+                          </span>
+                          
+                          <span className="text-[8px] text-gray-500 font-mono block text-right mt-1.5">
+                            {new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} • {isClient ? 'Cliente' : (botMode === 'ai' ? 'AutoTech AI' : 'Regras')}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* Typewriter Typing status indicator for bot */}
+                  {isBotTyping && (
+                    <div className="self-end max-w-[85%]">
+                      <div className="p-3 bg-emerald-950/25 border border-emerald-900/40 rounded-2xl rounded-tr-none text-emerald-400 italic text-[11px] font-mono flex items-center gap-1">
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                        <span>AutoTech Bot está analisando e formulando resposta...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Operator Direct Text input bar */}
+                <div className="bg-[#0c1223] border-t border-gray-800/80 p-3 flex gap-2.5 items-center">
+                  <div className="relative flex-grow">
+                    <input
+                      type="text"
+                      value={simulatedMessageText}
+                      onChange={(e) => setSimulatedMessageText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleClientSimulatedSend();
+                      }}
+                      className="w-full bg-[#050912] border border-gray-900 rounded-xl p-3 pr-10 outline-none text-xs text-slate-200 font-mono placeholder-gray-550 focus:border-red-650 focus:ring-1 focus:ring-red-650"
+                      placeholder="Simular resposta direta do cliente..."
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleClientSimulatedSend()}
+                    className="p-3 bg-green-600 hover:bg-green-700 text-white rounded-xl cursor-pointer"
+                    title="Simular cliente enviando este texto"
+                  >
+                    <Send className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Bot Interaction Action Simulation Suite */}
+              <div className="bg-[#0c1223] rounded-2xl border border-gray-850 p-5 flex flex-col gap-4 text-left">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-850 pb-2.5 gap-2">
+                  <h3 className="font-display font-black text-xs text-white uppercase tracking-wider flex items-center gap-2">
+                    <Bot className="w-4 h-4 text-blue-400 animate-bounce" /> 🚀 Suite de Eventos: Simular Mensagens Prontas do Cliente
+                  </h3>
+                  <span className="px-2 py-0.5 rounded bg-blue-950 border border-blue-900 text-[9px] font-mono font-bold text-blue-400">TESTAR ROBÔ</span>
+                </div>
+
+                <p className="text-[11px] text-gray-400 font-mono leading-relaxed">
+                  Utilize os botões abaixo para simular mensagens e perguntas reais de clientes sobre o veículo correspondente no WhatsApp. O robô irá processar seu comportamento e disparar as devidas etapas operacionais instantaneamente.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1.5 [&>button]:p-3 [&>button]:rounded-xl [&>button]:border [&>button]:border-gray-850 [&>button]:bg-[#070b13] [&>button]:text-[11px] [&>button]:font-mono [&>button]:text-left [&>button]:relative [&>button]:transition-all [&>button]:cursor-pointer">
+                  
+                  <button
+                    type="button"
+                    onClick={() => handleClientSimulatedSend("Boa tarde! Qual é o status do reparo do meu carro?")}
+                    className="hover:border-blue-900 flex flex-col gap-1 hover:bg-blue-950/10"
+                  >
+                    <strong className="text-white">🔍 CONSULTAR STATUS DO CARRO</strong>
+                    <span className="text-[10px] text-gray-500">Simula o cliente perguntando se sua O.S. está pronta.</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleClientSimulatedSend("Vocês fazem alinhamento e balanceamento 3D? Quanto custa?")}
+                    className="hover:border-blue-900 flex flex-col gap-1 hover:bg-blue-950/10"
+                  >
+                    <strong className="text-white">💰 CONSULTAR TARIFAS DE SERVIÇO</strong>
+                    <span className="text-[10px] text-gray-500">Pergunta sobre custos de alinhamento e roda 3D.</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleClientSimulatedSend("Quero agendar uma troca de óleo preventiva com filtros Castrol.")}
+                    className="hover:border-blue-900 flex flex-col gap-1 hover:bg-blue-950/10"
+                  >
+                    <strong className="text-white">💧 SOLICITAR TROCA DE ÓLEO</strong>
+                    <span className="text-[10px] text-gray-500">Pergunta sobre revisões preventiva e kits de troca Castrol.</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleClientSimulatedSend("Qual é o endereço físico da oficina e os horários de sábado?")}
+                    className="hover:border-blue-900 flex flex-col gap-1 hover:bg-blue-950/10"
+                  >
+                    <strong className="text-white">📍 ENDEREÇO E HORÁRIOS DA SEDE</strong>
+                    <span className="text-[10px] text-gray-500">Solicita a localização, mapas e horário de funcionamento.</span>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      )}
       {clientToDelete && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-[#0c1223] rounded-2xl border border-red-900/30 p-6 max-w-sm w-full text-left flex flex-col gap-4 animate-scaleUp">

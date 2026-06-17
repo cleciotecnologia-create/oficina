@@ -140,6 +140,11 @@ export const ConfigView: React.FC = () => {
       if (company.fiscalTaxRules) {
         setFiscalTaxRules(company.fiscalTaxRules);
       }
+      setSmtpHost(company.smtpHost || 'smtp.gmail.com');
+      setSmtpPort(company.smtpPort !== undefined ? company.smtpPort : 465);
+      setSmtpUser(company.smtpUser || '');
+      setSmtpPass(company.smtpPass || '');
+      setSmtpSecure(company.smtpSecure !== undefined ? company.smtpSecure : true);
     }
   }, [company]);
 
@@ -187,6 +192,7 @@ export const ConfigView: React.FC = () => {
   const [logoFeedback, setLogoFeedback] = useState<string | null>(null);
 
   // Custom Domain & DNS Subdomain configurations state
+  const [showThermalPreview, setShowThermalPreview] = useState(false);
   const [customDomainStr, setCustomDomainStr] = useState(company.customDomain || '');
   const [subdomainStr, setSubdomainStr] = useState(company.subdomain || '');
   const [domainStatusVal, setDomainStatusVal] = useState<'Pendente' | 'Verificando' | 'Ativo' | 'Falhado'>(company.domainStatus || 'Pendente');
@@ -200,6 +206,17 @@ export const ConfigView: React.FC = () => {
   const [badgeTheme, setBadgeTheme] = useState<'red' | 'blue' | 'gold' | 'green' | 'orange' | 'purple'>('red');
   const [badgeInitials, setBadgeInitials] = useState<string>('ATC');
   const [accentStripes, setAccentStripes] = useState<boolean>(true);
+
+  // Gmail SMTP integration state
+  const [smtpHost, setSmtpHost] = useState(company.smtpHost || 'smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState<number>(company.smtpPort !== undefined ? company.smtpPort : 465);
+  const [smtpUser, setSmtpUser] = useState(company.smtpUser || '');
+  const [smtpPass, setSmtpPass] = useState(company.smtpPass || '');
+  const [smtpSecure, setSmtpSecure] = useState<boolean>(company.smtpSecure !== undefined ? company.smtpSecure : true);
+  const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+  const [smtpTestFeedback, setSmtpTestFeedback] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
+  const [emailTestFeedback, setEmailTestFeedback] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
 
   // Other system options
   const [thermalWidth, setThermalWidth] = useState('80mm');
@@ -1052,7 +1069,12 @@ export const ConfigView: React.FC = () => {
         fiscalServiceInitialNum,
         fiscalAutoEmitOnOSClose,
         fiscalSeriesList,
-        fiscalTaxRules
+        fiscalTaxRules,
+        smtpHost,
+        smtpPort,
+        smtpUser,
+        smtpPass,
+        smtpSecure
       });
       if (user && user.role === 'Administrador' && userReversalPassword) {
         await updateUserProfile({
@@ -1470,14 +1492,234 @@ export const ConfigView: React.FC = () => {
                 </select>
               </div>
 
+              <div className="flex flex-col gap-1.5 flex-1 justify-between">
+                <div>
+                  <label className="text-[10px] text-gray-400">ASSINATURA WHITE-LABEL NO RODAPÉ</label>
+                  <input 
+                    type="text" 
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white text-xs focus:ring-1 focus:ring-red-500 w-full mt-1.5"
+                    value={whiteLabelTitle}
+                    onChange={(e) => setWhiteLabelTitle(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-1">
+              <button
+                type="button"
+                onClick={() => setShowThermalPreview(true)}
+                className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-red-900/40 bg-red-950/20 hover:bg-red-900/30 text-white text-xs font-mono font-bold transition-all cursor-pointer shadow-md select-none"
+              >
+                <Eye className="w-4 h-4 text-red-500 animate-pulse" />
+                <span>Visualizar Impressão (Bobina 80mm)</span>
+              </button>
+            </div>
+
+            {/* SMTP / Gmail Integration panel */}
+            <div className="border-t border-gray-850 pt-4 flex items-center gap-2">
+              <Mail className="w-5 h-5 text-red-500" />
+              <div>
+                <h3 className="font-display font-bold text-white text-sm">Integração com Gmail (SMTP)</h3>
+                <span className="text-[10px] text-gray-500 font-mono block">Configure os dados de envio automático de Orçamentos e comprovantes via Gmail.</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400">ASSINATURA WHITE-LABEL NO RODAPÉ</label>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono">SERVIDOR SMTP</label>
                 <input 
                   type="text" 
-                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white text-xs focus:ring-1 focus:ring-red-500"
-                  value={whiteLabelTitle}
-                  onChange={(e) => setWhiteLabelTitle(e.target.value)}
+                  placeholder="smtp.gmail.com"
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 transition-colors"
+                  value={smtpHost}
+                  onChange={(e) => setSmtpHost(e.target.value)}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono">PORTA SMTP</label>
+                  <input 
+                    type="number" 
+                    placeholder="465"
+                    className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 transition-colors"
+                    value={smtpPort}
+                    onChange={(e) => setSmtpPort(Number(e.target.value))}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5 justify-center mt-3 pl-2">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-gray-400 text-[10px] select-none font-bold uppercase tracking-wider font-mono">
+                    <input 
+                      type="checkbox"
+                      checked={smtpSecure}
+                      onChange={(e) => setSmtpSecure(e.target.checked)}
+                      className="rounded border-gray-850 bg-[#080c16] text-red-500 focus:ring-0 focus:ring-offset-0 mr-1 cursor-pointer"
+                    />
+                    SSL/TLS
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono">USUÁRIO GMAIL</label>
+                <input 
+                  type="email" 
+                  placeholder="suaoficina@gmail.com"
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 transition-colors"
+                  value={smtpUser}
+                  onChange={(e) => setSmtpUser(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-mono">SENHA DE APP DO GMAIL (16 DÍGITOS)</label>
+                <input 
+                  type="password" 
+                  placeholder="••••••••••••••••"
+                  className="bg-[#080c16] border border-gray-800 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-red-500 transition-colors"
+                  value={smtpPass}
+                  onChange={(e) => setSmtpPass(e.target.value)}
+                />
+                <span className="text-[9.5px] text-gray-500 leading-normal font-sans">
+                  💡 no Gmail, use uma <strong>"Senha de App"</strong> gerada na segurança de sua Conta Google (não utilize sua senha pessoal padrão).
+                </span>
+              </div>
+
+              <div className="col-span-1 sm:col-span-2 flex flex-col gap-2 mt-1">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={isTestingSmtp || !smtpHost || !smtpUser || !smtpPass}
+                    onClick={async () => {
+                      setIsTestingSmtp(true);
+                      setSmtpTestFeedback(null);
+                      try {
+                        const response = await fetch('/api/email/verify', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            smtpHost,
+                            smtpPort,
+                            smtpUser,
+                            smtpPass,
+                            smtpSecure
+                          })
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                          setSmtpTestFeedback({ success: true, message: data.message });
+                        } else {
+                          setSmtpTestFeedback({ success: false, error: data.error });
+                        }
+                      } catch (err: any) {
+                        setSmtpTestFeedback({ success: false, error: err.message || 'Erro de rede na conexão.' });
+                      } finally {
+                        setIsTestingSmtp(false);
+                      }
+                    }}
+                    className="p-2 bg-slate-900 border border-gray-850 hover:bg-slate-850 text-white rounded-lg cursor-pointer flex items-center gap-1.5 text-[11px] font-sans transition-all w-fit font-bold shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {isTestingSmtp ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Verificando Conexão...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-3.5 h-3.5 text-blue-400" /> Testar & Validar SMTP Gmail
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isSendingTestEmail || !smtpHost || !smtpUser || !smtpPass}
+                    onClick={async () => {
+                      setIsSendingTestEmail(true);
+                      setEmailTestFeedback(null);
+                      const testDestination = emailStr || smtpUser || "contato@autoprecision.com.br";
+                      try {
+                        const response = await fetch('/api/email/send', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            smtpHost,
+                            smtpPort,
+                            smtpUser,
+                            smtpPass,
+                            smtpSecure,
+                            to: testDestination,
+                            subject: "Teste de Envio de E-mail - AutoTech CRM",
+                            text: `Sucesso! Suas configurações SMTP de envio automático estão funcionando perfeitamente.\n\nE-mail destinatário configurado: ${testDestination}\n\nOficina AutoTech - Gestão & Conectividade.`,
+                            html: `
+                              <div style="font-family: sans-serif; max-width: 600px; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                                <h2 style="color: #0f172a; margin-top: 0;">🎉 Conexão SMTP Ativa!</h2>
+                                <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+                                  Este é um e-mail de teste automático confirmando que o sistema conseguiu estabelecer contato com o seu servidor de e-mail e despachar a mensagem.
+                                </p>
+                                <div style="background-color: #f2f5f9; padding: 12px; border-radius: 6px; font-size: 13px; font-family: monospace; border-left: 4px solid #16a34a; margin: 15px 0; color: #334155;">
+                                  <strong>Destinatário Configurado:</strong> ${testDestination}<br/>
+                                  <strong>Servidor SMTP:</strong> ${smtpHost}:${smtpPort}
+                                </div>
+                                <p style="font-size: 12px; color: #64748b; margin-bottom: 0;">
+                                  Oficina AutoTech • Sistema Integrado de Ordens de Serviço
+                                </p>
+                              </div>
+                            `,
+                            fromName: "AutoTech OS"
+                          })
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                          setEmailTestFeedback({ success: true, message: `E-mail de teste enviado com êxito! Verifique a caixa de entrada de: ${testDestination}` });
+                        } else {
+                          setEmailTestFeedback({ success: false, error: data.error || "Houve um problema de validação ao enviar e-mail nas credenciais informadas." });
+                        }
+                      } catch (err: any) {
+                        setEmailTestFeedback({ success: false, error: err.message || 'Falha de rede ao disparar e-mail de teste.' });
+                      } finally {
+                        setIsSendingTestEmail(false);
+                      }
+                    }}
+                    className="p-2 bg-green-950/30 border border-green-900/50 hover:bg-green-900/40 text-green-400 rounded-lg cursor-pointer flex items-center gap-1.5 text-[11px] font-sans transition-all w-fit font-bold shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {isSendingTestEmail ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" /> Enviando E-mail...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5 text-green-400" /> Testar Conexão (Enviar E-mail)
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {smtpTestFeedback && (
+                  <div className={`p-3 rounded-lg border text-[11px] leading-relaxed flex flex-col gap-1 ${
+                    smtpTestFeedback.success 
+                      ? 'bg-blue-950/25 border-blue-900/60 text-blue-400' 
+                      : 'bg-red-950/25 border-red-900/60 text-red-400'
+                  }`}>
+                    <span className="font-bold uppercase tracking-wider text-[9.5px]">
+                      {smtpTestFeedback.success ? '✓ SMTP Ativo' : '⚠️ Erro de SMTP'}
+                    </span>
+                    <span>{smtpTestFeedback.success ? smtpTestFeedback.message : smtpTestFeedback.error}</span>
+                  </div>
+                )}
+
+                {emailTestFeedback && (
+                  <div className={`p-3 rounded-lg border text-[11px] leading-relaxed flex flex-col gap-1 ${
+                    emailTestFeedback.success 
+                      ? 'bg-green-950/25 border-green-900/60 text-green-400' 
+                      : 'bg-red-950/25 border-red-900/60 text-red-400'
+                  }`}>
+                    <span className="font-bold uppercase tracking-wider text-[9.5px]">
+                      {emailTestFeedback.success ? '✓ E-mail Enviado' : '⚠️ Falha no Envio'}
+                    </span>
+                    <span>{emailTestFeedback.success ? emailTestFeedback.message : emailTestFeedback.error}</span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4259,6 +4501,177 @@ export const ConfigView: React.FC = () => {
                 )}
               </div>
 
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {showThermalPreview && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0b101c] rounded-2xl border border-gray-800 p-6 max-w-md w-full text-left flex flex-col gap-4 animate-scaleUp max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center border-b border-gray-800/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <Printer className="w-5 h-5 text-red-500 animate-pulse" />
+                <div>
+                  <h3 className="font-display font-black text-sm text-white uppercase tracking-wider">
+                    Visualizar Cupom {thermalWidth || '80mm'}
+                  </h3>
+                  <span className="text-[10px] text-gray-500 font-mono block">
+                    Simulação fiel baseada na largura de {thermalWidth || '80mm'}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowThermalPreview(false)}
+                className="p-1.5 px-3 text-[10px] font-mono text-gray-400 hover:text-white bg-slate-900 border border-gray-850 rounded-lg cursor-pointer"
+              >
+                FECHAR
+              </button>
+            </div>
+
+            {/* Simulated Receipt paper container */}
+            <div className="flex flex-col items-center justify-center bg-gray-950 p-6 rounded-xl border border-gray-900 shadow-inner relative overflow-hidden">
+              
+              {/* Paper roll representation */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-gray-900 text-gray-500 border-b border-l border-r border-gray-850 rounded-b-lg px-4 py-0.5 text-[8px] font-mono tracking-widest font-extrabold uppercase">
+                ALIMENTAÇÃO AUTOMÁTICA
+              </div>
+
+              {/* Serrated tear-off emulation */}
+              <div 
+                className="w-full h-2 bg-repeat-x opacity-80 mt-2" 
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 5' width='10' height='5'%3E%3Cpolygon points='0,5 5,0 10,5' fill='%23ffffff'/%3E%3C/svg%3E")`,
+                  backgroundSize: '10px 5px'
+                }}
+              />
+
+              {/* Actual ticket body */}
+              <div 
+                className="bg-white text-black p-5 font-mono text-[11px] leading-relaxed shadow-2xl relative select-none w-full border-b-2 border-dashed border-gray-300"
+                style={{
+                  maxWidth: thermalWidth === '58mm' ? '220px' : '310px',
+                }}
+              >
+                
+                {/* Logo & Header info */}
+                <div className="flex flex-col items-center text-center border-b border-black border-dashed pb-3 mb-3">
+                  {logoUrlStr ? (
+                    <img 
+                      src={logoUrlStr} 
+                      alt="Logo Oficina" 
+                      className="w-16 h-16 object-contain mb-2 filter grayscale brightness-90 max-h-20"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://picsum.photos/seed/broken-thermal/60/60';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded border border-dashed border-gray-400 flex items-center justify-center text-[9px] text-gray-400 mb-2 font-mono">
+                      [SEM LOGO]
+                    </div>
+                  )}
+                  <span className="font-black text-xs block tracking-widest uppercase">
+                    {companyName ? companyName.toUpperCase() : 'OFFICIAL AUTOTECH SPA'}
+                  </span>
+                  <span className="text-[9px] block text-gray-750 mt-1 leading-snug">
+                    {addressStr || 'AV. DAS NAÇÕES UNIDAS, 1040 - PINHEIROS, SP'}
+                  </span>
+                  <span className="text-[9px] block text-gray-750 font-bold mt-0.5">
+                    CNPJ: {cnpjStr || '12.345.678/0001-90'}
+                  </span>
+                  <span className="text-[9px] block text-gray-750">
+                    FONE: {phoneStr || '(11) 98765-4321'}
+                  </span>
+                </div>
+
+                {/* Subtitle / Ticket identification */}
+                <div className="text-center font-black mb-3 uppercase tracking-wider text-[10px] border-b border-black border-dashed pb-2">
+                  🧾 ORÇAMENTO DE SERVIÇOS #2026
+                </div>
+
+                {/* Simulated table client information */}
+                <div className="text-[9px] flex flex-col gap-0.5 border-b border-black border-dashed pb-3 mb-2.5 text-left">
+                  <span><strong>CLIENTE:</strong> JOÃO SILVA PINTO</span>
+                  <span><strong>VEÍCULO:</strong> HONDA CIVIC LXR 2.0 FLEX 2016</span>
+                  <span><strong>PLACA:</strong> QXG-9H88</span>
+                  <span><strong>DATA:</strong> 17/06/2026 12:45 CH</span>
+                </div>
+
+                {/* Services details */}
+                <div className="flex flex-col gap-1 mb-2.5 text-left border-b border-black border-dashed pb-2">
+                  <div className="text-[9px] font-bold">OPERACAO / SERVICOS</div>
+                  <div className="flex justify-between text-[9px]">
+                    <span className="truncate max-w-[140px]">TROCA DE SENSOR LAMBDA</span>
+                    <span>R$ 150,00</span>
+                  </div>
+                  <div className="flex justify-between text-[9px]">
+                    <span className="truncate max-w-[140px]">REVISAO COMPLETA INJECAO</span>
+                    <span>R$ 250,00</span>
+                  </div>
+                </div>
+
+                {/* Parts details */}
+                <div className="flex flex-col gap-1 border-b border-black border-dashed pb-2.5 mb-2.5 text-left">
+                  <div className="text-[9px] font-bold">PECAS / INSUMOS</div>
+                  <div className="flex justify-between text-[9px]">
+                    <span className="truncate max-w-[150px]">SONDA LAMBDA Genuína Bosch</span>
+                    <span>R$ 480,00</span>
+                  </div>
+                  <div className="flex justify-between text-[9px]">
+                    <span className="truncate max-w-[150px]">FILTRO DE AR MANN</span>
+                    <span>R$ 85,00</span>
+                  </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="flex flex-col gap-0.5 text-right font-mono text-[10px] mb-3">
+                  <div className="flex justify-between">
+                    <span>MÃO DE OBRA:</span>
+                    <span>R$ 400,00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>SOMA PEÇAS:</span>
+                    <span>R$ 565,00</span>
+                  </div>
+                  <div className="flex justify-between border-t border-black pt-1.5 font-bold">
+                    <span>TOTAL GERAL:</span>
+                    <span>R$ 965,00</span>
+                  </div>
+                </div>
+
+                {/* Footer white-label */}
+                <div className="text-center text-[7.5px] border-t border-black border-dashed pt-3 pb-1 text-gray-500 flex flex-col gap-0.5 uppercase">
+                  <span>DOCUMENTO AUXILIAR SEM VALOR FISCAL</span>
+                  <span className="font-bold tracking-wider">
+                    {whiteLabelTitle || '@AutoTech Premium Cloud System'}
+                  </span>
+                </div>
+
+              </div>
+              
+              {/* Serrated bottom edge emulation */}
+              <div 
+                className="w-full h-2 bg-repeat-x -mt-0.5 opacity-80" 
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 5' width='10' height='5'%3E%3Cpolygon points='0,0 5,5 10,0' fill='%23ffffff'/%3E%3C/svg%3E")`,
+                  backgroundSize: '10px 5px'
+                }}
+              />
+            </div>
+
+            {/* Helper tips at the bottom */}
+            <div className="p-3 bg-slate-900/50 rounded-xl border border-gray-850 flex flex-col gap-1.5 font-sans">
+              <strong className="text-red-400 font-extrabold text-[9.5px] uppercase tracking-wider block font-mono">
+                💡 NOTA DE COR DE LOGOTIPO
+              </strong>
+              <p className="text-[10px] text-gray-300 leading-relaxed font-sans">
+                As impressões térmicas convertem automaticamente seu logotipo colorido para tons monocromáticos de alta fidelidade e limitam a largura de renderização a <span className="text-white font-bold">{thermalWidth || '80mm'}</span> para garantir compatibilidade perfeita com bobinas de cupom de marcas comuns (como Bematech, Elgin, Epson ou Daruma).
+              </p>
             </div>
 
           </div>

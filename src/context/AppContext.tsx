@@ -1047,6 +1047,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           notes: fields.reopenReason || 'Alteração de status'
         }
       ];
+
+      // Automatic WhatsApp Status Notification Dispatch Integration
+      const matchedClient = clientes.find(c => c.id === currentOS.clienteId || c.name === currentOS.clienteName);
+      if (matchedClient && matchedClient.phone) {
+        let textMsg = "";
+        const shopName = company?.name || "AutoTech";
+        const vehicleInfo = `${currentOS.vehicleBrand || ''} ${currentOS.vehicleModel || 'Veículo'}`;
+        
+        switch(fields.status) {
+          case 'Finalizada':
+            textMsg = `Olá, *${matchedClient.name}*! Ótima notícia: seu veículo *${vehicleInfo}* (Placa: ${currentOS.plate}) está com a Ordem de Serviço FINALIZADA e o carro está perfeitamente testado e disponível para retirada na *${shopName}*! 🚗✨\n\nAgradecemos a preferência!`;
+            break;
+          case 'Em execução':
+            textMsg = `Olá, *${matchedClient.name}*! Gostaríamos de avisar que seu veículo *${vehicleInfo}* (Placa: ${currentOS.plate}) teve sua Ordem de Serviço iniciada e já está EM EXECUÇÃO na nossa oficina *${shopName}*. 🔧⚙️`;
+            break;
+          case 'Garantia Reaberta':
+            textMsg = `Olá, *${matchedClient.name}*! Compreendemos o ocorrido e abrimos com prioridade o processo de Garantia Reaberta para o seu veículo *${vehicleInfo}* (Placa: ${currentOS.plate}) na *${shopName}*. Nossa equipe entrará em contato.`;
+            break;
+          case 'Aguardando peça':
+            textMsg = `Olá, *${matchedClient.name}*! Informamos que seu veículo *${vehicleInfo}* (Placa: ${currentOS.plate}) está com o status atualizado para AGUARDANDO PEÇA em nosso pátio. Assim que os componentes chegarem, iniciaremos a montagem! 📦`;
+            break;
+          default:
+            textMsg = `Olá, *${matchedClient.name}*! Passando para informar que o progresso do seu veículo *${vehicleInfo}* (Placa: ${currentOS.plate}) na oficina *${shopName}* mudou oficialmente para o status: *${fields.status}*.`;
+        }
+
+        // Send via server API
+        fetch('/api/whatsapp/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            phone: matchedClient.phone,
+            clientName: matchedClient.name,
+            osId: id,
+            status: fields.status,
+            message: textMsg
+          })
+        }).then(res => res.json())
+          .then(data => {
+            console.log("[AppContext] Notificação WhatsApp enviada via API com sucesso:", data);
+          })
+          .catch(err => {
+            console.warn("[AppContext] Falha ao despachar notificação WhatsApp:", err);
+          });
+      }
+
     } else {
       addLocalAuditLog("Edição de OS", `Dados da Ordem de Serviço #${id} atualizados.`);
     }

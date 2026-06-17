@@ -296,6 +296,7 @@ export const EstoqueView: React.FC = () => {
   const [selectedXmlItems, setSelectedXmlItems] = useState<Record<string, boolean>>({});
   const [customSellPrices, setCustomSellPrices] = useState<Record<string, string>>({});
   const [customCategories, setCustomCategories] = useState<Record<string, string>>({});
+  const [showXmlImporterModal, setShowXmlImporterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
   const [onlyCriticalFilter, setOnlyCriticalFilter] = useState(false);
@@ -995,8 +996,8 @@ export const EstoqueView: React.FC = () => {
       {activeTab === 'geral' && (
         <>
           {/* SEARCH AND FILTERS */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-[#0a0f1d] p-4 rounded-xl border border-gray-900">
-            <div className="relative md:col-span-8">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 bg-[#0a0f1d] p-4 rounded-xl border border-gray-900 items-center">
+            <div className="relative md:col-span-6">
               <Search className="absolute left-3.5 top-3 w-4 h-4 text-gray-500" />
               <input 
                 type="text" 
@@ -1007,7 +1008,7 @@ export const EstoqueView: React.FC = () => {
               />
             </div>
 
-            <div className="md:col-span-4">
+            <div className="md:col-span-3">
               <select 
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
@@ -1017,6 +1018,18 @@ export const EstoqueView: React.FC = () => {
                   <option key={idx} value={cat}>{cat}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="md:col-span-3">
+              <button
+                type="button"
+                id="btn-import-xml-estoque"
+                onClick={() => { playStockBeeper(); setShowXmlImporterModal(true); }}
+                className="w-full bg-red-650 hover:bg-red-700 bg-red-600 text-white font-mono text-[11px] font-extrabold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer border border-red-500/30 hover:border-red-500/60 shadow-lg shadow-red-950/20 uppercase"
+              >
+                <FileCode className="w-4 h-4" />
+                Importar XML
+              </button>
             </div>
           </div>
 
@@ -2629,6 +2642,373 @@ export const EstoqueView: React.FC = () => {
               >
                 Voltar
               </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* 📥 INVENTORY AUTOMATIC XML IMPORTER OVERLAY MODAL */}
+      {showXmlImporterModal && (
+        <div id="xml-importer-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-[#0b132b] border border-gray-805 border-gray-800 text-white rounded-2xl w-full max-w-5xl h-[88vh] flex flex-col shadow-2xl relative overflow-hidden">
+            
+            {/* Header */}
+            <div className="p-4 border-b border-gray-850 bg-[#070b19] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-red-950/40 border border-red-500/30 rounded-xl">
+                  <FileCode className="w-5 h-5 text-red-500 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="font-display font-extrabold text-sm tracking-wide text-white uppercase flex items-center gap-2">
+                    Importador Automático de XML (NF-e)
+                  </h3>
+                  <span className="text-[10px] text-gray-400 font-mono block">
+                    Processamento inteligente de Notas Fiscais eletrônicas da SEFAZ para reabastecimento imediato de estoque
+                  </span>
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setShowXmlImporterModal(false);
+                }}
+                className="px-3 py-1.5 bg-[#141d33] hover:bg-red-650 hover:bg-red-600 hover:text-white text-gray-400 border border-gray-800 rounded-lg text-[10px] font-mono font-bold transition-all cursor-pointer"
+              >
+                Fechar (Esc)
+              </button>
+            </div>
+
+            {/* XML Import Main Area */}
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar bg-[#091122]/40">
+              
+              {/* If XML is NOT loaded, show dropzone and samples */}
+              {!parsedXml ? (
+                <div className="flex flex-col gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
+                    
+                    <div className="md:col-span-7 bg-[#0c1223] rounded-2xl border border-gray-850 border-gray-800 p-6 flex flex-col gap-5 justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-red-950/40 text-red-500 border border-red-900/30 flex items-center justify-center">
+                          <Upload className="w-6 h-6 text-red-400 animate-pulse" />
+                        </div>
+                        <div>
+                          <h3 className="text-white font-display font-extrabold text-base">Entrada de Mercadoria via XML</h3>
+                          <p className="text-[11px] text-gray-400 font-mono">Arraste ou selecione o arquivo fiscal válido para início do parsing de produtos.</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-[#080c16] border-2 border-dashed border-gray-800 hover:border-red-500/30 transition-colors rounded-xl p-8 flex flex-col items-center justify-center gap-4 text-center relative group">
+                        <Upload className="w-10 h-10 text-gray-600 group-hover:text-red-400 transition-colors" />
+                        
+                        <div className="flex flex-col gap-1">
+                          <span className="text-xs text-slate-200 font-semibold">Arraste o XML de Nota Fiscal aqui</span>
+                          <span className="text-[10px] text-slate-500 font-mono">Formatos suportados: .xml, .tmp (Padrão SEFAZ NF-e 4.00)</span>
+                        </div>
+
+                        <label className="mt-2 text-xs font-mono font-bold py-2 px-4 rounded border border-gray-800 hover:border-gray-700 bg-slate-950 text-slate-300 hover:text-white transition-colors cursor-pointer relative z-10">
+                          {xmlFileSelected ? `📄 ${xmlFileName}` : "Selecionar Arquivo da Nota..."}
+                          <input 
+                            type="file" 
+                            accept=".xml,.tmp" 
+                            onChange={handleXmlFileUpload} 
+                            className="sr-only" 
+                          />
+                        </label>
+                      </div>
+
+                      {xmlFeedback && (
+                        <div className={`p-3.5 rounded-xl border text-xs font-mono flex items-start gap-2.5 leading-relaxed ${
+                          xmlFeedback.startsWith('❌') 
+                            ? 'border-red-900/30 bg-red-950/15 text-red-400' 
+                            : xmlFeedback.startsWith('✅') 
+                            ? 'border-green-900/30 bg-green-950/15 text-green-400'
+                            : 'border-slate-800 bg-slate-950 text-slate-400'
+                        }`}>
+                          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <span>{xmlFeedback}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="md:col-span-5 bg-[#0a0f1d] border border-gray-800 rounded-2xl p-6 flex flex-col justify-between gap-4">
+                      <div>
+                        <span className="text-[9px] font-mono text-gray-500 uppercase tracking-widest font-extrabold flex items-center gap-1">
+                          <Settings className="w-3.5 h-3.5" />
+                          AMBIENTE DE TESTE ACELERADO
+                        </span>
+                        <h4 className="text-sm font-display font-extrabold text-white mt-1 border-b border-gray-850 pb-2">Como testar sem arquivos reais?</h4>
+                        <p className="text-[11px] text-gray-400 mt-2 leading-relaxed">
+                          Para homologar o decodificador agora mesmo, simulamos notas completas com produtos de fabricantes padrão:
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadSampleXml('bosch')}
+                          className="w-full text-left p-3 rounded-xl border border-gray-850 border-gray-800 hover:border-red-500/40 bg-slate-950/40 hover:bg-slate-950 text-xs flex justify-between items-center transition-all cursor-pointer"
+                        >
+                          <div>
+                            <span className="font-bold text-white block">📦 NF-e Nº 008592 - Robert Bosch Ltda</span>
+                            <span className="text-[9.5px] text-gray-500 font-mono">Velais Iridium, Pastilhas, Filtro de Óleo</span>
+                          </div>
+                          <Check className="w-4 h-4 text-emerald-500" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleLoadSampleXml('cofap')}
+                          className="w-full text-left p-3 rounded-xl border border-gray-850 border-gray-800 hover:border-red-500/40 bg-slate-950/40 hover:bg-slate-950 text-xs flex justify-between items-center transition-all cursor-pointer"
+                        >
+                          <div>
+                            <span className="font-bold text-white block">📦 NF-e Nº 014902 - Marelli Cofap</span>
+                            <span className="text-[9.5px] text-gray-500 font-mono">Amortecedor, Rolamento SKF Traseiro</span>
+                          </div>
+                          <Check className="w-4 h-4 text-emerald-500" />
+                        </button>
+                      </div>
+
+                      <div className="bg-[#050912] p-3 rounded-xl border border-gray-900 text-[10px] text-center text-gray-500 leading-normal font-mono">
+                        💡 Nosso leitor reconhece CNPJ, SKU, quantidades e custos automaticamente!
+                      </div>
+                    </div>
+
+                  </div>
+
+                  {/* SUCCESS BANNER OVERVIEW OR GENERAL INFO */}
+                  {xmlImportSuccess && (
+                    <div className="bg-emerald-950/10 border border-emerald-900/30 p-4 rounded-xl flex items-center justify-between text-left animate-fadeIn">
+                      <div>
+                        <strong className="text-emerald-400 text-xs font-mono font-bold block uppercase">✅ IMPORTAÇÃO REALIZADA COM SUCESSO!</strong>
+                        <span className="text-[11px] text-gray-400 block mt-0.5">Os faturamentos de balcão e fichas físicas de estoque foram reabesteados. Você já pode visualizar a movimentação na aba de logs.</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowXmlImporterModal(false);
+                          setActiveTab('geral');
+                        }}
+                        className="py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-mono font-bold text-[10px] uppercase cursor-pointer"
+                      >
+                        Concluído
+                      </button>
+                    </div>
+                  )}
+
+                </div>
+              ) : (
+                <div className="flex flex-col gap-6 animate-fadeIn">
+                  
+                  {/* NF summary header card */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-[#080d19] border border-gray-850 p-4 rounded-xl">
+                    <div>
+                      <span className="text-[9px] font-mono text-gray-500 uppercase font-bold block">FORNECEDOR EMITENTE</span>
+                      <span className="text-xs font-bold text-slate-100 uppercase mt-0.5 block truncate">{parsedXml.emitName}</span>
+                      <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">CNPJ: {parsedXml.emitCNPJ}</span>
+                    </div>
+                    
+                    <div>
+                      <span className="text-[9px] font-mono text-gray-500 uppercase font-bold block">NÚMERO DA NOTA FISCAL</span>
+                      <span className="text-xs font-bold text-slate-100 uppercase mt-0.5 block">Nº {parsedXml.invoiceNumber}</span>
+                      <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">Série: 1 • Situação: Autorizada</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[9px] font-mono text-gray-500 uppercase font-bold block">VALOR TOTAL DA NOTA</span>
+                      <span className="text-sm font-extrabold text-red-400 uppercase mt-0.5 block">R$ {parsedXml.totalValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">Incidência ICMS padrão</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[9px] font-mono text-gray-500 uppercase font-bold block">DATA DE EMISSÃO DA SEFAZ</span>
+                      <span className="text-xs font-bold text-slate-100 uppercase mt-0.5 block">
+                        {new Date(parsedXml.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">Módulo Fiscal Oficial</span>
+                    </div>
+                  </div>
+
+                  {/* Duplicate SKU alert banner inside modal */}
+                  {(() => {
+                    const duplicateItems = parsedXml.items.filter(item => 
+                      produtos.some(p => 
+                        p.internalSku.toLowerCase() === item.code.toLowerCase() || 
+                        (p.barcode && p.barcode === item.barcode)
+                      )
+                    );
+                    if (duplicateItems.length === 0) return null;
+
+                    return (
+                      <div className="bg-amber-950/20 border border-amber-900/40 p-4 rounded-xl flex items-start gap-3 animate-fadeIn text-left">
+                        <div className="p-2 bg-amber-950/40 border border-amber-900/30 rounded-lg shrink-0 flex items-center justify-center animate-pulse">
+                          <AlertTriangle className="w-5 h-5 text-amber-500" />
+                        </div>
+                        <div>
+                          <h4 className="text-amber-400 text-xs font-bold font-mono uppercase tracking-wider">
+                            ⚠️ Alerta de Duplicidade detectada ({duplicateItems.length} {duplicateItems.length === 1 ? 'item' : 'itens'})
+                          </h4>
+                          <p className="text-[11px] text-gray-400 mt-1 leading-normal">
+                            Detectamos que {duplicateItems.length} SKU(s) / barras já constam no cadastro principal: {" "}
+                            <strong className="text-white font-mono">{duplicateItems.map(item => item.code).join(", ")}</strong>.
+                            Ao prosseguir, somaremos o novo saldo ao estoque existente de forma automática.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Table of items inside modal */}
+                  <div className="flex flex-col gap-3">
+                    <div className="flex justify-between items-center pb-2 border-b border-gray-850">
+                      <span className="text-white font-display font-semibold text-sm">Relação de Peças Fiscalizadas no XML</span>
+                      <span className="text-[10px] text-gray-400 font-mono">{parsedXml.items.length} componentes identificados</span>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-xl border border-gray-850/80">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="border-b border-gray-900 bg-slate-950/40 text-gray-400 text-[10px] font-mono uppercase tracking-wider">
+                            <th className="py-3 px-3 text-center w-12">Selec.</th>
+                            <th className="py-3 px-3">Código/EAN</th>
+                            <th className="py-3 px-3">Peça / Produto Fiscal</th>
+                            <th className="py-3 px-2 text-center w-16">Qtd XML</th>
+                            <th className="py-3 px-3 text-right">Custo Un.</th>
+                            <th className="py-3 px-3 text-right">Subtotal</th>
+                            <th className="py-3 px-3">Destino ERP de Autopeças</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parsedXml.items.map((item, idx) => {
+                            const isSelected = !!selectedXmlItems[item.code];
+                            const matchedProduct = produtos.find(p => 
+                              p.internalSku.toLowerCase() === item.code.toLowerCase() || 
+                              (p.barcode && p.barcode === item.barcode)
+                            );
+
+                            return (
+                              <tr key={idx} className="border-b border-gray-900/60 hover:bg-slate-950/10 transition-colors bg-slate-950/5">
+                                
+                                <td className="py-3.5 px-3 text-center">
+                                  <input 
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={(e) => setSelectedXmlItems(prev => ({ ...prev, [item.code]: e.target.checked }))}
+                                    className="w-4 h-4 rounded text-red-500 bg-slate-950 border-gray-850 focus:ring-0 cursor-pointer"
+                                  />
+                                </td>
+
+                                <td className="py-3.5 px-3 font-mono text-gray-300">
+                                  <span className="block font-bold">{item.code}</span>
+                                  <span className="text-[9px] text-gray-500">EAN: {item.barcode || "Ausente"}</span>
+                                </td>
+
+                                <td className="py-3.5 px-3 text-slate-100 font-semibold max-w-xs truncate">
+                                  {item.name}
+                                  <span className="text-[9.5px] block text-purple-400 font-mono font-bold uppercase mt-0.5">{item.brand} • {item.unit}</span>
+                                </td>
+
+                                <td className="py-3.5 px-2 text-center font-mono font-bold text-white">
+                                  {item.qty}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-right font-mono text-gray-300">
+                                  R$ {item.costPrice.toFixed(2)}
+                                </td>
+
+                                <td className="py-3.5 px-3 text-right font-mono text-gray-150 font-bold">
+                                  R$ {(item.costPrice * item.qty).toFixed(2)}
+                                </td>
+
+                                <td className="py-3.5 px-3">
+                                  {matchedProduct ? (
+                                    <div className="bg-emerald-950/40 p-2 rounded-xl border border-emerald-900/20 text-[10.5px] leading-tight flex flex-col gap-0.5 text-left">
+                                      <span className="text-emerald-400 font-bold flex items-center gap-1 font-mono uppercase text-[9px]">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block" />
+                                        Vincular ao Cadastro ERP
+                                      </span>
+                                      <span className="text-slate-350 block font-semibold truncate">{matchedProduct.name}</span>
+                                      <span className="text-gray-400 font-mono text-[9px]">Saldo atual: <strong className="text-slate-200">{matchedProduct.quantity} un</strong> • Novo Saldo: <strong className="text-emerald-400">{matchedProduct.quantity + item.qty} un</strong></span>
+                                    </div>
+                                  ) : (
+                                    <div className="bg-amber-950/20 p-2.5 rounded-xl border border-amber-900/30 text-[10.5px] leading-tight flex flex-col gap-1.5 text-left">
+                                      <span className="text-amber-400 font-bold font-mono uppercase text-[9px] block">
+                                        🛑 Novo Item (Será cadastrado)
+                                      </span>
+                                      
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                          <span className="text-[9px] text-gray-500 font-mono block">CATEGORIA</span>
+                                          <select
+                                            value={customCategories[item.code] || item.category}
+                                            onChange={(e) => setCustomCategories(p => ({ ...p, [item.code]: e.target.value }))}
+                                            className="w-full bg-[#080d19] border border-gray-800 text-[10px] rounded p-1 text-white font-mono"
+                                          >
+                                            {categoriesList.filter(c => c !== "Todas").map((cat, i) => (
+                                              <option key={i} value={cat}>{cat}</option>
+                                            ))}
+                                          </select>
+                                        </div>
+                                        <div>
+                                          <span className="text-[9px] text-gray-500 font-mono block">PREÇO SUGERIDO (R$)</span>
+                                          <input 
+                                            type="number"
+                                            step="0.1"
+                                            value={customSellPrices[item.code] || item.sellPrice}
+                                            onChange={(e) => setCustomSellPrices(p => ({ ...p, [item.code]: e.target.value }))}
+                                            className="w-full bg-[#080d19] border border-gray-800 text-[10px] rounded p-1 text-white font-mono font-bold"
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </td>
+
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-950/30 p-4 rounded-xl border border-gray-900 text-xs bg-slate-950/40">
+                      <div className="text-left leading-normal">
+                        <span className="text-gray-400 block font-semibold">Considerações Importantes:</span>
+                        <span className="text-[10px] text-gray-500 block font-mono">
+                          - Apenas itens selecionados serão processados e integrados.<br />
+                          - Novos custos unitários atualizarão as margens brutas do financeiro.
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setXmlFileSelected(false);
+                            setParsedXml(null);
+                          }}
+                          className="py-2.5 px-4 bg-gray-805 bg-gray-800 hover:bg-gray-750 text-gray-400 hover:text-white rounded-xl font-mono text-xs uppercase cursor-pointer"
+                        >
+                          Limpar e Voltar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await handleConfirmXmlImport();
+                          }}
+                          className="py-2.5 px-5 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl font-bold font-mono text-white text-xs tracking-wider uppercase transition-all shadow-md shrink-0 flex items-center gap-1.5 cursor-pointer"
+                        >
+                          📥 INTEGRAR ENTRADA FISCAL
+                        </button>
+                      </div>
+                    </div>
+
+                  </div>
+
+                </div>
+              )}
+
             </div>
 
           </div>

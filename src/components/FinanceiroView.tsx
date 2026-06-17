@@ -1525,6 +1525,14 @@ export const FinanceiroView: React.FC = () => {
               <div id="pix-receipt-container" className="print-container-target flex flex-col gap-4 w-full text-left font-sans animate-fade-in">
                 
                 <div className="flex flex-col items-center text-center gap-2 pb-3 border-b border-gray-800/80">
+                  {company?.logoUrl && (
+                    <img 
+                      src={company.logoUrl} 
+                      alt="Logo" 
+                      className="w-12 h-12 object-contain rounded-lg border border-gray-800 print:border-slate-300 mb-1"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
                   <div className="w-11 h-11 rounded-full bg-emerald-950/60 border border-emerald-500 flex items-center justify-center text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
                     <CheckCircle2 className="w-6 h-6 animate-pulse" />
                   </div>

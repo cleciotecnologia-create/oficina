@@ -52,7 +52,12 @@ import {
   Command,
   Search,
   Car,
-  GraduationCap
+  GraduationCap,
+  Upload,
+  Link,
+  Image,
+  Check,
+  History
 } from 'lucide-react';
 
 interface TutorialStep {
@@ -172,7 +177,8 @@ function AppContent() {
     syncing,
     ordensServico,
     produtos,
-    highContrast
+    highContrast,
+    updateCompany
   } = useApp();
 
   const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering' | 'tools'>('landing');
@@ -231,6 +237,71 @@ function AppContent() {
   const [isAiDrawerOpen, setIsAiDrawerOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
 
+  // States & handlers for inline header logo updater
+  const [isLogoPopupOpen, setIsLogoPopupOpen] = useState(false);
+  const [logoUrlInput, setLogoUrlInput] = useState(company?.logoUrl || '');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [logoUpdateError, setLogoUpdateError] = useState<string | null>(null);
+  const [logoUpdateSuccess, setLogoUpdateSuccess] = useState(false);
+
+  React.useEffect(() => {
+    if (company?.logoUrl) {
+      setLogoUrlInput(company.logoUrl);
+    }
+  }, [company?.logoUrl]);
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    
+    setIsUploadingLogo(true);
+    setLogoUpdateError(null);
+    setLogoUpdateSuccess(false);
+
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+      });
+
+      await updateCompany({ logoUrl: base64 });
+      setLogoUpdateSuccess(true);
+      setTimeout(() => {
+        setLogoUpdateSuccess(false);
+        setIsLogoPopupOpen(false);
+      }, 1500);
+    } catch (err: any) {
+      console.error("Erro ao fazer upload da logo:", err);
+      setLogoUpdateError("Erro ao processar imagem.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleLogoUrlSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUploadingLogo(true);
+    setLogoUpdateError(null);
+    setLogoUpdateSuccess(false);
+
+    try {
+      await updateCompany({ logoUrl: logoUrlInput });
+      setLogoUpdateSuccess(true);
+      setTimeout(() => {
+        setLogoUpdateSuccess(false);
+        setIsLogoPopupOpen(false);
+      }, 1500);
+    } catch (err: any) {
+      console.error("Erro ao salvar url da logo:", err);
+      setLogoUpdateError("Erro ao salvar endereço da logo.");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
   // Calculate critical products count (stock <= minStock) for the warning badge
   const criticalProductsCount = (produtos || []).filter(
     p => p.quantity <= (p.minStock ?? 0)
@@ -240,6 +311,47 @@ function AppContent() {
   const [globalSearchPlate, setGlobalSearchPlate] = useState('');
   const [headerSearchPlate, setHeaderSearchPlate] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+
+  // Recent searched plates history (stores up to 5 unique plates)
+  const [recentSearches, setRecentSearches] = useState<{
+    plate: string;
+    clienteName?: string;
+    veiculoInfo?: string;
+    timestamp: number;
+  }[]>(() => {
+    try {
+      const saved = localStorage.getItem('autoprecision_recent_plates');
+      return saved ? JSON.parse(saved) : [];
+    } catch (err) {
+      console.error('Error loading recent plates:', err);
+      return [];
+    }
+  });
+
+  const addRecentSearch = (plate: string, clienteName?: string, veiculoInfo?: string) => {
+    if (!plate || !plate.trim()) return;
+    const normalizedPlate = plate.trim().toUpperCase();
+    
+    setRecentSearches((prev) => {
+      const filtered = prev.filter((item) => item.plate.toUpperCase() !== normalizedPlate);
+      const updated = [
+        {
+          plate: normalizedPlate,
+          clienteName,
+          veiculoInfo,
+          timestamp: Date.now(),
+        },
+        ...filtered,
+      ].slice(0, 5);
+
+      try {
+        localStorage.setItem('autoprecision_recent_plates', JSON.stringify(updated));
+      } catch (err) {
+        console.error('Error saving recent searches:', err);
+      }
+      return updated;
+    });
+  };
 
   // Customer tracking portal state with URL params observer
   const [customerPortalOpen, setCustomerPortalOpen] = useState(false);
@@ -683,25 +795,131 @@ function AppContent() {
             <Menu className="w-5 h-5 text-white" />
           </button>
           
-          <div className="flex items-center gap-2">
-            {company.logoUrl ? (
-              <img 
-                src={company.logoUrl} 
-                alt="Logo Empresa" 
-                className="w-8 h-8 rounded-lg object-cover bg-slate-950 border border-gray-800" 
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-lg bg-red-650 bg-red-600 flex items-center justify-center">
-                <Wrench className="w-4 h-4 text-white rotate-45" />
+          <div className="relative flex items-center">
+            <button
+              type="button"
+              onClick={() => setIsLogoPopupOpen(!isLogoPopupOpen)}
+              title="Clique para atualizar o logotipo"
+              className="flex items-center gap-2 text-left hover:bg-white/5 active:scale-95 focus:outline-none focus:ring-1 focus:ring-red-500 rounded-lg p-1.5 transition-all relative group cursor-pointer"
+            >
+              {company.logoUrl ? (
+                <div className="relative">
+                  <img 
+                    src={company.logoUrl} 
+                    alt="Logo Empresa" 
+                    className="w-9 h-9 rounded-lg object-cover bg-slate-950 border border-gray-850" 
+                    referrerPolicy="no-referrer"
+                  />
+                  <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Upload className="w-3 h-3 text-white" />
+                  </div>
+                </div>
+              ) : (
+                <div className="w-9 h-9 rounded-lg bg-red-650 bg-red-600 flex items-center justify-center relative">
+                  <Wrench className="w-4 h-4 text-white rotate-45" />
+                  <div className="absolute inset-0 bg-black/60 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Upload className="w-3 h-3 text-white" />
+                  </div>
+                </div>
+              )}
+              <div>
+                <span className="font-display font-bold text-sm tracking-tight text-white block">
+                  SISTEMA OFICINA <span className="text-red-500">PDV</span>
+                </span>
+                <span className="block text-[8px] text-gray-500 font-mono tracking-widest leading-none mt-0.5">SOFTWARE DE GESTÃO</span>
+              </div>
+            </button>
+
+            {/* FLOATING LOGO UPDATER DROPDOWN POPOVER */}
+            {isLogoPopupOpen && (
+              <div 
+                id="header-logo-popover" 
+                className="absolute top-14 left-0 z-50 w-72 bg-[#090f1d] border border-gray-850 rounded-xl p-4 shadow-2xl flex flex-col gap-3 font-sans text-left"
+              >
+                <div className="flex justify-between items-center border-b border-gray-855 pb-2">
+                  <span className="text-[10px] font-bold font-mono tracking-wide text-white uppercase flex items-center gap-1.5">
+                    <Image className="w-3.5 h-3.5 text-red-500" /> Logotipo da Oficina
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsLogoPopupOpen(false)}
+                    className="text-gray-400 hover:text-white p-0.5 cursor-pointer rounded hover:bg-white/5"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {logoUpdateError && (
+                  <div className="p-2 bg-red-950/20 border border-red-900/40 rounded text-red-400 font-mono text-[9px]">
+                    ⚠️ {logoUpdateError}
+                  </div>
+                )}
+
+                {logoUpdateSuccess && (
+                  <div className="p-2 bg-green-950/20 border border-green-900/40 rounded text-green-400 font-mono text-[9px] flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Logotipo atualizado com sucesso!
+                  </div>
+                )}
+
+                {/* Option 1: Upload local logo file */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest">Opção 1: Enviar Arquivo</label>
+                  <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-gray-800 hover:border-red-500/40 bg-black/40 rounded-lg cursor-pointer transition text-center hover:bg-slate-900/40">
+                    <Upload className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
+                    <span className="text-[10px] text-gray-300 font-semibold mt-1">Carregar imagem...</span>
+                    <span className="text-[8px] text-gray-500 mt-0.5">PNG, JPG, SVG ou WEBP</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      disabled={isUploadingLogo}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-gray-850"></div>
+                  <span className="flex-shrink mx-2 text-[8px] text-gray-600 font-mono uppercase">OU</span>
+                  <div className="flex-grow border-t border-gray-850"></div>
+                </div>
+
+                {/* Option 2: Image URL field */}
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleLogoUrlSubmit(e);
+                  }} 
+                  className="flex flex-col gap-1.5"
+                >
+                  <label className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest">Opção 2: Endereço (URL)</label>
+                  <div className="flex gap-1.5">
+                    <div className="relative flex-1">
+                      <Link className="absolute left-2 top-2.5 w-3 h-3 text-slate-500" />
+                      <input
+                        type="url"
+                        placeholder="https://suaoficina.com/logo.png"
+                        value={logoUrlInput}
+                        onChange={(e) => setLogoUrlInput(e.target.value)}
+                        className="w-full bg-black/50 border border-gray-850 rounded-lg py-1.5 pl-6.5 pr-1.5 text-[10px] text-white focus:outline-none focus:border-red-500 transition-all font-mono"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isUploadingLogo}
+                      className="px-2.5 py-1.5 bg-red-650 hover:bg-red-600 rounded-lg text-[10px] font-mono font-bold text-white transition active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                </form>
+
+                {/* Info disclaimer */}
+                <div className="text-[8px] text-gray-500 font-sans leading-normal pt-1.5 border-t border-gray-850">
+                  💡 O logotipo alterado será sincronizado instantaneamente na barra de cabeçalho, orçamentos, ordens de serviço e relatórios.
+                </div>
               </div>
             )}
-            <div>
-              <span className="font-display font-bold text-sm tracking-tight text-white">
-                SISTEMA OFICINA <span className="text-red-500">PDV</span>
-              </span>
-              <span className="block text-[8px] text-gray-500 font-mono tracking-widest leading-none">SOFTWARE DE GESTÃO</span>
-            </div>
           </div>
           
           <span className="hidden sm:inline-block ml-4 text-[10px] font-mono bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-slate-400">
@@ -724,6 +942,31 @@ function AppContent() {
               className="w-full bg-[#0a0f1d] border border-gray-800 rounded-full py-1.5 px-8 text-[11px] text-white placeholder-slate-505 placeholder-slate-500 focus:outline-none focus:border-red-500 transition-all font-mono tracking-wider"
               onFocus={() => setIsSearchFocused(true)}
               onBlur={() => setTimeout(() => setIsSearchFocused(false), 250)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  const query = headerSearchPlate.trim();
+                  if (query) {
+                    const normQuery = query.toLowerCase();
+                    const bestMatch = ordensServico ? ordensServico.find(os => 
+                      os.plate.toLowerCase() === normQuery ||
+                      os.plate.toLowerCase().includes(normQuery) ||
+                      (os.clienteName && os.clienteName.toLowerCase().includes(normQuery)) ||
+                      (os.veiculoInfo && os.veiculoInfo.toLowerCase().includes(normQuery))
+                    ) : null;
+
+                    if (bestMatch) {
+                      addRecentSearch(bestMatch.plate, bestMatch.clienteName, bestMatch.veiculoInfo);
+                      setGlobalSearchPlate(bestMatch.plate);
+                    } else {
+                      addRecentSearch(query.toUpperCase());
+                      setGlobalSearchPlate(query.toUpperCase());
+                    }
+                    setActiveRoute('os');
+                    setHeaderSearchPlate('');
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }
+              }}
             />
             {headerSearchPlate && (
               <button
@@ -736,76 +979,152 @@ function AppContent() {
             )}
           </div>
 
-          {/* Autocomplete Dropdown */}
-          {isSearchFocused && headerSearchPlate && (
+          {/* Autocomplete & Recent Searches Dropdown */}
+          {isSearchFocused && (
             <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0e1628] border border-gray-850 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-60 overflow-y-auto z-55">
-              {(() => {
-                const query = headerSearchPlate.toLowerCase();
-                const matches = ordensServico ? ordensServico.filter(os => 
-                  os.plate.toLowerCase().includes(query) || 
-                  (os.clienteName && os.clienteName.toLowerCase().includes(query)) ||
-                  (os.veiculoInfo && os.veiculoInfo.toLowerCase().includes(query))
-                ) : [];
+              {headerSearchPlate ? (
+                (() => {
+                  const query = headerSearchPlate.toLowerCase();
+                  const matches = ordensServico ? ordensServico.filter(os => 
+                    os.plate.toLowerCase().includes(query) || 
+                    (os.clienteName && os.clienteName.toLowerCase().includes(query)) ||
+                    (os.veiculoInfo && os.veiculoInfo.toLowerCase().includes(query))
+                  ) : [];
 
-                if (matches.length === 0) {
-                  return (
-                    <div className="p-4 text-center text-gray-500 text-[10px] font-mono uppercase">
-                      Nenhum veículo com "{headerSearchPlate.toUpperCase()}"
-                    </div>
-                  );
-                }
+                  if (matches.length === 0) {
+                    return (
+                      <div className="p-4 text-center text-gray-500 text-[10px] font-mono uppercase">
+                        Nenhum veículo com "{headerSearchPlate.toUpperCase()}"
+                      </div>
+                    );
+                  }
 
-                return matches.map((os) => {
-                  const statusColors: Record<string, string> = {
-                    'Aberta': 'border-blue-900 bg-blue-950/40 text-blue-400',
-                    'Em análise': 'border-yellow-905 bg-yellow-950/40 text-yellow-500',
-                    'Aguardando peça': 'border-orange-950 bg-orange-950/40 text-orange-400',
-                    'Em execução': 'border-red-955 bg-red-950/20 text-red-500',
-                    'Finalizada': 'border-green-900 bg-green-950/20 text-green-400',
-                    'Entregue': 'border-emerald-600 bg-emerald-950/20 text-emerald-400',
-                    'Agendada': 'border-purple-900 bg-purple-950/40 text-purple-400'
-                  };
-                  const colorClass = statusColors[os.status] || 'border-slate-850 text-slate-400 bg-slate-900/40';
+                  return matches.map((os) => {
+                    const statusColors: Record<string, string> = {
+                      'Aberta': 'border-blue-900 bg-blue-950/40 text-blue-400',
+                      'Em análise': 'border-yellow-905 bg-yellow-950/40 text-yellow-500',
+                      'Aguardando peça': 'border-orange-950 bg-orange-950/40 text-orange-400',
+                      'Em execução': 'border-red-955 bg-red-950/20 text-red-500',
+                      'Finalizada': 'border-green-900 bg-green-950/20 text-green-400',
+                      'Entregue': 'border-emerald-600 bg-emerald-950/20 text-emerald-400',
+                      'Agendada': 'border-purple-900 bg-purple-950/40 text-purple-400'
+                    };
+                    const colorClass = statusColors[os.status] || 'border-slate-850 text-slate-400 bg-slate-900/40';
 
-                  return (
-                    <button
-                      key={os.id}
-                      type="button"
-                      onMouseDown={() => {
-                        setGlobalSearchPlate(os.plate);
-                        setActiveRoute('os');
-                        setHeaderSearchPlate('');
-                      }}
-                      className="w-full p-2.5 hover:bg-slate-900/60 transition-colors text-left border-b border-gray-850/50 flex justify-between items-center bg-transparent border-0 cursor-pointer"
-                    >
-                      <div className="flex flex-col gap-1 min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {/* Brazilian formatted license plate */}
-                          <span className="inline-flex items-center gap-1 border border-blue-500 bg-[#0f172a] text-blue-400 font-bold px-1.5 py-0.5 rounded text-[8.5px] leading-tight font-mono tracking-wider shrink-0">
-                            <span className="w-1 h-1 rounded-full bg-blue-500" />
-                            {os.plate.toUpperCase()}
-                          </span>
-                          <span className="text-white font-bold text-[10px] truncate max-w-[110px]">
-                            {os.clienteName || 'Consumidor Final'}
+                    return (
+                      <button
+                        key={os.id}
+                        type="button"
+                        onMouseDown={() => {
+                          addRecentSearch(os.plate, os.clienteName, os.veiculoInfo);
+                          setGlobalSearchPlate(os.plate);
+                          setActiveRoute('os');
+                          setHeaderSearchPlate('');
+                        }}
+                        className="w-full p-2.5 hover:bg-slate-900/60 transition-colors text-left border-b border-gray-850/50 flex justify-between items-center bg-transparent border-0 cursor-pointer"
+                      >
+                        <div className="flex flex-col gap-1 min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* Brazilian formatted license plate */}
+                            <span className="inline-flex items-center gap-1 border border-blue-500 bg-[#0f172a] text-blue-400 font-bold px-1.5 py-0.5 rounded text-[8.5px] leading-tight font-mono tracking-wider shrink-0">
+                              <span className="w-1 h-1 rounded-full bg-blue-500" />
+                              {os.plate.toUpperCase()}
+                            </span>
+                            <span className="text-white font-bold text-[10px] truncate max-w-[110px]">
+                              {os.clienteName || 'Consumidor Final'}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-gray-400 font-sans truncate block">
+                            🚗 {os.veiculoInfo || 'Veículo não informado'}
                           </span>
                         </div>
-                        <span className="text-[9px] text-gray-400 font-sans truncate block">
-                          🚗 {os.veiculoInfo || 'Veículo não informado'}
-                        </span>
-                      </div>
-                      
-                      <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
-                        <span className={`text-[8px] px-1 py-0.5 rounded border ${colorClass} font-mono uppercase font-black leading-none`}>
-                          {os.status}
-                        </span>
-                        <span className="text-[7.5px] text-gray-500 font-mono">
-                          #{os.id.substring(0, 8)}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                });
-              })()}
+                        
+                        <div className="flex flex-col items-end gap-1 shrink-0 ml-2">
+                          <span className={`text-[8px] px-1 py-0.5 rounded border ${colorClass} font-mono uppercase font-black leading-none`}>
+                            {os.status}
+                          </span>
+                          <span className="text-[7.5px] text-gray-500 font-mono">
+                            #{os.id.substring(0, 8)}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  });
+                })()
+              ) : (
+                /* Recent Searches dropdown format */
+                <div className="flex flex-col">
+                  <div className="flex justify-between items-center px-3 py-2 bg-slate-950/40 border-b border-gray-850">
+                    <span className="text-[8.5px] font-bold font-mono tracking-wider text-slate-400 uppercase flex items-center gap-1">
+                      <History className="w-3 h-3 text-red-500" /> Buscas Recentes (Últimas 5)
+                    </span>
+                    {recentSearches.length > 0 && (
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setRecentSearches([]);
+                          try {
+                            localStorage.removeItem('autoprecision_recent_plates');
+                          } catch (err) {
+                            console.error(err);
+                          }
+                        }}
+                        className="text-[8px] font-bold font-mono text-red-500 hover:text-red-400 uppercase transition-colors bg-transparent border-0 cursor-pointer"
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+
+                  {recentSearches.length === 0 ? (
+                    <div className="p-4 text-center text-gray-500 text-[10px] font-mono leading-relaxed">
+                      💡 HISTÓRICO DE BUSCAS VAZIO<br />
+                      CONSULTE PLACAS OU NOMES DE CLIENTES PARA SALVAR.
+                    </div>
+                  ) : (
+                    recentSearches.map((item, index) => {
+                      return (
+                        <button
+                          key={`${item.plate}-${index}`}
+                          type="button"
+                          onMouseDown={() => {
+                            setGlobalSearchPlate(item.plate);
+                            setActiveRoute('os');
+                            setHeaderSearchPlate('');
+                          }}
+                          className="w-full p-2.5 hover:bg-slate-900/60 transition-colors text-left border-b border-gray-850/50 flex justify-between items-center bg-transparent border-0 cursor-pointer"
+                        >
+                          <div className="flex flex-col gap-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {/* Brazilian formatted license plate */}
+                              <span className="inline-flex items-center gap-1 border border-blue-500 bg-[#0f172a] text-blue-400 font-bold px-1.5 py-0.5 rounded text-[8.5px] leading-tight font-mono tracking-wider shrink-0">
+                                <span className="w-1 h-1 rounded-full bg-blue-500" />
+                                {item.plate.toUpperCase()}
+                              </span>
+                              {item.clienteName && (
+                                <span className="text-white font-bold text-[10px] truncate max-w-[110px]">
+                                  {item.clienteName}
+                                </span>
+                              )}
+                            </div>
+                            {item.veiculoInfo && (
+                              <span className="text-[9px] text-gray-400 font-sans truncate block">
+                                🚗 {item.veiculoInfo}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="shrink-0 ml-2">
+                            <Search className="w-3.5 h-3.5 text-slate-500 hover:text-white" />
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

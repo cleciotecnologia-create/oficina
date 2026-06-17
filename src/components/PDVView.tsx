@@ -288,6 +288,7 @@ export const PDVView: React.FC = () => {
   // Checkout & invoice state
   const [saleFinished, setSaleFinished] = useState(false);
   const [lastFinishedSale, setLastFinishedSale] = useState<any | null>(null);
+  const [receiptType, setReceiptType] = useState<'thermal' | 'nota'>('thermal');
 
   // PIX verification/approval modal states
   const [showPixApprovalModal, setShowPixApprovalModal] = useState(false);
@@ -2200,11 +2201,19 @@ export const PDVView: React.FC = () => {
               <X className="w-4 h-4" />
             </button>
 
-            <div className="text-center font-mono text-xs border-b-2 border-black pb-3">
+            <div className="text-center font-mono text-xs border-b-2 border-black pb-3 flex flex-col items-center">
+              {company.logoUrl && (
+                <img 
+                  src={company.logoUrl} 
+                  alt="Logo Oficina" 
+                  className="w-12 h-12 object-contain mb-2 filter grayscale" 
+                  referrerPolicy="no-referrer"
+                />
+              )}
               <span className="font-extrabold text-sm block tracking-widest text-red-650 uppercase">🚨 COMPROVANTE DE ESTORNO</span>
               <span className="font-extrabold text-[11px] block tracking-wide mt-1 text-black">{company.name.toUpperCase()}</span>
               <span className="text-[10px] block mt-0.5">{company.address || "Av. das Nações Unidas, 1040 - São Paulo, SP"}</span>
-              <span className="text-[10px] block">CNPJ: {company.cnpj || "12.345.678/0001-90"} • Fone: {company.phone || "(11) 98765-4321"}</span>
+              <span className="text-[10px] block font-mono">CNPJ: {company.cnpj || "12.345.678/0001-90"} • Fone: {company.phone || "(11) 98765-4321"}</span>
             </div>
 
             <div className="my-3 p-3 bg-red-50 border-2 border-red-600 rounded-xl font-mono text-[10px] text-red-800 leading-normal flex flex-col gap-1">
@@ -2539,8 +2548,11 @@ export const PDVView: React.FC = () => {
 
       {/* DYNAMIC THERMAL PRINTER RECEIPT DIALOG MODAL */}
       {saleFinished && lastFinishedSale && (
-        <div id="sale-finished-receipt-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-          <div className="print-container-target bg-white text-black max-w-sm w-full rounded-2xl p-6 shadow-2xl relative text-left">
+        <div 
+          id={receiptType === 'thermal' ? "sale-finished-receipt-modal" : "sale-finished-nota-modal"} 
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in overflow-y-auto"
+        >
+          <div className={`print-container-target bg-white text-black rounded-2xl p-6 shadow-2xl relative text-left my-8 ${receiptType === 'thermal' ? 'max-w-sm w-full' : 'max-w-4xl w-full'}`}>
             
             <button 
               type="button"
@@ -2548,144 +2560,401 @@ export const PDVView: React.FC = () => {
                 setSaleFinished(false);
                 setLastFinishedSale(null);
               }}
-              className="absolute top-4 right-4 p-1 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800"
+              className="absolute top-4 right-4 p-1 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 no-print cursor-pointer border-0"
             >
               <X className="w-4 h-4" />
             </button>
 
-            <div className="text-center font-mono text-xs border-b-2 border-black pb-3">
-              <span className="font-extrabold text-sm block tracking-widest">{company.name.toUpperCase()}</span>
-              <span className="text-[10px] block mt-0.5">{company.address || "Av. das Nações Unidas, 1040 - São Paulo, SP"}</span>
-              <span className="text-[10px] block">CNPJ: {company.cnpj || "12.345.678/0001-90"} • Fone: {company.phone || "(11) 98765-4321"}</span>
+            {/* Selector de tipo de recibo format - no-print */}
+            <div className="flex bg-neutral-100 p-1 rounded-xl mb-4 no-print gap-1 select-none border border-neutral-200">
+              <button
+                type="button"
+                onClick={() => setReceiptType('thermal')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-sans transition flex items-center justify-center gap-1.5 cursor-pointer border-0 ${
+                  receiptType === 'thermal'
+                    ? 'bg-neutral-900 text-white shadow'
+                    : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
+                }`}
+              >
+                <Printer className="w-3.5 h-3.5" /> Cupom de Bobina (80mm)
+              </button>
+              <button
+                type="button"
+                onClick={() => setReceiptType('nota')}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-sans transition flex items-center justify-center gap-1.5 cursor-pointer border-0 ${
+                  receiptType === 'nota'
+                    ? 'bg-neutral-900 text-white shadow'
+                    : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" /> Nota de Balcão (A4)
+              </button>
             </div>
 
-            {lastFinishedSale.status === 'estornada' && (
-              <div className="my-2 p-2.5 border-2 border-red-600 bg-red-50 text-red-700 text-center rounded-xl text-xs font-mono font-bold uppercase tracking-wider leading-tight">
-                ⚠️ CUPOM ESTORNADO / CANCELADO ⚠️
-                <span className="block text-[9px] text-red-500 font-semibold mt-0.5 lowercase italic font-sans normal-case">
-                  motivo: "{lastFinishedSale.justification || 'não informado'}"
-                </span>
-              </div>
-            )}
-            
-            <div className="my-4 font-mono text-[11px] flex flex-col gap-1">
-              <div className="flex justify-between font-bold">
-                <span>CUPOM NÃO FISCAL</span>
-                <span>PDV #{lastFinishedSale.id}</span>
-              </div>
-              <span>Data/Hora: {new Date().toLocaleString()}</span>
-              <span className="border-b border-dashed border-black my-1"></span>
-              
-              {/* Customer Space */}
-              <div className="bg-neutral-100 p-2 rounded text-[10px] flex flex-col gap-0.5 text-neutral-850">
-                <span className="font-bold">CLIENTE:</span>
-                <span>{lastFinishedSale.clienteName}</span>
-                <span>CPF/CNPJ: {lastFinishedSale.clienteCpfCnpj || "Consumidor Final"}</span>
-              </div>
-
-              {/* Seller / Commission tracking */}
-              {lastFinishedSale.sellerName && (
-                <div className="text-[10px] text-gray-600 mt-1 pl-1">
-                  <span>Atendente: <strong>{lastFinishedSale.sellerName}</strong></span>
+            {receiptType === 'thermal' ? (
+              <>
+                <div className="text-center font-mono text-xs border-b-2 border-black pb-3 flex flex-col items-center">
+                  {company.logoUrl && (
+                    <img 
+                      src={company.logoUrl} 
+                      alt="Logo Oficina" 
+                      className="w-12 h-12 object-contain mb-2 filter grayscale" 
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                  <span className="font-extrabold text-sm block tracking-widest">{company.name.toUpperCase()}</span>
+                  <span className="text-[10px] block mt-0.5">{company.address || "Av. das Nações Unidas, 1040 - São Paulo, SP"}</span>
+                  <span className="text-[10px] block font-mono">CNPJ: {company.cnpj || "12.345.678/0001-90"} • Fone: {company.phone || "(11) 98765-4321"}</span>
                 </div>
-              )}
 
-              {lastFinishedSale.linkedOSId && (
-                <div className="bg-red-50 p-2 rounded text-[10px] mt-1 text-red-800 border border-red-200">
-                  <span className="font-bold">ORDEM DE SERVIÇO:</span>
-                  <span className="block font-semibold">{lastFinishedSale.linkedOSId}</span>
-                </div>
-              )}
-
-              <span className="border-b border-dashed border-black my-1"></span>
-              
-              {/* Product and Labor list inside Ticket */}
-              <div className="flex flex-col gap-1.5 font-sans">
-                <span className="font-bold font-mono text-[10px] uppercase text-neutral-650 block">ITENS COMPRADOS / CÓDIGOS:</span>
-                {lastFinishedSale.items.map((it: any, index: number) => (
-                  <div key={index} className="flex justify-between items-start text-xs leading-tight">
-                    <span className="pr-2">{it.quantity}x {it.name}</span>
-                    <span className="font-mono text-right whitespace-nowrap">R$ {it.subtotal.toFixed(2)}</span>
+                {lastFinishedSale.status === 'estornada' && (
+                  <div className="my-2 p-2.5 border-2 border-red-600 bg-red-50 text-red-700 text-center rounded-xl text-xs font-mono font-bold uppercase tracking-wider leading-tight">
+                    ⚠️ CUPOM ESTORNADO / CANCELADO ⚠️
+                    <span className="block text-[9px] text-red-500 font-semibold mt-0.5 lowercase italic font-sans normal-case">
+                      motivo: "{lastFinishedSale.justification || 'não informado'}"
+                    </span>
                   </div>
-                ))}
-              </div>
+                )}
+                
+                <div className="my-4 font-mono text-[11px] flex flex-col gap-1">
+                  <div className="flex justify-between font-bold">
+                    <span>CUPOM NÃO FISCAL</span>
+                    <span>PDV #{lastFinishedSale.id}</span>
+                  </div>
+                  <span>Data/Hora: {new Date().toLocaleString()}</span>
+                  <span className="border-b border-dashed border-black my-1"></span>
+                  
+                  {/* Customer Space */}
+                  <div className="bg-neutral-100 p-2 rounded text-[10px] flex flex-col gap-0.5 text-neutral-850">
+                    <span className="font-bold">CLIENTE:</span>
+                    <span>{lastFinishedSale.clienteName}</span>
+                    <span>CPF/CNPJ: {lastFinishedSale.clienteCpfCnpj || "Consumidor Final"}</span>
+                  </div>
 
-              <span className="border-b border-dashed border-black my-1.5"></span>
-              
-              {/* Financial calculations */}
-              <div className="flex justify-between text-xs">
-                <span>Subtotal bruto:</span>
-                <span>R$ {(lastFinishedSale.total + lastFinishedSale.discount).toFixed(2)}</span>
-              </div>
+                  {/* Seller / Commission tracking */}
+                  {lastFinishedSale.sellerName && (
+                    <div className="text-[10px] text-gray-600 mt-1 pl-1">
+                      <span>Atendente: <strong>{lastFinishedSale.sellerName}</strong></span>
+                    </div>
+                  )}
 
-              {lastFinishedSale.discount > 0 && (
-                <div className="flex justify-between text-red-650 font-bold text-xs">
-                  <span>Desconto de Balcão:</span>
-                  <span>- R$ {lastFinishedSale.discount.toFixed(2)}</span>
+                  {lastFinishedSale.linkedOSId && (
+                    <div className="bg-red-50 p-2 rounded text-[10px] mt-1 text-red-800 border border-red-200">
+                      <span className="font-bold">ORDEM DE SERVIÇO:</span>
+                      <span className="block font-semibold">{lastFinishedSale.linkedOSId}</span>
+                    </div>
+                  )}
+
+                  <span className="border-b border-dashed border-black my-1"></span>
+                  
+                  {/* Product and Labor list inside Ticket */}
+                  <div className="flex flex-col gap-1.5 font-sans">
+                    <span className="font-bold font-mono text-[10px] uppercase text-neutral-650 block">ITENS COMPRADOS / CÓDIGOS:</span>
+                    {lastFinishedSale.items.map((it: any, index: number) => (
+                      <div key={index} className="flex justify-between items-start text-xs leading-tight">
+                        <span className="pr-2">{it.quantity}x {it.name}</span>
+                        <span className="font-mono text-right whitespace-nowrap">R$ {it.subtotal.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <span className="border-b border-dashed border-black my-1.5"></span>
+                  
+                  {/* Financial calculations */}
+                  <div className="flex justify-between text-xs">
+                    <span>Subtotal bruto:</span>
+                    <span>R$ {(lastFinishedSale.total + lastFinishedSale.discount).toFixed(2)}</span>
+                  </div>
+
+                  {lastFinishedSale.discount > 0 && (
+                    <div className="flex justify-between text-red-650 font-bold text-xs">
+                      <span>Desconto de Balcão:</span>
+                      <span>- R$ {lastFinishedSale.discount.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between font-bold text-sm border-t border-neutral-300 pt-1 mt-1 font-mono text-black">
+                    <span>TOTAL A PAGAR:</span>
+                    <span>R$ {lastFinishedSale.total.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex justify-between text-[10px] text-neutral-600 mt-1 pl-1 font-mono">
+                    <span>Modalidade de Pago:</span>
+                    <span className="font-bold text-black uppercase">{lastFinishedSale.paymentMethod}</span>
+                  </div>
+
+                  {lastFinishedSale.paymentMethod === 'PIX' && (
+                    <div className="mt-3 bg-neutral-100 p-2.5 rounded-xl border border-neutral-300 flex flex-col items-center gap-2 font-mono text-center">
+                      <span className="text-[8.5px] font-bold text-neutral-800 flex items-center gap-1">
+                        <QrCode className="w-3.5 h-3.5 text-black" /> COBRANÇA PIX INTEGRADA
+                      </span>
+                      {receiptPixQrBase64 ? (
+                        <div className="p-1.5 bg-white border border-neutral-200 rounded shadow-sm">
+                          <img 
+                            src={receiptPixQrBase64} 
+                            alt="PIX QR" 
+                            className="w-28 h-28 object-contain"
+                            referrerPolicy="no-referrer"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-[8px] text-neutral-500">Gerando QR...</span>
+                      )}
+                      <span className="text-[8px] leading-tight text-neutral-600 font-sans">
+                        Aponte seu app do banco para pagar • Valor: <strong>R$ {lastFinishedSale.total.toFixed(2)}</strong>
+                      </span>
+                      
+                      <div className="flex gap-1 w-full mt-1">
+                        <input 
+                          type="text" 
+                          readOnly 
+                          value={lastFinishedPixStringCode} 
+                          className="bg-white border border-neutral-300 rounded px-1.5 py-1 text-[8px] text-neutral-550 select-all truncate flex-1 outline-none text-left text-neutral-600"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try {
+                              navigator.clipboard.writeText(lastFinishedPixStringCode);
+                              alert("PIX copiado!");
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className="px-2 py-1 bg-black text-white font-mono text-[8.5px] font-bold uppercase rounded cursor-pointer shrink-0"
+                        >
+                          COPIAR
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
 
-              <div className="flex justify-between font-bold text-sm border-t border-neutral-300 pt-1 mt-1 font-mono text-black">
-                <span>TOTAL A PAGAR:</span>
-                <span>R$ {lastFinishedSale.total.toFixed(2)}</span>
-              </div>
+                <div className="text-center text-[10px] font-mono border-t border-black pt-3 flex flex-col gap-0.5 text-neutral-505 text-gray-600">
+                  <span>Volte sempre! Obrigado pela preferência.</span>
+                  <span className="block italic text-[8.5px] text-neutral-500">AutoTech Cloud ERP Systems Software v1.2</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col gap-6 font-sans">
+                {/* Status cancelada/estornada block */}
+                {lastFinishedSale.status === 'estornada' && (
+                  <div className="p-3 border-2 border-red-600 bg-red-50 text-red-700 text-center rounded-xl text-xs font-mono font-bold uppercase tracking-wider">
+                    ⚠️ NOTA DE BALCÃO ESTORNADA / CANCELADA ⚠️
+                    <span className="block text-[10px] text-red-500 font-semibold mt-1 font-sans lowercase normal-case italic">
+                      Motivo do estorno: "{lastFinishedSale.justification || 'não informado'}"
+                    </span>
+                  </div>
+                )}
 
-              <div className="flex justify-between text-[10px] text-neutral-600 mt-1 pl-1 font-mono">
-                <span>Modalidade de Pago:</span>
-                <span className="font-bold text-black uppercase">{lastFinishedSale.paymentMethod}</span>
-              </div>
-
-              {lastFinishedSale.paymentMethod === 'PIX' && (
-                <div className="mt-3 bg-neutral-100 p-2.5 rounded-xl border border-neutral-300 flex flex-col items-center gap-2 font-mono text-center">
-                  <span className="text-[8.5px] font-bold text-neutral-800 flex items-center gap-1">
-                    <QrCode className="w-3.5 h-3.5 text-black" /> COBRANÇA PIX INTEGRADA
-                  </span>
-                  {receiptPixQrBase64 ? (
-                    <div className="p-1.5 bg-white border border-neutral-200 rounded shadow-sm">
+                {/* Main Header Row */}
+                <div className="flex flex-col md:flex-row justify-between items-start gap-4 border-b-2 border-black pb-4 text-black">
+                  {/* Company Info Header */}
+                  <div className="flex items-center gap-3">
+                    {company.logoUrl ? (
                       <img 
-                        src={receiptPixQrBase64} 
-                        alt="PIX QR" 
-                        className="w-28 h-28 object-contain"
+                        src={company.logoUrl} 
+                        alt="Logo Oficina" 
+                        className="w-14 h-14 rounded-xl object-contain bg-slate-950 border border-gray-300"
                         referrerPolicy="no-referrer"
                       />
+                    ) : (
+                      <div className="w-14 h-14 rounded-xl bg-red-600 flex items-center justify-center text-white">
+                        <Wrench className="w-6 h-6 rotate-45" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="text-base font-extrabold text-neutral-900 uppercase tracking-tight">{company.name || "AutoPrecision Premium Website"}</h3>
+                      <p className="text-[10px] text-gray-600 leading-normal font-mono">
+                        {company.address || "Av. das Nações Unidas, 1040 - São Paulo, SP"}
+                        {company.cnpj ? ` • CNPJ: ${company.cnpj}` : ""}
+                        {company.phone ? ` • Fone: ${company.phone}` : ""}
+                      </p>
+                      <p className="text-[10px] text-gray-500 font-mono mt-0.5">
+                        {company.email ? `E-mail: ${company.email}` : ""}
+                      </p>
                     </div>
-                  ) : (
-                    <span className="text-[8px] text-neutral-500">Gerando QR...</span>
-                  )}
-                  <span className="text-[8px] leading-tight text-neutral-600 font-sans">
-                    Aponte seu app do banco para pagar • Valor: <strong>R$ {lastFinishedSale.total.toFixed(2)}</strong>
-                  </span>
-                  
-                  <div className="flex gap-1 w-full mt-1">
-                    <input 
-                      type="text" 
-                      readOnly 
-                      value={lastFinishedPixStringCode} 
-                      className="bg-white border border-neutral-300 rounded px-1.5 py-1 text-[8px] text-neutral-550 select-all truncate flex-1 outline-none text-left text-neutral-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        try {
-                          navigator.clipboard.writeText(lastFinishedPixStringCode);
-                          alert("PIX copiado!");
-                        } catch (err) {
-                          console.error(err);
-                        }
-                      }}
-                      className="px-2 py-1 bg-black text-white font-mono text-[8.5px] font-bold uppercase rounded cursor-pointer shrink-0"
-                    >
-                      COPIAR
-                    </button>
+                  </div>
+
+                  {/* Document Badge */}
+                  <div className="text-right flex flex-col items-end gap-1 font-mono md:border-l md:border-dashed md:border-neutral-300 md:pl-4">
+                    <span className="text-[9px] font-extrabold px-2.5 py-1 bg-red-650 bg-red-600 text-white rounded border border-red-700 leading-none uppercase tracking-widest">
+                      NOTA DE BALCÃO
+                    </span>
+                    <span className="text-[8px] font-extrabold text-gray-500 uppercase">
+                      SEM VALOR FISCAL
+                    </span>
+                    <span className="text-xs font-bold text-neutral-900 mt-1">
+                      Nº: <strong className="font-mono text-xs">{lastFinishedSale.id}</strong>
+                    </span>
+                    <span className="text-[9px] text-gray-500">
+                      Emissão: {new Date().toLocaleString('pt-BR')}
+                    </span>
                   </div>
                 </div>
-              )}
-            </div>
 
-            <div className="text-center text-[10px] font-mono border-t border-black pt-3 flex flex-col gap-0.5 text-neutral-505 text-gray-600">
-              <span>Volte sempre! Obrigado pela preferência.</span>
-              <span className="block italic text-[8.5px] text-neutral-500">AutoTech Cloud ERP Systems Software v1.2</span>
-            </div>
+                {/* Document Information Blocks */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-black">
+                  {/* Customer Information Column */}
+                  <div className="bg-neutral-50 rounded-xl p-3 border border-neutral-200">
+                    <span className="text-[9px] font-bold text-gray-400 font-mono uppercase tracking-wider block mb-2 border-b border-neutral-200 pb-1">
+                      👤 CLIENTE / DESTINATÁRIO
+                    </span>
+                    <div className="text-xs font-semibold text-neutral-900 flex flex-col gap-1 leading-normal">
+                      <div>
+                        <span className="text-gray-500 font-normal font-mono">Nome:</span> {lastFinishedSale.clienteName}
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-normal font-mono">CPF/CNPJ:</span> {lastFinishedSale.clienteCpfCnpj || "Não especificado (Consumidor Final)"}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Transaction Metadata Column */}
+                  <div className="bg-neutral-50 rounded-xl p-3 border border-neutral-200 font-mono text-[11px]">
+                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-2 border-b border-neutral-200 pb-1">
+                      ⚙️ INFORMAÇÕES DE TRANSAÇÃO
+                    </span>
+                    <div className="flex flex-col gap-1 leading-normal text-neutral-850">
+                      <div>
+                        <span className="text-gray-500 font-normal">Operador/Atendente:</span> <strong>{lastFinishedSale.sellerName || "Responsável Oficina"}</strong>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 font-normal">Forma de Pago:</span> <span className="font-extrabold uppercase text-neutral-900">{lastFinishedSale.paymentMethod}</span>
+                      </div>
+                      {lastFinishedSale.linkedOSId && (
+                        <div>
+                          <span className="text-gray-500 font-normal">Ordem de Serviço Vínculo:</span> <span className="text-red-650 font-bold underline">{lastFinishedSale.linkedOSId}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Spreadsheet Table of Items */}
+                <div className="border border-neutral-250 rounded-xl overflow-hidden mt-2 text-black">
+                  <table className="w-full text-left text-xs leading-normal border-collapse">
+                    <thead>
+                      <tr className="bg-neutral-100 border-b border-neutral-250 font-mono text-[10px] text-neutral-600 uppercase">
+                        <th className="p-3">Ref/SKU</th>
+                        <th className="p-3">Descrição do Produto / Serviço</th>
+                        <th className="p-3 text-center">Marca</th>
+                        <th className="p-3 text-center">Qtd</th>
+                        <th className="p-3 text-right">Unitário</th>
+                        <th className="p-3 text-right">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-neutral-200 text-neutral-850">
+                      {lastFinishedSale.items.map((it: any, index: number) => {
+                        const dbProd = (produtos || []).find((p: any) => p.name === it.name || p.id === it.id);
+                        const displaySku = it.sku || dbProd?.sku || "BALCAO";
+                        const displayBrand = it.brand || dbProd?.brand || "OFICINA";
+                        const displayPrice = it.price || (it.subtotal / it.quantity);
+
+                        return (
+                          <tr key={index} className="hover:bg-neutral-50/50">
+                            <td className="p-3 font-mono text-[10px] text-slate-500">{displaySku}</td>
+                            <td className="p-3 font-semibold text-neutral-900">{it.name}</td>
+                            <td className="p-3 text-center font-mono text-[10px] text-slate-500">{displayBrand}</td>
+                            <td className="p-3 text-center font-bold font-mono">{it.quantity}</td>
+                            <td className="p-3 text-right font-mono">R$ {displayPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-3 text-right font-bold font-mono">R$ {it.subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Calculation breakdown column structure */}
+                <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-t border-dashed border-neutral-300 pt-4 mt-2 text-black">
+                  <div className="text-[10px] font-mono text-gray-500 leading-relaxed md:max-w-md w-full">
+                    <p className="font-bold uppercase tracking-wider text-neutral-700">TERMOS & RESPONSABILIDADE DE GARANTIA:</p>
+                    <p>1. Esta nota destina-se para fins fiscais meramente opcionais no ato da venda e controle interno de almoxarifado.</p>
+                    <p>2. A garantia de peças novas obedece estritamente às normas do Fabricante e CDC.</p>
+                    <p>3. Não é permitida a devolução de peças com embalagem violada ou indícios de instalação inadequada.</p>
+                  </div>
+
+                  <div className="bg-neutral-50 border border-neutral-200 p-4 rounded-xl flex flex-col gap-2 w-full md:max-w-xs self-stretch shrink-0 font-mono">
+                    <div className="flex justify-between text-xs text-neutral-600">
+                      <span>Subtotal de Balcão:</span>
+                      <span>R$ {(lastFinishedSale.total + lastFinishedSale.discount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    {lastFinishedSale.discount > 0 && (
+                      <div className="flex justify-between text-xs font-bold text-red-650">
+                        <span>Desconto Aplicado:</span>
+                        <span>- R$ {lastFinishedSale.discount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-sm font-extrabold text-neutral-900 border-t border-neutral-200 pt-2">
+                      <span>VALOR LÍQUIDO GERAL:</span>
+                      <span className="text-[15px] text-neutral-950 font-sans font-extrabold">R$ {lastFinishedSale.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* PIX instructions if applicable */}
+                {lastFinishedSale.paymentMethod === 'PIX' && (
+                  <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 mt-2 flex flex-col md:flex-row items-center gap-4 text-center md:text-left text-black">
+                    {receiptPixQrBase64 && (
+                      <div className="p-1.5 bg-white border border-neutral-200 rounded shadow-sm shrink-0">
+                        <img 
+                          src={receiptPixQrBase64} 
+                          alt="PIX QR" 
+                          className="w-24 h-24 object-contain"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                    <div className="font-mono flex-1">
+                      <span className="text-[10px] font-bold text-neutral-900 uppercase flex items-center justify-center md:justify-start gap-1">
+                        <QrCode className="w-4 h-4 text-slate-900" /> Transação via PIX Conciliado
+                      </span>
+                      <p className="text-[9px] text-gray-500 leading-relaxed mt-1">
+                        Esta fatura representa uma transação balcão. Você pode registrar a quitação usando a chave Pix vinculada nas configurações de sua oficina ou apontar seu aplicativo para o QR Code ao lado.
+                      </p>
+                      <div className="mt-2 text-[10px] text-gray-700 select-all truncate border border-neutral-200 p-1.5 bg-white rounded flex items-center justify-between">
+                        <span className="truncate flex-1 font-mono text-[9px]">{lastFinishedPixStringCode}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try {
+                              navigator.clipboard.writeText(lastFinishedPixStringCode);
+                              alert("PIX copiado!");
+                            } catch (err) {
+                              console.error(err);
+                            }
+                          }}
+                          className="px-2 py-0.5 bg-black text-white text-[8px] rounded uppercase cursor-pointer shrink-0 ml-2"
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Corporate signatures, legal status disclaimer */}
+                <div className="mt-6 border-t border-neutral-300 pt-6 text-black">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-[11px] font-mono text-center">
+                    <div className="flex flex-col items-center">
+                      <div className="w-full max-w-xs border-b border-black mb-1"></div>
+                      <span className="font-bold text-neutral-900 uppercase">{lastFinishedSale.sellerName || "Operador Responsável"}</span>
+                      <span className="text-[9px] text-gray-500">AutoPrecision Oficina Balcão</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <div className="w-full max-w-xs border-b border-black mb-1"></div>
+                      <span className="font-bold text-neutral-900 uppercase">Assinatura do Cliente</span>
+                      <span className="text-[9px] text-gray-500">Aceite e integridade dos itens retro discriminados</span>
+                    </div>
+                  </div>
+
+                  <div className="text-center text-[9px] text-gray-500 mt-6 pt-3 border-t border-neutral-100 uppercase tracking-widest leading-loose font-mono">
+                    *** DOCUMENTAÇÃO INTERNA SUPLEMENTAR - EXPEDIDO SEM EFICÁCIA DE CRÉDITO DE ICMS/IPI/ISS (RECOLHIMENTO UNIFICADO) ***
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Action buttons inside Ticket receipt popup */}
             <div className="mt-6 flex flex-col gap-2 font-mono no-print">
@@ -2694,9 +2963,9 @@ export const PDVView: React.FC = () => {
                 onClick={() => {
                   window.print();
                 }}
-                className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0"
+                className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0 font-sans"
               >
-                <Printer className="w-4 h-4 text-white" /> Imprimir p/ Impressora Térmica
+                <Printer className="w-4 h-4 text-white" /> {receiptType === 'thermal' ? 'Imprimir p/ Impressora Térmica' : 'Imprimir p/ Impressora A4 (Nota)'}
               </button>
               
               <button 
@@ -2704,9 +2973,9 @@ export const PDVView: React.FC = () => {
                 onClick={() => {
                   window.print();
                 }}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0"
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0 font-sans"
               >
-                <FileText className="w-4 h-4 text-white animate-pulse" /> Exportar para PDF / Salvar Recibo
+                <FileText className="w-4 h-4 text-white animate-pulse" /> {receiptType === 'thermal' ? 'Exportar para PDF / Salvar Recibo' : 'Gerar PDF de Nota de Balcão (A4)'}
               </button>
 
               <button 
@@ -2715,7 +2984,7 @@ export const PDVView: React.FC = () => {
                   setSaleFinished(false);
                   setLastFinishedSale(null);
                 }}
-                className="w-full py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center mt-1 bg-transparent text-black"
+                className="w-full py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center mt-1 bg-transparent text-black font-sans"
               >
                 Fechar Recibo
               </button>

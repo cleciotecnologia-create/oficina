@@ -95,6 +95,11 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   const [easyParts, setEasyParts] = useState<PartUsed[]>([]);
   const [easyDiscount, setEasyDiscount] = useState<number>(0);
   
+  // Budget direct SMTP email states
+  const [isSendingBudgetEmail, setIsSendingBudgetEmail] = useState(false);
+  const [emailBudgetFeedback, setEmailBudgetFeedback] = useState<string | null>(null);
+  const [emailBudgetSuccess, setEmailBudgetSuccess] = useState<boolean | null>(null);
+  
   // Quick manual input fields for Orçamento Fácil
   const [easySelectedSrvId, setEasySelectedSrvId] = useState('');
   const [easyManualSrvDesc, setEasyManualSrvDesc] = useState('');
@@ -164,6 +169,183 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
   const [cameraError, setCameraError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Camera capture states for license plate scanner
+  const [showPlateScannerModal, setShowPlateScannerModal] = useState(false);
+  const [plateScannerTarget, setPlateScannerTarget] = useState<'quick' | 'easy' | null>(null);
+  const [plateScannerLoading, setPlateScannerLoading] = useState(false);
+  const [plateScannerFeedback, setPlateScannerFeedback] = useState<string | null>(null);
+  const [plateScannerError, setPlateScannerError] = useState<string | null>(null);
+  const [plateCameraActive, setPlateCameraActive] = useState(false);
+  const plateVideoRef = useRef<HTMLVideoElement | null>(null);
+  const plateStreamRef = useRef<MediaStream | null>(null);
+
+  const stopPlateCamera = () => {
+    if (plateStreamRef.current) {
+      plateStreamRef.current.getTracks().forEach(track => {
+        try {
+          track.stop();
+        } catch (err) {
+          console.error("Erro ao parar track da placa:", err);
+        }
+      });
+      plateStreamRef.current = null;
+    }
+    setPlateCameraActive(false);
+  };
+
+  const startPlateCamera = async () => {
+    setPlateScannerError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false
+      });
+      plateStreamRef.current = stream;
+      if (plateVideoRef.current) {
+        plateVideoRef.current.srcObject = stream;
+        plateVideoRef.current.play().catch(err => {
+          console.error("Erro ao dar play no vídeo da placa:", err);
+        });
+      }
+      setPlateCameraActive(true);
+    } catch (err: any) {
+      console.error("Erro ao acessar câmera para ler placa:", err);
+      setPlateScannerError("Não foi possível acessar a câmera do dispositivo. Verifique as permissões de privacidade ou faça upload de uma foto do computador/celular.");
+    }
+  };
+
+  const handlePlateCaptureAndProcess = async () => {
+    if (!plateVideoRef.current) return;
+    setPlateScannerLoading(true);
+    setPlateScannerError(null);
+    setPlateScannerFeedback("Capturando imagem...");
+    try {
+      const video = plateVideoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Não foi possível inicializar o canvas.");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+      setPlateScannerFeedback("Analisando com a Inteligência Artificial do Gemini...");
+      const res = await fetch("/api/gemini/scan-plate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: dataUrl })
+      });
+
+      if (!res.ok) {
+        throw new Error("Resposta inválida do servidor.");
+      }
+
+      const data = await res.json();
+      if (data.plate) {
+        const cleanedPlate = data.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (plateScannerTarget === 'quick') {
+          setQuickPlate(cleanedPlate);
+          if (data.brand) {
+            setQuickBrand(data.brand);
+            const foundSug = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === data.brand.toLowerCase());
+            if (foundSug) {
+              setQuickModelsList(foundSug.models);
+            }
+          }
+          if (data.model) {
+            setQuickModel(data.model);
+          }
+        } else if (plateScannerTarget === 'easy') {
+          setEasyVehiclePlate(cleanedPlate);
+          if (data.brand || data.model) {
+            setEasyVehicleDesc(`${data.brand || ''} ${data.model || ''}`.trim());
+          }
+        }
+        playSuccessSound();
+        setPlateScannerFeedback(`Placa ${cleanedPlate} identificada com sucesso! (${data.confidence === 'Alto' ? 'Confiança Alta' : 'Confiança Média'})`);
+        setTimeout(() => {
+          stopPlateCamera();
+          setShowPlateScannerModal(false);
+          setPlateScannerFeedback(null);
+        }, 2000);
+      } else {
+        throw new Error("Não foi possível identificar nenhuma placa de veículo na imagem.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPlateScannerError(err.message || "Erro desconhecido ao ler a placa.");
+    } finally {
+      setPlateScannerLoading(false);
+    }
+  };
+
+  const handlePlateFileUploadAndProcess = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+    
+    setPlateScannerLoading(true);
+    setPlateScannerError(null);
+    setPlateScannerFeedback("Carregando arquivo...");
+
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+      });
+
+      setPlateScannerFeedback("Analisando placa com a Inteligência Artificial do Gemini...");
+      const res = await fetch("/api/gemini/scan-plate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: base64 })
+      });
+
+      if (!res.ok) {
+        throw new Error("Resposta inválida do servidor ao analisar arquivo.");
+      }
+
+      const data = await res.json();
+      if (data.plate) {
+        const cleanedPlate = data.plate.toUpperCase().replace(/[^A-Z0-9]/g, '');
+        if (plateScannerTarget === 'quick') {
+          setQuickPlate(cleanedPlate);
+          if (data.brand) {
+            setQuickBrand(data.brand);
+            const foundSug = AUTO_SUGGESTIONS.find(s => s.name.toLowerCase() === data.brand.toLowerCase());
+            if (foundSug) {
+              setQuickModelsList(foundSug.models);
+            }
+          }
+          if (data.model) {
+            setQuickModel(data.model);
+          }
+        } else if (plateScannerTarget === 'easy') {
+          setEasyVehiclePlate(cleanedPlate);
+          if (data.brand || data.model) {
+            setEasyVehicleDesc(`${data.brand || ''} ${data.model || ''}`.trim());
+          }
+        }
+        playSuccessSound();
+        setPlateScannerFeedback(`Placa ${cleanedPlate} identificada com sucesso!`);
+        setTimeout(() => {
+          stopPlateCamera();
+          setShowPlateScannerModal(false);
+          setPlateScannerFeedback(null);
+        }, 2000);
+      } else {
+        throw new Error("Não foi possível identificar nenhuma placa nesta imagem. Tente outra foto mais nítida.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPlateScannerError(err.message || "Erro ao processar imagem.");
+    } finally {
+      setPlateScannerLoading(false);
+    }
+  };
 
   // Stop camera feed helper
   const stopCamera = () => {
@@ -252,6 +434,9 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     return () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (plateStreamRef.current) {
+        plateStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, []);
@@ -924,19 +1109,24 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
     window.open(url, '_blank');
   };
 
-  const handleEasyEmailShare = () => {
-    const srvLines = easyServices.map(s => `- Mão de Obra: ${s.description} - R$ ${s.price.toFixed(2)}`).join('\n');
-    const prtLines = easyParts.map(p => `- Peça: ${p.name} (x${p.quantity}) - R$ ${(p.sellPrice * p.quantity).toFixed(2)}`).join('\n');
-    
-    const subject = encodeURIComponent(`Orçamento Rápido - ${easyVehicleDesc || 'Seu Veículo'} - ${company?.name || 'AutoPrecision'}`);
+  const handleEasyEmailShare = async () => {
+    if (!easyClientEmail) {
+      alert("Por favor, preencha o e-mail do cliente para realizar o envio.");
+      return;
+    }
+
+    const srvTextLines = easyServices.map(s => `- Mão de Obra: ${s.description} - R$ ${s.price.toFixed(2)}`).join('\n');
+    const prtTextLines = easyParts.map(p => `- Peça: ${p.name} (x${p.quantity}) - R$ ${(p.sellPrice * p.quantity).toFixed(2)}`).join('\n');
+
+    const rawSubject = `Orçamento Rápido - ${easyVehicleDesc || 'Seu Veículo'} - ${company?.name || 'AutoPrecision'}`;
     let bodyText = `Olá${easyClientName ? ` ${easyClientName}` : ''},\n\n`;
     bodyText += `Seguem as tarifas e diagnósticos operacionais de orçamento provisório para o seu veículo${easyVehicleDesc ? ` (${easyVehicleDesc})` : ''}${easyVehiclePlate ? ` placa ${easyVehiclePlate.toUpperCase()}` : ''}.\n\n`;
     
     if (easyServices.length > 0) {
-      bodyText += `--- SERVIÇOS E OPERAÇÕES ---\n${srvLines}\n\n`;
+      bodyText += `--- SERVIÇOS E OPERAÇÕES ---\n${srvTextLines}\n\n`;
     }
     if (easyParts.length > 0) {
-      bodyText += `--- PEÇAS E MATERIAIS DE REPOSIÇÃO ---\n${prtLines}\n\n`;
+      bodyText += `--- PEÇAS E MATERIAIS DE REPOSIÇÃO ---\n${prtTextLines}\n\n`;
     }
     
     bodyText += `Subtotal: R$ ${easySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
@@ -946,9 +1136,116 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
     bodyText += `VALOR TOTAL ESTIMADO: R$ ${easyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
     bodyText += `Responderemos imediatamente caso queira aprovar por este canal.\n\n`;
     bodyText += `Atenciosamente,\n${company?.name || 'AutoPrecision Premium'}\nContato Telefônico: ${company?.phone || '(11) 98765-4321'}`;
-    
-    const url = `mailto:${easyClientEmail || ''}?subject=${subject}&body=${encodeURIComponent(bodyText)}`;
-    window.location.href = url;
+
+    // Rich HTML email design
+    const srvHtmlLines = easyServices.map(s => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-family: sans-serif; font-size: 13px; color: #334155;">Mão de Obra: ${s.description}</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-family: sans-serif; font-size: 13px; color: #334155; text-align: right;">R$ ${s.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join('');
+
+    const prtHtmlLines = easyParts.map(p => `
+      <tr>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-family: sans-serif; font-size: 13px; color: #334155;">Peça: ${p.name} (x${p.quantity})</td>
+        <td style="padding: 10px; border-bottom: 1px solid #e2e8f0; font-family: sans-serif; font-size: 13px; color: #334155; text-align: right;">R$ ${(p.sellPrice * p.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+      </tr>
+    `).join('');
+
+    const logoHtml = company?.logoUrl ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${company.logoUrl}" alt="Logo" style="max-height: 70px; border-radius: 8px;" /></div>` : '';
+
+    const htmlContent = `
+      <div style="background-color: #f8fafc; padding: 25px; font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px;">
+        ${logoHtml}
+        <h2 style="color: #0f172a; border-bottom: 2px solid #ef4444; padding-bottom: 10px; font-family: sans-serif; text-transform: uppercase;">${company?.name || 'AutoPrecision'}</h2>
+        <p style="color: #334155; font-size: 14px; line-height: 1.6;">Olá <strong>${easyClientName || 'Cliente'}</strong>,</p>
+        <p style="color: #334155; font-size: 14px; line-height: 1.6;">Seguem as tarifas e diagnósticos operacionais de orçamento provisório para o seu veículo <strong>${easyVehicleDesc || 'não especificado'}</strong> ${easyVehiclePlate ? `(Placa: <strong>${easyVehiclePlate.toUpperCase()}</strong>)` : ''}.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 15px;">
+          <thead>
+            <tr style="background-color: #f1f5f9;">
+              <th style="padding: 10px; text-align: left; font-size: 12px; color: #475569; text-transform: uppercase;">Serviço / Item</th>
+              <th style="padding: 10px; text-align: right; font-size: 12px; color: #475569; text-transform: uppercase;">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${srvHtmlLines}
+            ${prtHtmlLines}
+          </tbody>
+        </table>
+
+        <div style="background-color: #f1f5f9; padding: 15px; border-radius: 8px; margin-top: 20px;">
+          <table style="width: 100%;">
+            <tr>
+              <td style="font-size: 13px; color: #475569; font-family: sans-serif;">Subtotal:</td>
+              <td style="font-size: 13px; color: #334155; text-align: right; font-family: sans-serif;">R$ ${easySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            ${easyDiscount > 0 ? `
+            <tr>
+              <td style="font-size: 13px; color: #16a34a; font-weight: bold; font-family: sans-serif;">Desconto:</td>
+              <td style="font-size: 13px; color: #16a34a; font-weight: bold; text-align: right; font-family: sans-serif;">- R$ ${easyDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+            </tr>
+            ` : ''}
+            <tr style="border-top: 1px solid #cbd5e1;">
+              <td style="font-size: 15px; color: #0f172a; font-weight: bold; padding-top: 10px; font-family: sans-serif;">Valor Total Geral:</td>
+              <td style="font-size: 18px; color: #ef4444; font-weight: bold; text-align: right; padding-top: 10px; font-family: sans-serif;">R$ ${easyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+            </tr>
+          </table>
+        </div>
+
+        <p style="color: #475569; font-size: 12px; margin-top: 25px; border-top: 1px solid #e2e8f0; padding-top: 15px; text-align: center; font-family: sans-serif;">
+          Este documento constitui apenas uma estimativa provisória não vinculante.<br/>
+          <strong>${company?.name || 'Oficina'}</strong> • Contato: ${company?.phone || ''}
+        </p>
+      </div>
+    `;
+
+    if (company?.smtpHost && company?.smtpUser && company?.smtpPass) {
+      setIsSendingBudgetEmail(true);
+      setEmailBudgetFeedback("Transmitindo via servidor SMTP de alta performance...");
+      setEmailBudgetSuccess(null);
+      try {
+        const res = await fetch('/api/email/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            smtpHost: company.smtpHost,
+            smtpPort: company.smtpPort,
+            smtpUser: company.smtpUser,
+            smtpPass: company.smtpPass,
+            smtpSecure: company.smtpSecure,
+            to: easyClientEmail,
+            subject: rawSubject,
+            text: bodyText,
+            html: htmlContent,
+            fromName: company.name
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setEmailBudgetSuccess(true);
+          setEmailBudgetFeedback("✓ Orçamento enviado com sucesso via SMTP do Gmail!");
+        } else {
+          setEmailBudgetSuccess(false);
+          setEmailBudgetFeedback(`⚠️ Falha SMTP: ${data.error}`);
+        }
+      } catch (err: any) {
+        setEmailBudgetSuccess(false);
+        setEmailBudgetFeedback(`⚠️ Falha de conexão: ${err.message || err}`);
+      } finally {
+        setIsSendingBudgetEmail(false);
+      }
+    } else {
+      // Direct local mailto link redirection
+      setEmailBudgetSuccess(true);
+      setEmailBudgetFeedback("Direcionando para seu cliente de e-mail local...");
+      const url = `mailto:${easyClientEmail}?subject=${encodeURIComponent(rawSubject)}&body=${encodeURIComponent(bodyText)}`;
+      window.location.href = url;
+      setTimeout(() => {
+        setEmailBudgetFeedback(null);
+        setEmailBudgetSuccess(null);
+      }, 4000);
+    }
   };
 
   const handleConvertEasyToOS = async () => {
@@ -2021,7 +2318,20 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                     <div className="flex flex-col gap-3">
                       <div className="grid grid-cols-2 gap-3.5">
                         <div className="flex flex-col gap-1">
-                          <label className="text-[9px] text-gray-400 font-mono">PLACA *</label>
+                          <div className="flex justify-between items-center">
+                            <label className="text-[9px] text-gray-400 font-mono">PLACA *</label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPlateScannerTarget('quick');
+                                setShowPlateScannerModal(true);
+                                startPlateCamera();
+                              }}
+                              className="text-[9px] text-cyan-400 hover:text-cyan-300 font-mono font-bold flex items-center gap-1 cursor-pointer transition border border-transparent hover:border-cyan-500/20 px-1 py-0.5 rounded"
+                            >
+                              <Camera className="w-2.5 h-2.5" /> Escanear Placa
+                            </button>
+                          </div>
                           <input
                             type="text"
                             placeholder="GOLF-2018"
@@ -3303,7 +3613,20 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-[10px] font-mono text-gray-400 uppercase">Placa</label>
+                    <div className="flex justify-between items-center">
+                      <label className="text-[10px] font-mono text-gray-400 uppercase">Placa</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlateScannerTarget('easy');
+                          setShowPlateScannerModal(true);
+                          startPlateCamera();
+                        }}
+                        className="text-[9px] text-cyan-400 hover:text-cyan-300 font-mono font-bold flex items-center gap-1 cursor-pointer transition border border-transparent hover:border-cyan-500/20 px-1 py-0.5 rounded"
+                      >
+                        <Camera className="w-2.5 h-2.5" /> Escanear Placa
+                      </button>
+                    </div>
                     <input 
                       type="text" 
                       placeholder="Ex: ABC-1234"
@@ -3647,6 +3970,25 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               </button>
 
             </div>
+
+            {emailBudgetFeedback && (
+              <div className={`mt-3 p-3 rounded-lg border text-[11px] font-mono leading-relaxed flex flex-col gap-1 text-left ${
+                emailBudgetSuccess === true 
+                  ? 'bg-blue-950/25 border-blue-900/60 text-blue-400' 
+                  : emailBudgetSuccess === false
+                  ? 'bg-red-950/25 border-red-900/60 text-red-400'
+                  : 'bg-slate-900/40 border-gray-850 text-gray-400'
+              }`}>
+                <span className="font-bold uppercase tracking-wider text-[9px] flex items-center gap-1 font-mono">
+                  {isSendingBudgetEmail ? (
+                    <RefreshCw className="w-3 h-3 animate-spin text-blue-400" />
+                  ) : emailBudgetSuccess === true ? (
+                    "✓ Transmissão Concluída"
+                  ) : "⚠️ Transmissão SMTP"}
+                </span>
+                <span>{emailBudgetFeedback}</span>
+              </div>
+            )}
 
           </div>
 
@@ -5066,6 +5408,124 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
               alt="Ampliação da vistoria do veículo" 
               className="max-w-full max-h-[85vh] rounded-xl object-contain shadow-2xl border border-gray-800" 
             />
+          </div>
+        </div>
+      )}
+
+      {/* License Plate Scanner Modal with Gemini AI */}
+      {showPlateScannerModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
+          <div className="bg-[#050912] border border-cyan-500/30 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative overflow-hidden flex flex-col gap-4 animate-scaleUp">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center border-b border-cyan-950/50 pb-3">
+              <div className="flex items-center gap-2">
+                <Cpu className="w-5 h-5 text-cyan-400 animate-pulse" />
+                <div>
+                  <h3 className="text-sm font-extrabold text-white font-mono uppercase tracking-widest">Leitor de Placa Inteligente</h3>
+                  <p className="text-[10px] text-gray-400 font-sans mt-0.5">Visão Computacional & IA do Gemini</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  stopPlateCamera();
+                  setShowPlateScannerModal(false);
+                }}
+                className="p-1.5 rounded-lg hover:bg-slate-900 border border-transparent hover:border-gray-800 text-gray-400 hover:text-white transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Error messaging */}
+            {plateScannerError && (
+              <div className="p-3 bg-red-950/20 border border-red-900/60 rounded-xl text-red-400 font-mono text-[10px] leading-relaxed">
+                ⚠️ {plateScannerError}
+              </div>
+            )}
+
+            {/* Live Camera Feed inside the modal */}
+            {plateCameraActive && !plateScannerLoading && (
+              <div className="relative rounded-xl overflow-hidden border border-cyan-900/40 bg-black aspect-video w-full flex items-center justify-center">
+                <video
+                  ref={plateVideoRef}
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-2.5 left-2.5 bg-black/70 backdrop-blur-sm border border-cyan-500/20 rounded px-2 py-0.5 text-[8.5px] text-cyan-400 font-mono flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                  CÂMERA ATIVA
+                </div>
+                <div className="absolute bottom-2.5 left-2.5 right-2.5 bg-black/60 backdrop-blur-sm border border-gray-800 rounded p-1.5 text-center text-[9px] text-gray-300 font-mono leading-normal">
+                  Centralize a placa do veículo na área visível com boa iluminação.
+                </div>
+              </div>
+            )}
+
+            {/* Current processing status feedback */}
+            {plateScannerFeedback && (
+              <div className="p-4 bg-cyan-950/25 border border-cyan-800/80 rounded-xl flex flex-col items-center justify-center text-center gap-2 animate-pulse">
+                <RefreshCw className="w-6 h-6 text-cyan-400 animate-spin" />
+                <span className="text-xs text-cyan-300 font-mono">{plateScannerFeedback}</span>
+              </div>
+            )}
+
+            {/* Actions panel */}
+            <div className="flex flex-col gap-3">
+              {plateCameraActive && !plateScannerLoading && (
+                <button
+                  type="button"
+                  onClick={handlePlateCaptureAndProcess}
+                  className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-mono text-xs font-bold rounded-xl flex justify-center items-center gap-2 cursor-pointer shadow-lg active:scale-95 transition"
+                >
+                  <Camera className="w-4 h-4" /> TIRAR FOTO & ANALISAR PLACA
+                </button>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                {/* Fallback File Upload trigger */}
+                <label className="py-2.5 px-3 bg-[#080c16] hover:bg-[#0e1629] border border-gray-800 hover:border-gray-700 text-gray-300 rounded-xl text-[11px] font-semibold text-center cursor-pointer flex items-center justify-center gap-1.5 transition">
+                  📁 {plateCameraActive ? "Enviar Foto..." : "Escolher Imagem..."}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePlateFileUploadAndProcess}
+                    className="hidden"
+                    disabled={plateScannerLoading}
+                  />
+                </label>
+
+                {/* Toggle/Retake Trigger */}
+                {!plateCameraActive ? (
+                  <button
+                    type="button"
+                    disabled={plateScannerLoading}
+                    onClick={startPlateCamera}
+                    className="py-2.5 px-3 bg-cyan-950/40 hover:bg-cyan-900/40 border border-cyan-800/60 hover:border-cyan-550 text-cyan-400 font-mono rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer transition"
+                  >
+                    <Camera className="w-4 h-4" /> Ativar Câmera
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={plateScannerLoading}
+                    onClick={stopPlateCamera}
+                    className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 border border-gray-800 hover:border-gray-700 text-gray-400 font-mono rounded-xl text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition"
+                  >
+                    Desativar Câmera
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Footer tips */}
+            <div className="text-[9px] text-gray-500 font-sans leading-normal border-t border-slate-900 pt-2.5 flex items-start gap-1 justify-center text-center">
+              <span>💡</span>
+              <span>DICA: Fotos de celular bem aproximadas, nítidas e horizontais garantem 100% de precisão de reconhecimento.</span>
+            </div>
+
           </div>
         </div>
       )}

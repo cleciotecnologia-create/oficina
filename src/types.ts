@@ -54,6 +54,11 @@ export interface Company {
   fiscalAutoEmitOnOSClose?: boolean;
   fiscalSeriesList?: FiscalSeries[];
   fiscalTaxRules?: FiscalTaxRule[];
+  smtpHost?: string;
+  smtpPort?: number;
+  smtpUser?: string;
+  smtpPass?: string;
+  smtpSecure?: boolean;
 }
 
 export interface FiscalSeries {
