@@ -56,7 +56,8 @@ export const OSView: React.FC<OSViewProps> = ({ initialSearchPlate = '', onClear
     servicos,
     getSmartDiagnosis, 
     aiLoading,
-    company
+    company,
+    user
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'lista' | 'nova' | 'orcamento'>('lista');
@@ -1651,6 +1652,37 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                           <span className="text-gray-400">por {os.mechanicName || 'Sistema'}</span>
                         </div>
                         <span className="text-gray-500 italic text-[8.5px] mt-0.5">"Abertura da Ordem de Serviço"</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Print History Log */}
+                <div className="mt-2.5 border border-gray-850 bg-slate-950/20 rounded-xl overflow-hidden p-2.5">
+                  <span className="text-[9.5px] font-mono uppercase tracking-wider text-slate-400 font-extrabold flex items-center gap-1.5 select-none">
+                    <Printer className="w-3.5 h-3.5 text-green-400" />
+                    Impressões Realizadas (Cupom/Relatório)
+                  </span>
+                  
+                  <div className="mt-2 pl-1.5 flex flex-col gap-2 max-h-[120px] overflow-y-auto font-mono text-[9.5px] border-l border-green-950/30">
+                    {os.printLog && os.printLog.length > 0 ? (
+                      os.printLog.map((p, pIdx) => (
+                        <div key={p.id || pIdx} className="relative flex flex-col gap-0.5">
+                          <span className="absolute -left-[10px] top-[4px] w-1.5 h-1.5 rounded-full bg-green-500/85 border border-slate-950" />
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-gray-500 text-[8.5px] font-semibold">
+                              {new Date(p.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                            <span className="px-1 py-[1px] bg-green-950/20 text-green-400 font-bold rounded uppercase border border-green-900/30 text-[8.5px]">
+                              {p.documentType}
+                            </span>
+                            <span className="text-gray-400">por {p.printedBy || 'Operador'}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-gray-500 italic text-[8.5px] py-1 select-none flex items-center gap-1">
+                        <span>Nenhuma impressão foi registrada para esta O.S.</span>
                       </div>
                     )}
                   </div>
@@ -4203,7 +4235,36 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                 <div className="flex items-center gap-2 no-print">
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
+                      if (pdfOSSelected) {
+                        try {
+                          const currentPrintLog = pdfOSSelected.printLog || [];
+                          let docLabel = "Ficha de O.S. / Orçamento";
+                          if (pdfMode === 'danfe-nfe') {
+                            docLabel = "Cupom Fiscal DANFE (NF-e)";
+                          } else if (pdfMode === 'danfe-nfse') {
+                            docLabel = "Recibo NFS-e (Serviço)";
+                          }
+                          
+                          const newEntry = {
+                            id: 'print_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+                            documentType: docLabel,
+                            timestamp: new Date().toISOString(),
+                            printedBy: user?.name || "Operador"
+                          };
+                          
+                          const updatedPrintLog = [newEntry, ...currentPrintLog];
+                          await editOS(pdfOSSelected.id, { printLog: updatedPrintLog });
+                          
+                          // Also update local state so changes show up immediately in print list
+                          setPdfOSSelected({
+                            ...pdfOSSelected,
+                            printLog: updatedPrintLog
+                          });
+                        } catch (err) {
+                          console.error("Erro ao gravar log de impressao:", err);
+                        }
+                      }
                       window.print();
                     }}
                     className="py-2 px-4 rounded-xl bg-red-650 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow transition-all hover:scale-[1.02] no-print"
@@ -4258,6 +4319,24 @@ Por gentileza, acesse o link acima ou responda essa mensagem para aprovar a exec
                       ? '* O preenchimento detalhado do DANFE NF-e considera as peças adicionadas à O.S.'
                       : '* O Layout da NFS-e simula o Recibo Provisório e Alíquota de 5.00% do município prestador.'
                     }
+                  </div>
+                </div>
+              )}
+
+              {/* Previous prints ticker */}
+              {pdfOSSelected?.printLog && pdfOSSelected.printLog.length > 0 && (
+                <div className="border-t border-gray-850/60 pt-3 flex flex-col gap-2 text-left">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-gray-405 text-gray-400 font-bold uppercase tracking-wider">
+                    <Printer className="w-3.5 h-3.5 text-green-400 font-bold" />
+                    Histórico de Impressões desta O.S.:
+                  </div>
+                  <div className="flex flex-wrap gap-2 max-h-[100px] overflow-y-auto custom-scrollbar">
+                    {pdfOSSelected.printLog.map((p, idx) => (
+                      <span key={p.id || idx} className="text-[9.5px] font-mono bg-slate-900 border border-gray-850/60 py-1 px-2.5 rounded-lg text-gray-300 flex items-center gap-1.5 shrink-0">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        <strong>{p.documentType}</strong> às {new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} ({new Date(p.timestamp).toLocaleDateString('pt-BR')}) por <strong className="text-gray-400">{p.printedBy || 'Operador'}</strong>
+                      </span>
+                    ))}
                   </div>
                 </div>
               )}

@@ -30,7 +30,8 @@ import {
   Sparkles,
   RefreshCw,
   QrCode,
-  Download
+  Download,
+  Smartphone
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useApp } from '../context/AppContext';
@@ -141,7 +142,8 @@ export const CRMView: React.FC = () => {
     ordensServico,
     vendas,
     company,
-    user
+    user,
+    updateCompany
   } = useApp();
 
   // Helper to check if an OS is a warranty return
@@ -422,6 +424,17 @@ export const CRMView: React.FC = () => {
   const [newContactPhone, setNewContactPhone] = useState<string>("");
   const [newContactVehicle, setNewContactVehicle] = useState<string>("");
 
+  // States for general WhatsApp configuration in CRM
+  const [botWhatsapp, setBotWhatsapp] = useState<string>("");
+  const [isSavingWhatsapp, setIsSavingWhatsapp] = useState<boolean>(false);
+  const [whatsappSaveSuccess, setWhatsappSaveSuccess] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (company?.whatsapp) {
+      setBotWhatsapp(company.whatsapp);
+    }
+  }, [company?.whatsapp]);
+
   // States and dynamic QR Code generation for WhatsApp Suggestions
   const [suggestionPhone, setSuggestionPhone] = useState<string>("");
   const [suggestionMessage, setSuggestionMessage] = useState<string>("Olá! Gostaria de deixar uma sugestão de melhoria para a AutoTech: ");
@@ -429,10 +442,12 @@ export const CRMView: React.FC = () => {
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
   useEffect(() => {
-    if (company?.phone && !suggestionPhone) {
+    if (company?.whatsapp) {
+      setSuggestionPhone(company.whatsapp);
+    } else if (company?.phone && !suggestionPhone) {
       setSuggestionPhone(company.phone);
     }
-  }, [company?.phone]);
+  }, [company?.whatsapp, company?.phone]);
 
   useEffect(() => {
     const generateQrCode = async () => {
@@ -4052,6 +4067,57 @@ Acompanhe sempre o status do seu veículo em tempo real!`;
                   >
                     <div className={`w-4 h-4 rounded-full bg-white shadow-md transform transition-transform duration-200 ${botActive ? 'translate-x-4' : 'translate-x-0'}`} />
                   </button>
+                </div>
+
+                {/* Telefone WhatsApp para Clientes */}
+                <div className="flex flex-col gap-2 bg-[#070b13] p-3 rounded-xl border border-gray-900">
+                  <label className="text-[10px] font-mono text-gray-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5 text-green-450 text-green-450" /> Telefone WhatsApp Principal
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={botWhatsapp}
+                      onChange={(e) => {
+                        setBotWhatsapp(e.target.value);
+                        setWhatsappSaveSuccess(false);
+                      }}
+                      placeholder="Ex: (11) 98765-4321"
+                      className="flex-1 bg-[#0c1223] border border-gray-850 rounded-lg p-2 font-mono text-[11px] text-slate-200 outline-none focus:border-red-600 focus:ring-1 focus:ring-red-650"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSavingWhatsapp}
+                      onClick={async () => {
+                        if (!botWhatsapp.trim()) {
+                          alert("Por favor, digite um número válido.");
+                          return;
+                        }
+                        setIsSavingWhatsapp(true);
+                        try {
+                          await updateCompany({ whatsapp: botWhatsapp });
+                          setWhatsappSaveSuccess(true);
+                          setTimeout(() => setWhatsappSaveSuccess(false), 3000);
+                        } catch (err) {
+                          console.error("Erro ao salvar Whatsapp:", err);
+                        } finally {
+                          setIsSavingWhatsapp(false);
+                        }
+                      }}
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-mono font-bold text-[10px] rounded-lg cursor-pointer transition-all flex items-center gap-1"
+                    >
+                      {isSavingWhatsapp ? (
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                      ) : whatsappSaveSuccess ? (
+                        "Salvo ✓"
+                      ) : (
+                        "Salvar"
+                      )}
+                    </button>
+                  </div>
+                  <p className="text-[9px] text-gray-500 leading-tight">
+                    O número principal de WhatsApp é sincronizado em todas as áreas do sistema (DRE, orçamentos rápidos, acompanhamento web e SAC do chatbot).
+                  </p>
                 </div>
 
                 {/* Engine Mode Toggle */}

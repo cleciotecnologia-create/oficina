@@ -195,6 +195,13 @@ export interface OSHistoryEntry {
   notes?: string;
 }
 
+export interface PrintLogEntry {
+  id: string;
+  documentType: string; // e.g. "Cupom Térmico (80mm)", "Relatório PDF (A4)", etc.
+  timestamp: string;
+  printedBy?: string;
+}
+
 export interface OrdemServico {
   id: string;
   empresaId: string;
@@ -226,6 +233,7 @@ export interface OrdemServico {
   reopenedAt?: string;
   reopenReason?: string;
   statusHistory?: OSHistoryEntry[];
+  printLog?: PrintLogEntry[];
   statusPagamento?: 'PENDENTE' | 'PAGO';
   financeiroId?: string;
   faturamentoMode?: 'Balcão' | 'A faturar';
