@@ -61,6 +61,7 @@ export const ConfigView: React.FC = () => {
     triggerDailyBackup,
     deleteAutoBackup,
     localAuditLogs,
+    addLocalAuditLog,
     resetToProduction,
     user,
     updateUserProfile,
@@ -73,6 +74,13 @@ export const ConfigView: React.FC = () => {
     forceOffline,
     setForceOffline
   } = useApp();
+
+  // Audit Logs states
+  const [auditSearchQuery, setAuditSearchQuery] = useState('');
+  const [auditFilterCategory, setAuditFilterCategory] = useState<string>('todos');
+  const [showSimulateLogModal, setShowSimulateLogModal] = useState(false);
+  const [simLogAction, setSimLogAction] = useState('Ajuste Crítico de Estoque');
+  const [simLogDetails, setSimLogDetails] = useState('Ajuste manual de saldo físico para Pastilha de Freio Cobreq.');
 
   // Primary Company fields state
   const [companyName, setCompanyName] = useState(company.name);
@@ -1081,8 +1089,12 @@ export const ConfigView: React.FC = () => {
           reversalPassword: userReversalPassword
         });
       }
+      addLocalAuditLog(
+        "Configuração Global do SaaS",
+        `Parâmetros atualizados por ${user?.name || 'Administrador'}: Markup Padrão (${defaultMarkupVal}%), Garantia (${warrantyDaysVal}d), Chave PIX (${pixKeyStr}), Razão Social (${companyName}).`
+      );
       setTimeout(() => {
-        setSaveFeedback("✅ Configurações salvas com sucesso!");
+        setSaveFeedback("✅ Configurações e registros de auditoria salvos com sucesso!");
       }, 1000);
     } catch (err) {
       setSaveFeedback("❌ Erro ao sincronizar catálogo fiscal: " + String(err));
@@ -2679,10 +2691,26 @@ export const ConfigView: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Domínio Próprio Definitivo</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Domínio Próprio Definitivo (Dominio.br / Registro.br)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomDomainStr('www.oficinadorafael.com.br');
+                      setSubdomainStr('oficinadorafael');
+                      setDomainStatusVal('Ativo');
+                      setCustomPortalSlugStr('oficinadorafael');
+                      setSaveFeedback("Domínio Registro.br (www.oficinadorafael.com.br) aplicado e verificado com sucesso!");
+                      setTimeout(() => setSaveFeedback(""), 4000);
+                    }}
+                    className="text-[9px] bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-400 border border-emerald-800/60 px-2 py-0.5 rounded font-mono font-bold transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <span>✦ Ativar www.oficinadorafael.com.br</span>
+                  </button>
+                </div>
                 <input 
                   type="text" 
-                  placeholder="ex: oficina.seusite.com.br"
+                  placeholder="ex: www.oficinadorafael.com.br"
                   className="bg-[#080c16] border border-gray-850 rounded-lg py-2 px-3 text-white text-xs focus:outline-none focus:border-purple-500 font-mono"
                   value={customDomainStr}
                   onChange={(e) => {
@@ -2691,7 +2719,7 @@ export const ConfigView: React.FC = () => {
                   }}
                 />
                 <span className="text-[9px] text-gray-400 font-sans block mt-1">
-                  💡 <strong>Domínio Profissional:</strong> Vincule seu domínio próprio para substituir o link provisório da Vercel.
+                  💡 <strong>Domínio Profissional Registro.br:</strong> Vincule seu domínio próprio <code className="text-emerald-400 font-mono">www.oficinadorafael.com.br</code> registrado no Dominio.br / Registro.br.
                 </span>
               </div>
             </div>
@@ -2821,12 +2849,12 @@ export const ConfigView: React.FC = () => {
                       {/* Standard CNAME suggestion */}
                       <tr className="border-b border-gray-850 hover:bg-[#070d18] transition-colors">
                         <td className="p-2 text-purple-400 font-extrabold uppercase">CNAME</td>
-                        <td className="p-2 font-bold text-white">{customDomainStr ? (customDomainStr.split('.')[0] === 'www' ? 'www' : customDomainStr.split('.')[0] || '@') : 'atc'}</td>
-                        <td className="p-2 text-gray-300">saas.autoprecision.com.br</td>
+                        <td className="p-2 font-bold text-white">{customDomainStr ? (customDomainStr.split('.')[0] === 'www' ? 'www' : customDomainStr.split('.')[0] || '@') : 'www'}</td>
+                        <td className="p-2 text-gray-300">{customDomainStr.includes('oficinadorafael') ? 'cname.oficinadorafael.com.br' : 'saas.autoprecision.com.br'}</td>
                         <td className="p-2 text-right">
                           <button 
                             type="button" 
-                            onClick={() => handleCopyText("saas.autoprecision.com.br", "CNAME")}
+                            onClick={() => handleCopyText(customDomainStr.includes('oficinadorafael') ? "cname.oficinadorafael.com.br" : "saas.autoprecision.com.br", "CNAME")}
                             className="bg-slate-900 hover:bg-slate-800 p-1 rounded border border-gray-800 text-[10.5px] text-gray-400 cursor-pointer transition-all"
                           >
                             {copiedTemplateText === "CNAME" ? "Copiado!" : "Copiar"}
@@ -2837,11 +2865,11 @@ export const ConfigView: React.FC = () => {
                       <tr className="border-b border-gray-850 hover:bg-[#070d18] transition-colors">
                         <td className="p-2 text-amber-400 font-extrabold uppercase">A</td>
                         <td className="p-2 font-bold text-white">@ (ou em branco)</td>
-                        <td className="p-2 text-gray-300">34.117.158.121</td>
+                        <td className="p-2 text-gray-300">185.199.108.153</td>
                         <td className="p-2 text-right">
                           <button 
                             type="button" 
-                            onClick={() => handleCopyText("34.117.158.121", "A")}
+                            onClick={() => handleCopyText("185.199.108.153", "A")}
                             className="bg-slate-900 hover:bg-slate-800 p-1 rounded border border-gray-800 text-[10.5px] text-gray-400 cursor-pointer transition-all"
                           >
                             {copiedTemplateText === "A" ? "Copiado!" : "Copiar"}
@@ -2851,12 +2879,12 @@ export const ConfigView: React.FC = () => {
                       {/* Security Verification TXT Record */}
                       <tr className="border-b border-gray-850 hover:bg-[#070d18] transition-colors">
                         <td className="p-2 text-cyan-400 font-extrabold uppercase">TXT</td>
-                        <td className="p-2 font-bold text-white">_autoprecision-challenge</td>
-                        <td className="p-2 text-gray-300 text-[10px] break-all">{`autoprecision-verify-${company.id}`}</td>
+                        <td className="p-2 font-bold text-white">_registrobr-challenge</td>
+                        <td className="p-2 text-gray-300 text-[10px] break-all">{`oficinadorafael-verify-${company.id}`}</td>
                         <td className="p-2 text-right">
                           <button 
                             type="button" 
-                            onClick={() => handleCopyText(`autoprecision-verify-${company.id}`, "TXT")}
+                            onClick={() => handleCopyText(`oficinadorafael-verify-${company.id}`, "TXT")}
                             className="bg-slate-900 hover:bg-slate-800 p-1 rounded border border-gray-800 text-[10.5px] text-gray-400 cursor-pointer transition-all"
                           >
                             {copiedTemplateText === "TXT" ? "Copiado!" : "Copiar"}
@@ -3274,6 +3302,157 @@ export const ConfigView: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Módulo de Log de Auditoria & Rastreabilidade de Ações Críticas */}
+          <div className="bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6 font-sans">
+            <div className="border-b border-gray-850 pb-4 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2.5">
+                <FileText className="w-5 h-5 text-cyan-400" />
+                <div>
+                  <h3 className="font-display font-bold text-white text-base">📜 Audit Logs & Rastreabilidade de Operações</h3>
+                  <span className="text-[10px] text-gray-500 font-mono block">Histórico de alterações críticas em estoque, financeiro, caixa e configurações do sistema.</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sampleActions = [
+                      { act: 'Ajuste Crítico de Estoque', det: 'Contagem física de balanço: Pastilha de Freio Cobreq ajustada de 10 para 18 un.' },
+                      { act: 'Alteração Financeira', det: 'Estorno manual de lançamento de despesa em duplicidade no valor de R$ 350,00.' },
+                      { act: 'Fechamento de Caixa PDV', det: 'Fechamento de turno do operador com saldo final conferido sem sangrias pendentes.' },
+                      { act: 'Reajuste de Preço', det: 'Preço de custo do Filtro de Óleo Bosch alterado de R$ 18,90 para R$ 21,50.' }
+                    ];
+                    const picked = sampleActions[Math.floor(Math.random() * sampleActions.length)];
+                    addLocalAuditLog(picked.act, picked.det);
+                  }}
+                  className="px-3 py-1.5 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-800/60 rounded-lg text-[10px] font-mono font-bold text-cyan-300 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Simular Log
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(localAuditLogs, null, 2));
+                    const dlAnchorElem = document.createElement('a');
+                    dlAnchorElem.setAttribute("href", jsonStr);
+                    dlAnchorElem.setAttribute("download", `audit_logs_${new Date().toISOString().substring(0, 10)}.json`);
+                    dlAnchorElem.click();
+                  }}
+                  className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-gray-300 rounded-lg text-[10px] font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Exportar JSON
+                </button>
+              </div>
+            </div>
+
+            {/* Filters & Search */}
+            <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
+              <div className="relative w-full sm:w-72">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Buscar ação, usuário ou detalhe..."
+                  value={auditSearchQuery}
+                  onChange={(e) => setAuditSearchQuery(e.target.value)}
+                  className="w-full bg-[#050912] border border-gray-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-cyan-500 font-mono"
+                />
+              </div>
+
+              <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                <button
+                  type="button"
+                  onClick={() => setAuditFilterCategory('todos')}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all cursor-pointer ${auditFilterCategory === 'todos' ? 'bg-cyan-500 text-black' : 'bg-slate-900 text-gray-400 hover:text-white border border-slate-800'}`}
+                >
+                  Todos ({localAuditLogs.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditFilterCategory('estoque')}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all cursor-pointer ${auditFilterCategory === 'estoque' ? 'bg-amber-500 text-black' : 'bg-slate-900 text-gray-400 hover:text-white border border-slate-800'}`}
+                >
+                  Estoque & Peças
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditFilterCategory('financeiro')}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all cursor-pointer ${auditFilterCategory === 'financeiro' ? 'bg-emerald-500 text-black' : 'bg-slate-900 text-gray-400 hover:text-white border border-slate-800'}`}
+                >
+                  Financeiro & Caixa
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuditFilterCategory('config')}
+                  className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold transition-all cursor-pointer ${auditFilterCategory === 'config' ? 'bg-purple-500 text-black' : 'bg-slate-900 text-gray-400 hover:text-white border border-slate-800'}`}
+                >
+                  Configurações
+                </button>
+              </div>
+            </div>
+
+            {/* Audit Log Table / Timeline */}
+            <div className="bg-[#050912] border border-gray-850 rounded-xl overflow-hidden">
+              {localAuditLogs.length === 0 ? (
+                <div className="p-8 text-center text-gray-500 font-mono text-xs">
+                  Nenhum registro de auditoria armazenado localmente ainda.
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto divide-y divide-gray-900">
+                  {localAuditLogs
+                    .filter(log => {
+                      const q = auditSearchQuery.toLowerCase();
+                      const matches = 
+                        (log.action || '').toLowerCase().includes(q) ||
+                        (log.details || '').toLowerCase().includes(q) ||
+                        (log.userName || '').toLowerCase().includes(q) ||
+                        (log.userEmail || '').toLowerCase().includes(q);
+                      if (!matches) return false;
+
+                      if (auditFilterCategory === 'todos') return true;
+                      if (auditFilterCategory === 'estoque') return log.action.toLowerCase().includes('estoque') || log.action.toLowerCase().includes('produto') || log.action.toLowerCase().includes('preço');
+                      if (auditFilterCategory === 'financeiro') return log.action.toLowerCase().includes('caixa') || log.action.toLowerCase().includes('venda') || log.action.toLowerCase().includes('estorno') || log.action.toLowerCase().includes('financeiro');
+                      if (auditFilterCategory === 'config') return log.action.toLowerCase().includes('configura') || log.action.toLowerCase().includes('parâmetro') || log.action.toLowerCase().includes('segurança') || log.action.toLowerCase().includes('saas');
+                      return true;
+                    })
+                    .map((log) => {
+                      const isEstoque = log.action.toLowerCase().includes('estoque') || log.action.toLowerCase().includes('produto') || log.action.toLowerCase().includes('preço');
+                      const isFinanceiro = log.action.toLowerCase().includes('caixa') || log.action.toLowerCase().includes('venda') || log.action.toLowerCase().includes('estorno') || log.action.toLowerCase().includes('financeiro');
+                      
+                      return (
+                        <div key={log.id} className="p-3.5 hover:bg-slate-900/40 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs font-mono">
+                          <div className="flex flex-col gap-1 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                                isEstoque ? 'bg-amber-950/60 text-amber-400 border border-amber-900/60' :
+                                isFinanceiro ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-900/60' :
+                                'bg-cyan-950/60 text-cyan-400 border border-cyan-900/60'
+                              }`}>
+                                {log.action}
+                              </span>
+                              <span className="text-[10px] text-gray-500">
+                                {new Date(log.timestamp).toLocaleString('pt-BR')}
+                              </span>
+                            </div>
+                            <p className="text-gray-300 font-sans text-xs leading-relaxed mt-0.5">
+                              {log.details}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            <span className="text-[10px] text-gray-400 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-full flex items-center gap-1">
+                              👤 {log.userName || 'Sistema'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </div>
 

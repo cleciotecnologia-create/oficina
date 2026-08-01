@@ -237,7 +237,7 @@ export const SuperAdminView: React.FC = () => {
               status: 'Ativo',
               databaseSize: 620,
               monthlyValue: 499,
-              customDomain: "oficinadorafael.autoprecision.com.br",
+              customDomain: "www.oficinadorafael.com.br",
               subdomain: "oficinadorafael",
               domainStatus: "Ativo"
             }
@@ -543,7 +543,7 @@ export const SuperAdminView: React.FC = () => {
         status: 'Ativo',
         databaseSize: 620,
         monthlyValue: 499,
-        customDomain: "oficinadorafael.autoprecision.com.br",
+        customDomain: "www.oficinadorafael.com.br",
         subdomain: "oficinadorafael",
         domainStatus: "Ativo"
       }

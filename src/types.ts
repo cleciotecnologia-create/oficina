@@ -59,6 +59,7 @@ export interface Company {
   smtpUser?: string;
   smtpPass?: string;
   smtpSecure?: boolean;
+  totalElevators?: number;
 }
 
 export interface FiscalSeries {
@@ -239,6 +240,7 @@ export interface OrdemServico {
   faturamentoMode?: 'Balcão' | 'A faturar';
   scheduledDate?: string; // YYYY-MM-DD
   scheduledTime?: string; // HH:MM
+  elevadorBox?: string;   // e.g. "Elevador 1", "Elevador 2", "Box Quick Service"
   priority?: boolean;
 }
 

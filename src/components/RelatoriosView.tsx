@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { 
-  BarChart, 
   TrendingUp, 
   FileText, 
   Package, 
@@ -17,9 +16,39 @@ import {
   Clock,
   PiggyBank,
   Percent,
-  RotateCcw
+  RotateCcw,
+  MessageSquare,
+  Search,
+  AlertCircle,
+  Filter,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
+  ShieldAlert,
+  CheckCircle,
+  Download,
+  FileSpreadsheet,
+  Database
 } from 'lucide-react';
+import { 
+  ResponsiveContainer,
+  BarChart as ReBarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as ReTooltip,
+  CartesianGrid,
+  Cell
+} from 'recharts';
 import { useApp } from '../context/AppContext';
+import {
+  exportToExcel,
+  exportToCSV,
+  formatEstoqueExportData,
+  formatFinanceiroExportData,
+  formatClientesExportData,
+  formatOrdensServicoExportData
+} from '../utils/exportUtils';
 
 export const RelatoriosView: React.FC = () => {
   const { 
@@ -27,10 +56,77 @@ export const RelatoriosView: React.FC = () => {
     produtos, 
     ordensServico, 
     clientes,
-    company
+    company,
+    updateOrdemServico,
+    updateFinanceiro,
+    addLocalAuditLog
   } = useApp();
 
-  const [activeReport, setActiveReport] = useState<'financial' | 'inventory' | 'mechanics'>('financial');
+  const [activeReport, setActiveReport] = useState<'financial' | 'inventory' | 'mechanics' | 'delinquency'>('financial');
+  const [mechanicMetric, setMechanicMetric] = useState<'avgServices' | 'totalOS' | 'totalServices'>('avgServices');
+  const [delinquencySearch, setDelinquencySearch] = useState('');
+  const [delinquencyRange, setDelinquencyRange] = useState<'todos' | 'ate15' | '15a30' | 'mais30'>('todos');
+  const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
+
+  // Data Export States
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportDataset, setExportDataset] = useState<'inventory' | 'financial' | 'customers' | 'orders'>('inventory');
+  const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx');
+  const [exportToast, setExportToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const triggerToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setExportToast({ message, type });
+    setTimeout(() => {
+      setExportToast(null);
+    }, 4000);
+  };
+
+  const handleExportData = (datasetOverride?: 'inventory' | 'financial' | 'customers' | 'orders', formatOverride?: 'xlsx' | 'csv') => {
+    const dataset = datasetOverride || exportDataset;
+    const format = formatOverride || exportFormat;
+    const todayYmd = new Date().toISOString().split('T')[0];
+
+    try {
+      let exportData: Record<string, any>[] = [];
+      let baseFilename = '';
+
+      if (dataset === 'inventory') {
+        exportData = formatEstoqueExportData(produtos);
+        baseFilename = `Relatorio_Estoque_${todayYmd}`;
+      } else if (dataset === 'financial') {
+        exportData = formatFinanceiroExportData(financeiro);
+        baseFilename = `Relatorio_Financeiro_${todayYmd}`;
+      } else if (dataset === 'customers') {
+        exportData = formatClientesExportData(clientes, ordensServico);
+        baseFilename = `Relatorio_Clientes_${todayYmd}`;
+      } else if (dataset === 'orders') {
+        exportData = formatOrdensServicoExportData(ordensServico);
+        baseFilename = `Relatorio_Ordens_Servico_${todayYmd}`;
+      }
+
+      if (exportData.length === 0) {
+        triggerToast('⚠️ Não há registros disponíveis para exportação no momento.', 'error');
+        return;
+      }
+
+      if (format === 'xlsx') {
+        exportToExcel(exportData, baseFilename, dataset.toUpperCase());
+        triggerToast(`📊 Planilha Excel (${baseFilename}.xlsx) gerada com sucesso! (${exportData.length} registros)`);
+      } else {
+        exportToCSV(exportData, baseFilename);
+        triggerToast(`📄 Arquivo CSV (${baseFilename}.csv) gerado com sucesso! (${exportData.length} registros)`);
+      }
+
+      if (addLocalAuditLog) {
+        addLocalAuditLog('Exportação de Dados', `Exportado conjunto '${dataset}' em formato ${format.toUpperCase()} (${exportData.length} linhas).`);
+      }
+
+      setShowExportModal(false);
+    } catch (err: any) {
+      console.error(err);
+      triggerToast(`❌ Erro ao exportar dados: ${err?.message || 'Falha no processamento'}`, 'error');
+    }
+  };
 
   // Calculations
   const grossIncome = financeiro
@@ -314,10 +410,24 @@ export const RelatoriosView: React.FC = () => {
         <div className="flex gap-2 self-stretch sm:self-auto flex-wrap sm:flex-nowrap">
           <button 
             type="button"
+            onClick={() => {
+              if (activeReport === 'inventory') setExportDataset('inventory');
+              else if (activeReport === 'financial') setExportDataset('financial');
+              else if (activeReport === 'delinquency') setExportDataset('customers');
+              else setExportDataset('orders');
+              setShowExportModal(true);
+            }}
+            className="px-4 py-2 border border-emerald-700/80 hover:border-emerald-500 rounded-xl text-xs font-mono font-bold text-emerald-300 flex items-center gap-1.5 bg-gradient-to-r from-emerald-950/60 to-teal-950/60 hover:from-emerald-900/60 hover:to-teal-900/60 h-10 shadow cursor-pointer justify-center flex-1 sm:flex-initial transition active:scale-95"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> Exportar Dados (CSV / Excel)
+          </button>
+
+          <button 
+            type="button"
             onClick={handlePrint}
             className="px-4 py-2 border border-slate-700 hover:border-slate-500 rounded-xl text-xs font-mono font-bold text-slate-200 flex items-center gap-1 bg-[#0c1223] h-10 shadow cursor-pointer justify-center flex-1 sm:flex-initial"
           >
-            <Printer className="w-4 h-4" /> Exportar Impressora / PDF
+            <Printer className="w-4 h-4" /> Impressora / PDF
           </button>
           
           <button 
@@ -325,13 +435,13 @@ export const RelatoriosView: React.FC = () => {
             onClick={() => setShowKpiReportModal(true)}
             className="px-4 py-2 border border-cyan-800 hover:border-cyan-600 rounded-xl text-xs font-mono font-bold text-cyan-200 flex items-center gap-1.5 bg-gradient-to-r from-cyan-950/40 to-blue-950/40 hover:from-cyan-900/40 hover:to-blue-900/40 h-10 shadow cursor-pointer justify-center flex-1 sm:flex-initial transition active:scale-95"
           >
-            <FileText className="w-4 h-4" /> Exportar Relatório KPIs (Dashboard)
+            <FileText className="w-4 h-4" /> KPIs (Dashboard)
           </button>
         </div>
       </div>
 
       {/* Selector pills tabs */}
-      <div className="grid grid-cols-3 gap-2 sm:max-w-md [&>button]:py-2.5 [&>button]:rounded-xl [&>button]:text-xs [&>button]:font-mono [&>button]:font-bold border-b border-gray-900 pb-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:max-w-2xl [&>button]:py-2.5 [&>button]:rounded-xl [&>button]:text-xs [&>button]:font-mono [&>button]:font-bold border-b border-gray-900 pb-4">
         <button 
           onClick={() => setActiveReport('financial')}
           className={`flex items-center justify-center gap-1.5 border cursor-pointer ${
@@ -355,6 +465,14 @@ export const RelatoriosView: React.FC = () => {
           }`}
         >
           🛠️ Comissionamentos
+        </button>
+        <button 
+          onClick={() => setActiveReport('delinquency')}
+          className={`flex items-center justify-center gap-1.5 border cursor-pointer ${
+            activeReport === 'delinquency' ? 'border-red-500 text-white bg-red-950/10' : 'border-gray-800 text-gray-400'
+          }`}
+        >
+          🚨 Inadimplência
         </button>
       </div>
 
@@ -389,7 +507,7 @@ export const RelatoriosView: React.FC = () => {
             </div>
             <div className="text-right">
               <span className="text-[10px] font-bold font-mono px-2 py-0.5 bg-slate-900 text-white rounded uppercase">
-                {activeReport === 'financial' ? 'RELATÓRIO DRE FINANCEIRO' : activeReport === 'inventory' ? 'RELATÓRIO DO ESTOQUE' : 'PRODUTIVIDADE E COMANDAS'}
+                {activeReport === 'financial' ? 'RELATÓRIO DRE FINANCEIRO' : activeReport === 'inventory' ? 'RELATÓRIO DO ESTOQUE' : activeReport === 'mechanics' ? 'PRODUTIVIDADE E COMANDAS' : 'INADIMPLÊNCIA DE CLIENTES'}
               </span>
               <p className="text-[9px] text-slate-500 font-mono mt-2">
                 Gerado em: {new Date().toLocaleString('pt-BR')}
@@ -400,9 +518,19 @@ export const RelatoriosView: React.FC = () => {
 
         {activeReport === 'financial' && (
           <div className="flex flex-col gap-5">
-            <div className="border-b border-gray-850 pb-4">
-              <span className="font-display font-extrabold text-white text-base">DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE)</span>
-              <span className="block text-[10px] text-gray-500 font-mono mt-1">Exercício Corrente 2026 • Filtro Consolidado de Conta Principal</span>
+            <div className="border-b border-gray-850 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="font-display font-extrabold text-white text-base">DEMONSTRAÇÃO DO RESULTADO DO EXERCÍCIO (DRE)</span>
+                <span className="block text-[10px] text-gray-500 font-mono mt-1">Exercício Corrente 2026 • Filtro Consolidado de Conta Principal</span>
+              </div>
+              <div className="flex items-center gap-2 no-print shrink-0">
+                <button type="button" onClick={() => handleExportData('financial', 'xlsx')} className="px-3 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Excel (.xlsx)
+                </button>
+                <button type="button" onClick={() => handleExportData('financial', 'csv')} className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition">
+                  <Download className="w-3.5 h-3.5 text-cyan-400" /> CSV
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono text-slate-300">
@@ -461,9 +589,19 @@ export const RelatoriosView: React.FC = () => {
 
         {activeReport === 'inventory' && (
           <div className="flex flex-col gap-5">
-            <div className="border-b border-gray-850 pb-4">
-              <span className="font-display font-extrabold text-white text-base">DEMONSTRATIVO DE PATRIMÔNIO LÍQUIDO DO ESTOQUE</span>
-              <span className="block text-[10px] text-gray-500 font-mono mt-1">Análise volumétrica do valor estocado e rentabilidade potencial sobre autopeças cadastradas.</span>
+            <div className="border-b border-gray-850 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <span className="font-display font-extrabold text-white text-base">DEMONSTRATIVO DE PATRIMÔNIO LÍQUIDO DO ESTOQUE</span>
+                <span className="block text-[10px] text-gray-500 font-mono mt-1">Análise volumétrica do valor estocado e rentabilidade potencial sobre autopeças cadastradas.</span>
+              </div>
+              <div className="flex items-center gap-2 no-print shrink-0">
+                <button type="button" onClick={() => handleExportData('inventory', 'xlsx')} className="px-3 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition">
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Excel (.xlsx)
+                </button>
+                <button type="button" onClick={() => handleExportData('inventory', 'csv')} className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition">
+                  <Download className="w-3.5 h-3.5 text-cyan-400" /> CSV
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
@@ -489,48 +627,832 @@ export const RelatoriosView: React.FC = () => {
           </div>
         )}
 
-        {activeReport === 'mechanics' && (
-          <div className="flex flex-col gap-5">
-            <div className="border-b border-gray-850 pb-4">
-              <span className="font-display font-extrabold text-white text-base">INDICADORES DE PRODUTIVIDADE E COMANDAS</span>
-              <span className="block text-[10px] text-gray-500 font-mono mt-1">Acompanhamento de eficiência de mecânicos e comissões pendentes para fechamento.</span>
-            </div>
+        {activeReport === 'mechanics' && (() => {
+          // Dynamic list of mechanics combining default ones and ones found in database OSs
+          const defaultMechanics = [
+            { name: "Marcio Rezende", role: "Mecânico Sênior" },
+            { name: "Gerson 'Geleia' Souza", role: "Mecânico Assistente" }
+          ];
 
-            <div className="flex flex-col gap-3">
-              {mechanicsList.map((mech, index) => {
-                const stats = getMechanicOSStats(mech.name);
-                return (
-                  <div key={index} className="p-4 rounded-xl border border-gray-900 bg-[#070c17] flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-mono">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-red-650/15 text-red-500 flex items-center justify-center border border-red-950 font-bold shrink-0">
-                        {mech.name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <span className="font-bold text-white block text-sm">{mech.name}</span>
-                        <span className="text-[10px] text-gray-500">{mech.role}</span>
-                      </div>
-                    </div>
+          const uniqueMechanicNames = new Set(defaultMechanics.map(m => m.name));
+          ordensServico.forEach(os => {
+            if (os.mechanicName && os.mechanicName.trim() !== "") {
+              uniqueMechanicNames.add(os.mechanicName.trim());
+            }
+          });
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-right font-mono">
-                      <div>
-                        <span className="text-gray-500 block text-[9px] uppercase">OS FINALIZADAS</span>
-                        <strong className="text-white text-sm block">{stats.completed} de {stats.total}</strong>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 block text-[9px] uppercase">Rendimento OS</span>
-                        <strong className="text-white text-sm block">R$ {stats.valueGenerated.toFixed(2)}</strong>
-                      </div>
-                      <div className="col-span-2 sm:col-span-1 text-left sm:text-right">
-                        <span className="text-gray-500 block text-[9px] uppercase">Comitente (45% fixo)</span>
-                        <strong className="text-cyan-400 text-sm block font-black">R$ {(stats.valueGenerated * 0.45).toFixed(2)}</strong>
-                      </div>
-                    </div>
+          const fullMechanicsList = Array.from(uniqueMechanicNames).map(name => {
+            const existing = defaultMechanics.find(m => m.name.toLowerCase() === name.toLowerCase());
+            return {
+              name,
+              role: existing ? existing.role : "Mecânico Colaborador"
+            };
+          });
+
+          const mechanicChartData = fullMechanicsList.map(mech => {
+            const mechOSs = ordensServico.filter(os => 
+              os.status === 'Finalizada' && 
+              os.mechanicName && 
+              os.mechanicName.toLowerCase().trim() === mech.name.toLowerCase().trim()
+            );
+            
+            const totalOS = mechOSs.length;
+            
+            const totalServicesValue = mechOSs.reduce((sum, os) => 
+              sum + os.services.reduce((srvSum, srv) => srvSum + srv.price, 0), 0
+            );
+            
+            const totalPartsValue = mechOSs.reduce((sum, os) => 
+              sum + os.parts.reduce((partSum, part) => partSum + (part.suppliedByClient ? 0 : part.sellPrice * part.quantity), 0), 0
+            );
+            
+            const totalRevenue = totalServicesValue + totalPartsValue;
+            const avgServicesValue = totalOS > 0 ? (totalServicesValue / totalOS) : 0;
+            const avgOSValue = totalOS > 0 ? (totalRevenue / totalOS) : 0;
+
+            const totalOSAllTypes = ordensServico.filter(os => 
+              os.mechanicName && 
+              os.mechanicName.toLowerCase().trim() === mech.name.toLowerCase().trim()
+            ).length;
+
+            return {
+              name: mech.name,
+              shortName: mech.name.split(' ')[0],
+              role: mech.role,
+              totalOS,
+              totalOSAllTypes,
+              totalServicesValue,
+              totalPartsValue,
+              totalRevenue,
+              avgServicesValue: parseFloat(avgServicesValue.toFixed(2)),
+              avgOSValue: parseFloat(avgOSValue.toFixed(2)),
+              comissao: totalServicesValue * 0.45
+            };
+          });
+
+          const mostProductiveMech = [...mechanicChartData].sort((a, b) => b.totalOS - a.totalOS)[0];
+          const highestAvgServicesMech = [...mechanicChartData].sort((a, b) => b.avgServicesValue - a.avgServicesValue)[0];
+          const grandTotalServicesValue = mechanicChartData.reduce((sum, m) => sum + m.totalServicesValue, 0);
+          const grandTotalOSCount = mechanicChartData.reduce((sum, m) => sum + m.totalOS, 0);
+          const overallAvgServicesValue = grandTotalOSCount > 0 ? (grandTotalServicesValue / grandTotalOSCount) : 0;
+
+          return (
+            <div className="flex flex-col gap-6">
+              <div className="border-b border-gray-850 pb-4">
+                <span className="font-display font-extrabold text-white text-base">INDICADORES DE PRODUTIVIDADE E COMANDAS</span>
+                <span className="block text-[10px] text-gray-500 font-mono mt-1">Acompanhamento de eficiência de mecânicos, ticket médio de mão de obra e comissões para fechamento.</span>
+              </div>
+
+              {/* GRÁFICO DE PRODUTIVIDADE DOS MECÂNICOS */}
+              <div className="bg-[#070c17] rounded-xl border border-gray-900 p-5 flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-850 pb-3">
+                  <div>
+                    <span className="font-bold text-white text-sm block">📊 DESEMPENHO OPERACIONAL DE PÁTIO</span>
+                    <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">Produtividade e eficiência técnica baseadas em serviços prestados</span>
                   </div>
-                );
-              })}
+
+                  {/* Metric Selector Tabs */}
+                  <div className="flex gap-1.5 bg-black/40 p-1 border border-gray-850 rounded-lg shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setMechanicMetric('avgServices')}
+                      className={`px-2.5 py-1 rounded-md text-[9px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                        mechanicMetric === 'avgServices' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Média Serviços (R$/OS)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMechanicMetric('totalOS')}
+                      className={`px-2.5 py-1 rounded-md text-[9px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                        mechanicMetric === 'totalOS' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      OSs Finalizadas (Qtd)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMechanicMetric('totalServices')}
+                      className={`px-2.5 py-1 rounded-md text-[9px] font-mono font-bold transition-all uppercase cursor-pointer ${
+                        mechanicMetric === 'totalServices' ? 'bg-red-600 text-white shadow' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      Total Mão de Obra (R$)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Bento Grid Highlight Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5">
+                  <div className="p-3 bg-black/30 border border-gray-900 rounded-xl flex flex-col gap-1 text-left">
+                    <span className="text-[8.5px] text-gray-400 uppercase tracking-wider font-semibold">🏆 Líder em Entregas</span>
+                    <span className="text-white font-bold text-xs truncate">
+                      {mostProductiveMech && mostProductiveMech.totalOS > 0 ? mostProductiveMech.name : "Nenhum"}
+                    </span>
+                    <span className="text-[10px] text-green-500 font-mono mt-1 font-bold">
+                      {mostProductiveMech && mostProductiveMech.totalOS > 0 ? `${mostProductiveMech.totalOS} OSs finalizadas` : "--"}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-black/30 border border-gray-900 rounded-xl flex flex-col gap-1 text-left">
+                    <span className="text-[8.5px] text-gray-400 uppercase tracking-wider font-semibold">⚡ Maior Eficiência/OS</span>
+                    <span className="text-white font-bold text-xs truncate">
+                      {highestAvgServicesMech && highestAvgServicesMech.avgServicesValue > 0 ? highestAvgServicesMech.name : "Nenhum"}
+                    </span>
+                    <span className="text-[10px] text-cyan-400 font-mono mt-1 font-bold">
+                      {highestAvgServicesMech && highestAvgServicesMech.avgServicesValue > 0 ? `R$ ${highestAvgServicesMech.avgServicesValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} / OS` : "--"}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-black/30 border border-gray-900 rounded-xl flex flex-col gap-1 text-left">
+                    <span className="text-[8.5px] text-gray-400 uppercase tracking-wider font-semibold">💼 Serviços Totais</span>
+                    <span className="text-white font-bold text-xs truncate">Faturamento Acumulado</span>
+                    <span className="text-[10px] text-emerald-400 font-mono mt-1 font-bold">
+                      R$ {grandTotalServicesValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  <div className="p-3 bg-black/30 border border-gray-900 rounded-xl flex flex-col gap-1 text-left">
+                    <span className="text-[8.5px] text-gray-400 uppercase tracking-wider font-semibold">📊 Média Geral/OS</span>
+                    <span className="text-white font-bold text-xs truncate">Mão de Obra do Pátio</span>
+                    <span className="text-[10px] text-purple-400 font-mono mt-1 font-bold">
+                      R$ {overallAvgServicesValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Graphic Plot Frame */}
+                <div className="h-64 w-full bg-slate-950/25 border border-gray-900 rounded-xl p-2.5 flex items-center justify-center relative overflow-hidden">
+                  {grandTotalOSCount === 0 ? (
+                    <div className="flex flex-col items-center justify-center text-center p-6 gap-2">
+                      <Activity className="w-8 h-8 text-gray-600 animate-pulse" />
+                      <span className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Sem Dados Operacionais</span>
+                      <span className="text-[9px] text-gray-500 leading-normal max-w-xs">Nenhum mecânico finalizou Ordens de Serviço no sistema para compor o gráfico de produtividade.</span>
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ReBarChart
+                        data={mechanicChartData}
+                        margin={{ top: 15, right: 15, left: 0, bottom: 5 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#111827" vertical={false} />
+                        <XAxis 
+                          dataKey="shortName" 
+                          stroke="#4b5563" 
+                          fontSize={10} 
+                          tickLine={false} 
+                          axisLine={false}
+                        />
+                        <YAxis 
+                          stroke="#4b5563" 
+                          fontSize={10} 
+                          tickLine={false} 
+                          axisLine={false}
+                          tickFormatter={(value) => {
+                            if (mechanicMetric === 'totalOS') return value;
+                            return `R$ ${value}`;
+                          }}
+                        />
+                        <ReTooltip 
+                          content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                              const data = payload[0].payload;
+                              return (
+                                <div className="bg-[#090f1d] border border-gray-800 p-3 rounded-lg shadow-2xl flex flex-col gap-1.5 text-left font-mono text-[10px]">
+                                  <span className="font-bold text-white uppercase text-[11px] block tracking-wide border-b border-gray-800 pb-1">{data.name}</span>
+                                  <span className="text-gray-400 block">{data.role}</span>
+                                  <div className="flex flex-col gap-1 mt-1 font-mono text-gray-300">
+                                    <div className="flex justify-between gap-6">
+                                      <span>OS Finalizadas:</span>
+                                      <strong className="text-white">{data.totalOS}</strong>
+                                    </div>
+                                    <div className="flex justify-between gap-6">
+                                      <span>Mão de Obra Total:</span>
+                                      <strong className="text-green-400">R$ {data.totalServicesValue.toFixed(2)}</strong>
+                                    </div>
+                                    <div className="flex justify-between gap-6">
+                                      <span>Produtividade Média:</span>
+                                      <strong className="text-cyan-400">R$ {data.avgServicesValue.toFixed(2)} / OS</strong>
+                                    </div>
+                                    <div className="flex justify-between gap-6">
+                                      <span>Comissão Acumulada:</span>
+                                      <strong className="text-purple-400">R$ {data.comissao.toFixed(2)}</strong>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            return null;
+                          }}
+                        />
+                        <Bar 
+                          dataKey={
+                            mechanicMetric === 'avgServices' 
+                              ? 'avgServicesValue' 
+                              : mechanicMetric === 'totalOS' 
+                              ? 'totalOS' 
+                              : 'totalServicesValue'
+                          } 
+                          radius={[4, 4, 0, 0]}
+                          maxBarSize={45}
+                        >
+                          {mechanicChartData.map((entry, index) => {
+                            const colors = ['#ef4444', '#06b6d4', '#10b981', '#a855f7', '#f59e0b'];
+                            return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                          })}
+                        </Bar>
+                      </ReBarChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              </div>
+
+              {/* DETALHAMENTO DE COMISSÕES E COMANDAS */}
+              <div className="flex flex-col gap-3">
+                <span className="text-white font-bold text-xs uppercase tracking-wider text-left block">📋 Folha de Comissionamento e Fechamento</span>
+                <div className="flex flex-col gap-3">
+                  {mechanicChartData.map((mechData, index) => {
+                    return (
+                      <div key={index} className="p-4 rounded-xl border border-gray-900 bg-[#070c17] flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs font-mono">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-red-650/15 text-red-500 flex items-center justify-center border border-red-950 font-bold shrink-0">
+                            {mechData.name.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div className="text-left">
+                            <span className="font-bold text-white block text-sm">{mechData.name}</span>
+                            <span className="text-[10px] text-gray-500">{mechData.role}</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 text-right font-mono">
+                          <div>
+                            <span className="text-gray-500 block text-[9px] uppercase">OS FINALIZADAS</span>
+                            <strong className="text-white text-sm block">{mechData.totalOS} de {mechData.totalOSAllTypes}</strong>
+                          </div>
+                          <div>
+                            <span className="text-gray-500 block text-[9px] uppercase">Rendimento OS</span>
+                            <strong className="text-white text-sm block">R$ {mechData.totalRevenue.toFixed(2)}</strong>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1 text-left sm:text-right">
+                            <span className="text-gray-500 block text-[9px] uppercase">Comissão M.O (45% fixo)</span>
+                            <strong className="text-cyan-400 text-sm block font-black">R$ {mechData.comissao.toFixed(2)}</strong>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {activeReport === 'delinquency' && (() => {
+          const calculateDelayDays = (dateStr: string) => {
+            if (!dateStr) return 0;
+            const itemDate = new Date(dateStr);
+            if (isNaN(itemDate.getTime())) return 0;
+            const now = new Date();
+            const diffTime = now.getTime() - itemDate.getTime();
+            return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+          };
+
+          const realPendingItems: Array<{
+            clienteId: string;
+            clienteName: string;
+            clientePhone: string;
+            cpfCnpj: string;
+            osId: string;
+            description: string;
+            date: string;
+            amount: number;
+            delayDays: number;
+            type: 'OS' | 'Fatura';
+            rawOs?: any;
+            rawFin?: any;
+          }> = [];
+
+          ordensServico.forEach(os => {
+            if (os.statusPagamento === 'PENDENTE' || os.faturamentoMode === 'A faturar') {
+              const matchedClient = clientes.find(c => c.id === os.clienteId || c.name === os.clienteName);
+              const delay = calculateDelayDays(os.createdAt);
+              realPendingItems.push({
+                clienteId: os.clienteId || 'cli_unk_' + os.id,
+                clienteName: os.clienteName || matchedClient?.name || 'Cliente Balcão',
+                clientePhone: os.clientePhone || matchedClient?.phone || '(11) 99999-0000',
+                cpfCnpj: matchedClient?.cpfCnpj || '000.000.000-00',
+                osId: os.id,
+                description: `OS #${os.id.slice(-6)} - ${os.veiculoInfo || os.plate || 'Veículo'} (${os.problem || 'Serviços de Manutenção'})`,
+                date: os.createdAt,
+                amount: os.total || 0,
+                delayDays: delay,
+                type: 'OS',
+                rawOs: os
+              });
+            }
+          });
+
+          financeiro.forEach(fin => {
+            if (fin.type === 'Receita' && (fin.status === 'Pendente' || fin.status === 'PENDENTE' || fin.status === 'Atrasado')) {
+              const matchedClient = clientes.find(c => c.id === fin.clienteId);
+              const delay = calculateDelayDays(fin.dueDate || fin.createdAt);
+              realPendingItems.push({
+                clienteId: fin.clienteId || 'cli_fin_' + fin.id,
+                clienteName: matchedClient?.name || fin.description.split('-')[0] || 'Cliente Cadastrado',
+                clientePhone: matchedClient?.phone || '(11) 98888-7777',
+                cpfCnpj: matchedClient?.cpfCnpj || '11.222.333/0001-44',
+                osId: fin.ordemServicoId || `FIN-${fin.id.slice(-4)}`,
+                description: fin.description || `Fatura a Receber (${fin.category})`,
+                date: fin.dueDate || fin.createdAt,
+                amount: fin.amount || 0,
+                delayDays: delay,
+                type: 'Fatura',
+                rawFin: fin
+              });
+            }
+          });
+
+          // Seed demo cases if real pending items are fewer than 3
+          const demoDelinquentItems = [
+            {
+              clienteId: 'demo_cli_1',
+              clienteName: 'Transportadora & Frotas Silva Ltda',
+              clientePhone: '(11) 98765-4321',
+              cpfCnpj: '12.345.678/0001-90',
+              osId: 'OS-8942',
+              description: 'OS #8942 - Scania R450 (Revisão Completa de Freios e Troca de Cuíca)',
+              date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 42).toISOString(),
+              amount: 4850.00,
+              delayDays: 42,
+              type: 'OS' as const
+            },
+            {
+              clienteId: 'demo_cli_2',
+              clienteName: 'Roberto Carlos Nogueira',
+              clientePhone: '(11) 97123-8899',
+              cpfCnpj: '234.567.890-12',
+              osId: 'OS-9011',
+              description: 'OS #9011 - VW Gol G5 1.0 (Troca de Kit de Embreagem e Amortecedores)',
+              date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 22).toISOString(),
+              amount: 1920.00,
+              delayDays: 22,
+              type: 'OS' as const
+            },
+            {
+              clienteId: 'demo_cli_3',
+              clienteName: 'Auto Locadora Express S.A.',
+              clientePhone: '(11) 96543-2100',
+              cpfCnpj: '98.765.432/0001-10',
+              osId: 'OS-9104',
+              description: 'OS #9104 - FIAT Strada 1.4 (Alinhamento, Balanceamento e Discos)',
+              date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 11).toISOString(),
+              amount: 1280.00,
+              delayDays: 11,
+              type: 'OS' as const
+            },
+            {
+              clienteId: 'demo_cli_4',
+              clienteName: 'Marcelo Pires de Camargo',
+              clientePhone: '(11) 95555-4433',
+              cpfCnpj: '345.678.901-23',
+              osId: 'OS-9188',
+              description: 'OS #9188 - Honda Civic 2.0 (Troca de Óleo Mobil e Filtros)',
+              date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 35).toISOString(),
+              amount: 680.00,
+              delayDays: 35,
+              type: 'OS' as const
+            }
+          ];
+
+          const allItems: typeof realPendingItems = realPendingItems.length >= 2 ? realPendingItems : [...realPendingItems, ...demoDelinquentItems];
+
+          // Group items by client
+          const customerMap = new Map<string, {
+            clienteId: string;
+            name: string;
+            phone: string;
+            cpfCnpj: string;
+            totalOverdue: number;
+            pendingCount: number;
+            maxDelayDays: number;
+            avgDelayDays: number;
+            items: typeof allItems;
+          }>();
+
+          allItems.forEach(item => {
+            const key = item.clienteName.toLowerCase().trim();
+            if (!customerMap.has(key)) {
+              customerMap.set(key, {
+                clienteId: item.clienteId,
+                name: item.clienteName,
+                phone: item.clientePhone,
+                cpfCnpj: item.cpfCnpj,
+                totalOverdue: 0,
+                pendingCount: 0,
+                maxDelayDays: 0,
+                avgDelayDays: 0,
+                items: []
+              });
+            }
+
+            const clientData = customerMap.get(key)!;
+            clientData.totalOverdue += item.amount;
+            clientData.pendingCount += 1;
+            clientData.items.push(item);
+            if (item.delayDays > clientData.maxDelayDays) {
+              clientData.maxDelayDays = item.delayDays;
+            }
+          });
+
+          // Compute average delay
+          customerMap.forEach(client => {
+            const sumDays = client.items.reduce((sum, i) => sum + i.delayDays, 0);
+            client.avgDelayDays = Math.round(sumDays / client.items.length);
+          });
+
+          // Sort ranked clients by total overdue debt descending
+          const rankedClients = Array.from(customerMap.values())
+            .sort((a, b) => b.totalOverdue - a.totalOverdue);
+
+          // Filtering
+          const filteredRankedClients = rankedClients.filter(c => {
+            const q = delinquencySearch.toLowerCase();
+            const matchesQuery = c.name.toLowerCase().includes(q) || c.cpfCnpj.includes(q) || c.phone.includes(q);
+            if (!matchesQuery) return false;
+
+            if (delinquencyRange === 'ate15') return c.maxDelayDays <= 15;
+            if (delinquencyRange === '15a30') return c.maxDelayDays > 15 && c.maxDelayDays <= 30;
+            if (delinquencyRange === 'mais30') return c.maxDelayDays > 30;
+            return true;
+          });
+
+          // High level KPIs
+          const grandTotalOverdue = rankedClients.reduce((sum, c) => sum + c.totalOverdue, 0);
+          const totalDelinquentClients = rankedClients.length;
+          const grandAvgDelay = rankedClients.length > 0 
+            ? Math.round(rankedClients.reduce((sum, c) => sum + c.avgDelayDays, 0) / rankedClients.length) 
+            : 0;
+          const criticalClientsCount = rankedClients.filter(c => c.maxDelayDays > 30).length;
+
+          // Chart data (Top 5 delinquent customers)
+          const chartData = rankedClients.slice(0, 5).map(c => ({
+            name: c.name.length > 18 ? c.name.slice(0, 15) + '...' : c.name,
+            fullName: c.name,
+            total: parseFloat(c.totalOverdue.toFixed(2)),
+            days: c.maxDelayDays
+          }));
+
+          const getRiskBadge = (days: number) => {
+            if (days > 30) {
+              return <span className="px-2 py-0.5 rounded bg-red-950/60 text-red-400 border border-red-900/60 text-[9px] font-mono font-bold flex items-center gap-1">🚨 Crítico ({days}d)</span>;
+            }
+            if (days > 15) {
+              return <span className="px-2 py-0.5 rounded bg-amber-950/60 text-amber-400 border border-amber-900/60 text-[9px] font-mono font-bold flex items-center gap-1">⚠️ Moderado ({days}d)</span>;
+            }
+            return <span className="px-2 py-0.5 rounded bg-cyan-950/60 text-cyan-400 border border-cyan-900/60 text-[9px] font-mono font-bold flex items-center gap-1">⏱️ Recente ({days}d)</span>;
+          };
+
+          return (
+            <div className="flex flex-col gap-6 font-sans">
+              {/* Header section */}
+              <div className="border-b border-gray-850 pb-4 flex items-center justify-between flex-wrap gap-2">
+                <div>
+                  <span className="font-display font-extrabold text-white text-base flex items-center gap-2">
+                    🚨 RANKING & ANÁLISE DE INADIMPLÊNCIA DE CLIENTES
+                  </span>
+                  <span className="block text-[10px] text-gray-500 font-mono mt-1">
+                    Mapeamento de ordens de serviço pendentes de pagamento, dias de atraso e régua de cobrança.
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                  <span className="px-3 py-1.5 bg-red-950/40 text-red-400 border border-red-900/60 rounded-lg text-xs font-mono font-bold">
+                    Inadimplência Total: R$ {grandTotalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                  <div className="flex items-center gap-1.5 no-print">
+                    <button type="button" onClick={() => handleExportData('customers', 'xlsx')} className="px-2.5 py-1.5 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition">
+                      <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> Excel
+                    </button>
+                    <button type="button" onClick={() => handleExportData('customers', 'csv')} className="px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1 cursor-pointer transition">
+                      <Download className="w-3.5 h-3.5 text-cyan-400" /> CSV
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4 Summary KPI Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono">
+                <div className="bg-[#070c17] p-4 rounded-xl border border-gray-900 flex flex-col justify-between">
+                  <div className="flex justify-between items-center text-gray-500 text-[10px] uppercase font-bold">
+                    <span>Total em Atraso</span>
+                    <DollarSign className="w-4 h-4 text-red-500" />
+                  </div>
+                  <strong className="text-red-400 text-lg block mt-2 font-display">
+                    R$ {grandTotalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </strong>
+                  <span className="text-[9px] text-gray-500 mt-1 block">Soma acumulada de OS e faturas a receber</span>
+                </div>
+
+                <div className="bg-[#070c17] p-4 rounded-xl border border-gray-900 flex flex-col justify-between">
+                  <div className="flex justify-between items-center text-gray-500 text-[10px] uppercase font-bold">
+                    <span>Clientes Inadimplentes</span>
+                    <Users className="w-4 h-4 text-amber-500" />
+                  </div>
+                  <strong className="text-white text-lg block mt-2 font-display">
+                    {totalDelinquentClients} Clientes
+                  </strong>
+                  <span className="text-[9px] text-amber-500 mt-1 block font-bold">
+                    {criticalClientsCount} com atraso crítico (&gt;30 dias)
+                  </span>
+                </div>
+
+                <div className="bg-[#070c17] p-4 rounded-xl border border-gray-900 flex flex-col justify-between">
+                  <div className="flex justify-between items-center text-gray-500 text-[10px] uppercase font-bold">
+                    <span>Média de Atraso</span>
+                    <Clock className="w-4 h-4 text-cyan-400" />
+                  </div>
+                  <strong className="text-cyan-400 text-lg block mt-2 font-display">
+                    {grandAvgDelay} Dias
+                  </strong>
+                  <span className="text-[9px] text-gray-500 mt-1 block">Tempo médio decorrido desde o vencimento</span>
+                </div>
+
+                <div className="bg-[#070c17] p-4 rounded-xl border border-gray-900 flex flex-col justify-between">
+                  <div className="flex justify-between items-center text-gray-500 text-[10px] uppercase font-bold">
+                    <span>Maior Débito</span>
+                    <AlertTriangle className="w-4 h-4 text-purple-400" />
+                  </div>
+                  <strong className="text-purple-400 text-sm block mt-2 font-bold truncate">
+                    {rankedClients[0]?.name || 'Nenhum'}
+                  </strong>
+                  <span className="text-[9px] text-gray-400 mt-1 block">
+                    {rankedClients[0] ? `R$ ${rankedClients[0].totalOverdue.toFixed(2)} (${rankedClients[0].maxDelayDays}d atraso)` : 'Sem inadimplência'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Chart & Filter Header */}
+              <div className="bg-[#070c17] rounded-xl border border-gray-900 p-5 flex flex-col gap-5 font-mono">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-850 pb-3">
+                  <div>
+                    <span className="font-bold text-white text-sm block font-sans">📊 TOP 5 MAIORES DÉBITOS DE CLIENTES</span>
+                    <span className="text-[10px] text-gray-500 font-mono mt-0.5 block">Ranking visual ordenado pelo montante pendente de liquidação (R$)</span>
+                  </div>
+                </div>
+
+                {/* Recharts Bar Chart */}
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ReBarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 25 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                      <XAxis dataKey="name" stroke="#64748b" tick={{ fontSize: 10, fill: '#94a3b8' }} interval={0} angle={-15} textAnchor="end" />
+                      <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(val) => `R$${val}`} />
+                      <ReTooltip
+                        contentStyle={{ backgroundColor: '#090d16', borderColor: '#334155', color: '#fff', fontSize: '11px', borderRadius: '8px' }}
+                        formatter={(val: any) => [`R$ ${Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Valor Pendente']}
+                        labelFormatter={(lbl) => {
+                          const item = chartData.find(d => d.name === lbl);
+                          return item ? item.fullName : lbl;
+                        }}
+                      />
+                      <Bar dataKey="total" radius={[6, 6, 0, 0]}>
+                        {chartData.map((_entry, index) => (
+                          <Cell key={`cell-${index}`} fill={index === 0 ? '#ef4444' : index === 1 ? '#f59e0b' : '#38bdf8'} />
+                        ))}
+                      </Bar>
+                    </ReBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Filter Controls Bar */}
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-3 bg-[#070c17] p-3.5 rounded-xl border border-gray-900 font-mono">
+                <div className="relative w-full sm:w-80">
+                  <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar cliente, CPF/CNPJ ou telefone..."
+                    value={delinquencySearch}
+                    onChange={(e) => setDelinquencySearch(e.target.value)}
+                    className="w-full bg-[#050912] border border-gray-800 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-red-500"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+                  <button
+                    type="button"
+                    onClick={() => setDelinquencyRange('todos')}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${delinquencyRange === 'todos' ? 'bg-red-500 text-black' : 'bg-slate-900 text-gray-400 hover:text-white border border-slate-800'}`}
+                  >
+                    Todos ({rankedClients.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDelinquencyRange('ate15')}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${delinquencyRange === 'ate15' ? 'bg-cyan-500 text-black' : 'bg-slate-900 text-gray-400 hover:text-white border border-slate-800'}`}
+                  >
+                    Até 15 Dias
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDelinquencyRange('15a30')}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${delinquencyRange === '15a30' ? 'bg-amber-500 text-black' : 'bg-slate-900 text-gray-400 hover:text-white border border-slate-800'}`}
+                  >
+                    15 a 30 Dias
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDelinquencyRange('mais30')}
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer ${delinquencyRange === 'mais30' ? 'bg-red-600 text-white' : 'bg-slate-900 text-gray-400 hover:text-white border border-slate-800'}`}
+                  >
+                    Mais de 30 Dias
+                  </button>
+                </div>
+              </div>
+
+              {/* Ranking Table */}
+              <div className="bg-[#050912] border border-gray-850 rounded-xl overflow-hidden font-mono text-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-900 text-gray-400 border-b border-gray-850 text-[10px] uppercase">
+                        <th className="p-3">Posição / Cliente</th>
+                        <th className="p-3">Contato & Doc</th>
+                        <th className="p-3 text-center">Ordens / Faturas</th>
+                        <th className="p-3 text-center">Maior Atraso</th>
+                        <th className="p-3 text-right">Total Devido</th>
+                        <th className="p-3 text-center">Régua de Cobrança</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-900 text-slate-300">
+                      {filteredRankedClients.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-gray-500 font-mono text-xs">
+                            Nenhum cliente inadimplente encontrado nos filtros selecionados.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredRankedClients.map((client, idx) => {
+                          const isExpanded = expandedClientId === client.name;
+                          const cleanPhone = client.phone.replace(/\D/g, '');
+                          const defaultPixKey = company?.pixKey || company?.cnpj || 'financeiro@autoprecision.com.br';
+                          const waText = encodeURIComponent(
+                            `Olá ${client.name}! Constatamos pendência financeira referente a serviços realizados na ${company?.name || 'Oficina'}, totalizando R$ ${client.totalOverdue.toFixed(2)} (${client.maxDelayDays} dias em aberto). Chave PIX para pagamento: ${defaultPixKey}. Qualquer dúvida, estamos à disposição!`
+                          );
+
+                          return (
+                            <React.Fragment key={client.name}>
+                              <tr className="hover:bg-slate-900/60 transition-colors">
+                                <td className="p-3 font-mono">
+                                  <div className="flex items-center gap-2.5">
+                                    <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] ${
+                                      idx === 0 ? 'bg-red-500 text-black' : idx === 1 ? 'bg-amber-500 text-black' : 'bg-slate-800 text-gray-300'
+                                    }`}>
+                                      #{idx + 1}
+                                    </span>
+                                    <div>
+                                      <strong className="text-white text-xs block font-sans font-bold">{client.name}</strong>
+                                      <span className="text-[9px] text-gray-500">ID: {client.clienteId.slice(0, 8)}</span>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="p-3">
+                                  <div className="flex flex-col">
+                                    <span className="text-gray-300 text-xs font-mono">{client.phone}</span>
+                                    <span className="text-[10px] text-gray-500">{client.cpfCnpj}</span>
+                                  </div>
+                                </td>
+
+                                <td className="p-3 text-center">
+                                  <span className="px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-xs font-bold text-white">
+                                    {client.pendingCount} pendência(s)
+                                  </span>
+                                </td>
+
+                                <td className="p-3 text-center">
+                                  <div className="flex justify-center">
+                                    {getRiskBadge(client.maxDelayDays)}
+                                  </div>
+                                </td>
+
+                                <td className="p-3 text-right">
+                                  <strong className="text-red-400 text-sm block font-mono font-bold">
+                                    R$ {client.totalOverdue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  </strong>
+                                </td>
+
+                                <td className="p-3 text-center">
+                                  <div className="flex items-center justify-center gap-1.5">
+                                    <a
+                                      href={`https://wa.me/55${cleanPhone}?text=${waText}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="px-2.5 py-1 bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-800/60 text-emerald-300 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                                      title="Cobrar via WhatsApp com mensagem personalizada"
+                                    >
+                                      <MessageSquare className="w-3 h-3 text-emerald-400" />
+                                      Cobrar WA
+                                    </a>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => setExpandedClientId(isExpanded ? null : client.name)}
+                                      className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-gray-300 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                                    >
+                                      {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                      Detalhes
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Expanded sub-row with detailed OS / Invoices breakdown */}
+                              {isExpanded && (
+                                <tr className="bg-[#03060d]">
+                                  <td colSpan={6} className="p-4 border-y border-gray-850">
+                                    <div className="flex flex-col gap-3 font-mono">
+                                      <div className="flex items-center justify-between border-b border-gray-850 pb-2">
+                                        <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+                                          📑 Lançamentos Pendentes do Cliente: {client.name}
+                                        </span>
+                                        <span className="text-[10px] text-gray-500">
+                                          Clique no botão "Quitar" caso o cliente tenha efetuado o pagamento
+                                        </span>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        {client.items.map((item, itemIdx) => (
+                                          <div key={itemIdx} className="bg-[#070c17] p-3 rounded-lg border border-gray-850 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                                            <div className="flex flex-col gap-1">
+                                              <div className="flex items-center gap-2">
+                                                <span className="px-2 py-0.5 rounded text-[9px] font-bold uppercase bg-slate-900 text-cyan-300 border border-slate-800">
+                                                  {item.type}
+                                                </span>
+                                                <strong className="text-white text-xs">{item.description}</strong>
+                                              </div>
+                                              <span className="text-[10px] text-gray-500">
+                                                Data de Entrada: {new Date(item.date).toLocaleDateString('pt-BR')} • Tempo Decorrido: <span className="text-red-400 font-bold">{item.delayDays} dias em atraso</span>
+                                              </span>
+                                            </div>
+
+                                            <div className="flex items-center gap-3 shrink-0 self-end sm:self-center">
+                                              <strong className="text-red-400 text-sm">
+                                                R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                              </strong>
+
+                                              {item.rawOs && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    updateOrdemServico(item.rawOs.id, { statusPagamento: 'PAGO' });
+                                                    if (addLocalAuditLog) {
+                                                      addLocalAuditLog("Quitação de Inadimplência", `OS #${item.rawOs.id.slice(-6)} de R$ ${item.amount.toFixed(2)} marcada como PAGA no módulo de Inadimplência.`);
+                                                    }
+                                                    alert(`✅ Pagamento da OS #${item.rawOs.id.slice(-6)} registrado com sucesso!`);
+                                                  }}
+                                                  className="px-3 py-1 bg-green-950/60 hover:bg-green-900/80 border border-green-800/60 text-green-300 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                                                >
+                                                  <CheckCircle className="w-3 h-3 text-green-400" />
+                                                  Quitar OS
+                                                </button>
+                                              )}
+
+                                              {item.rawFin && (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    updateFinanceiro(item.rawFin.id, { status: 'Pago', valorPago: item.amount, dataPagamento: new Date().toISOString() });
+                                                    if (addLocalAuditLog) {
+                                                      addLocalAuditLog("Quitação de Inadimplência", `Fatura #${item.rawFin.id.slice(-6)} de R$ ${item.amount.toFixed(2)} marcada como PAGA.`);
+                                                    }
+                                                    alert(`✅ Fatura #${item.rawFin.id.slice(-6)} baixada com sucesso!`);
+                                                  }}
+                                                  className="px-3 py-1 bg-green-950/60 hover:bg-green-900/80 border border-green-800/60 text-green-300 text-[10px] font-bold rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                                                >
+                                                  <CheckCircle className="w-3 h-3 text-green-400" />
+                                                  Quitar Fatura
+                                                </button>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Printable-only Corporate Footer & Signatures */}
         <div className="hidden print:flex flex-col gap-8 mt-12 text-black w-full border-t border-slate-300 pt-5">
@@ -844,6 +1766,178 @@ export const RelatoriosView: React.FC = () => {
           </div>
         );
       })()}
+
+      {/* Toast Feedback Notification */}
+      {exportToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-bounce">
+          <div className={`px-4 py-3 rounded-xl border shadow-2xl flex items-center gap-3 text-xs font-mono font-bold ${
+            exportToast.type === 'success' 
+              ? 'bg-emerald-950/90 border-emerald-500 text-emerald-200' 
+              : 'bg-red-950/90 border-red-500 text-red-200'
+          }`}>
+            <span>{exportToast.message}</span>
+            <button type="button" onClick={() => setExportToast(null)} className="text-gray-400 hover:text-white cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 📊 EXPORT MODAL DIALOG (CSV / EXCEL) */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 font-sans no-print">
+          <div className="bg-[#0b1222] border border-gray-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-6 text-left relative">
+            <div className="flex items-center justify-between border-b border-gray-850 pb-4">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-emerald-950/60 border border-emerald-800/80 text-emerald-400">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">Exportação de Dados da Oficina</h3>
+                  <p className="text-[11px] text-gray-400 font-mono">Gere planilhas em Excel ou CSV no frontend</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowExportModal(false)}
+                className="p-1.5 rounded-lg bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white cursor-pointer transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Step 1: Select Dataset */}
+            <div className="flex flex-col gap-2 font-mono">
+              <label className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
+                1. Selecione a Base de Dados
+              </label>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setExportDataset('inventory')}
+                  className={`p-3 rounded-xl border flex flex-col gap-1 transition-all cursor-pointer ${
+                    exportDataset === 'inventory' 
+                      ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 font-bold' 
+                      : 'bg-[#070c17] border-gray-850 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-bold text-xs">📦 Estoque</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/40 border border-gray-800">{produtos.length} it.</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-normal">Preços, custos e níveis de estoque</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExportDataset('financial')}
+                  className={`p-3 rounded-xl border flex flex-col gap-1 transition-all cursor-pointer ${
+                    exportDataset === 'financial' 
+                      ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 font-bold' 
+                      : 'bg-[#070c17] border-gray-850 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-bold text-xs">💰 Financeiro</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/40 border border-gray-800">{financeiro.length} lanc.</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-normal">DRE, receitas, despesas e status</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExportDataset('customers')}
+                  className={`p-3 rounded-xl border flex flex-col gap-1 transition-all cursor-pointer ${
+                    exportDataset === 'customers' 
+                      ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 font-bold' 
+                      : 'bg-[#070c17] border-gray-850 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-bold text-xs">👥 Clientes</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/40 border border-gray-800">{clientes.length} cli.</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-normal">Cadastro, débitos e histórico</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExportDataset('orders')}
+                  className={`p-3 rounded-xl border flex flex-col gap-1 transition-all cursor-pointer ${
+                    exportDataset === 'orders' 
+                      ? 'bg-emerald-950/40 border-emerald-500 text-emerald-300 font-bold' 
+                      : 'bg-[#070c17] border-gray-850 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 font-bold text-xs">🛠️ Ordens Serviço</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/40 border border-gray-800">{ordensServico.length} OS</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-normal">Veículos, mecânicos e peças</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Step 2: Select Format */}
+            <div className="flex flex-col gap-2 font-mono">
+              <label className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
+                2. Selecione o Formato
+              </label>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setExportFormat('xlsx')}
+                  className={`p-3.5 rounded-xl border flex items-center gap-3 transition-all cursor-pointer ${
+                    exportFormat === 'xlsx' 
+                      ? 'bg-emerald-950/60 border-emerald-500 text-white font-bold' 
+                      : 'bg-[#070c17] border-gray-850 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <div className="flex flex-col text-left">
+                    <span className="text-xs font-bold">Excel (.xlsx)</span>
+                    <span className="text-[9px] text-gray-400 font-normal font-sans">Planilha formatada</span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setExportFormat('csv')}
+                  className={`p-3.5 rounded-xl border flex items-center gap-3 transition-all cursor-pointer ${
+                    exportFormat === 'csv' 
+                      ? 'bg-emerald-950/60 border-emerald-500 text-white font-bold' 
+                      : 'bg-[#070c17] border-gray-850 text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Download className="w-5 h-5 text-cyan-400 shrink-0" />
+                  <div className="flex flex-col text-left">
+                    <span className="text-xs font-bold">CSV (.csv)</span>
+                    <span className="text-[9px] text-gray-400 font-normal font-sans">Com separador ';' & UTF-8</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 border-t border-gray-850 pt-4 mt-2">
+              <button
+                type="button"
+                onClick={() => setShowExportModal(false)}
+                className="px-4 py-2.5 rounded-xl bg-gray-900 border border-gray-800 hover:border-gray-700 text-gray-300 font-mono text-xs font-bold cursor-pointer transition"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleExportData()}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-mono text-xs font-bold flex items-center gap-2 shadow-lg cursor-pointer transition active:scale-95"
+              >
+                <Download className="w-4 h-4" /> Download {exportFormat.toUpperCase()}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

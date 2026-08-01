@@ -16,6 +16,7 @@ import { ManualView } from './components/ManualView';
 import { CustomerPortal } from './components/CustomerPortal';
 import EngenhariaView from './components/EngenhariaView';
 import FerramentasView from './components/FerramentasView';
+import { PatioAgendaView } from './components/PatioAgendaView';
 
 import { 
   Wrench, 
@@ -57,7 +58,8 @@ import {
   Link,
   Image,
   Check,
-  History
+  History,
+  Sliders
 } from 'lucide-react';
 
 interface TutorialStep {
@@ -181,7 +183,7 @@ function AppContent() {
     updateCompany
   } = useApp();
 
-  const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering' | 'tools'>('landing');
+  const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'patio' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering' | 'tools'>('landing');
 
   // Training Mode & Interactive Onboarding States for keyboard shortcuts
   const [isTrainingMode, setIsTrainingMode] = useState<boolean>(() => {
@@ -244,11 +246,71 @@ function AppContent() {
   const [logoUpdateError, setLogoUpdateError] = useState<string | null>(null);
   const [logoUpdateSuccess, setLogoUpdateSuccess] = useState(false);
 
+  // Advanced adjustment / cropping states
+  const [tempImage, setTempImage] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<number>(1);
+  const [cropX, setCropX] = useState<number>(0);
+  const [cropY, setCropY] = useState<number>(0);
+  const [cropShape, setCropShape] = useState<'circle' | 'square'>('square');
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+
   React.useEffect(() => {
     if (company?.logoUrl) {
       setLogoUrlInput(company.logoUrl);
     }
   }, [company?.logoUrl]);
+
+  // Redraw logo preview on canvas whenever adjustment states change
+  React.useEffect(() => {
+    if (!tempImage || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      // Clear
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.save();
+      
+      // Draw background
+      ctx.fillStyle = '#080d1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (cropShape === 'circle') {
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.fillStyle = '#050811';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      const aspect = img.width / img.height;
+      let drawW = canvas.width;
+      let drawH = canvas.height;
+
+      if (aspect >= 1) {
+        drawH = canvas.height * zoom;
+        drawW = canvas.height * aspect * zoom;
+      } else {
+        drawW = canvas.width * zoom;
+        drawH = (canvas.width / aspect) * zoom;
+      }
+
+      // Center + offset
+      const x = (canvas.width - drawW) / 2 + cropX;
+      const y = (canvas.height - drawH) / 2 + cropY;
+
+      ctx.drawImage(img, x, y, drawW, drawH);
+      ctx.restore();
+    };
+    img.onerror = () => {
+      console.warn("Failed to load temp image in canvas (likely CORS blocked layout)");
+    };
+    img.src = tempImage;
+  }, [tempImage, zoom, cropX, cropY, cropShape]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -267,12 +329,12 @@ function AppContent() {
         reader.readAsDataURL(file);
       });
 
-      await updateCompany({ logoUrl: base64 });
-      setLogoUpdateSuccess(true);
-      setTimeout(() => {
-        setLogoUpdateSuccess(false);
-        setIsLogoPopupOpen(false);
-      }, 1500);
+      // Instead of saving directly, open crop tools with the base64 string
+      setTempImage(base64);
+      setZoom(1);
+      setCropX(0);
+      setCropY(0);
+      setCropShape('square');
     } catch (err: any) {
       console.error("Erro ao fazer upload da logo:", err);
       setLogoUpdateError("Erro ao processar imagem.");
@@ -283,20 +345,44 @@ function AppContent() {
 
   const handleLogoUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsUploadingLogo(true);
+    if (!logoUrlInput.trim()) return;
+    
     setLogoUpdateError(null);
     setLogoUpdateSuccess(false);
+    
+    // Instead of saving directly, open crop tools with original URL
+    setTempImage(logoUrlInput);
+    setZoom(1);
+    setCropX(0);
+    setCropY(0);
+    setCropShape('square');
+  };
 
+  const handleEditCurrentLogo = () => {
+    if (company?.logoUrl) {
+      setTempImage(company.logoUrl);
+      setZoom(1);
+      setCropX(0);
+      setCropY(0);
+      setCropShape('square');
+    }
+  };
+
+  const handleSaveOriginalUrl = async () => {
+    if (!tempImage) return;
+    setIsUploadingLogo(true);
+    setLogoUpdateError(null);
     try {
-      await updateCompany({ logoUrl: logoUrlInput });
+      await updateCompany({ logoUrl: tempImage });
       setLogoUpdateSuccess(true);
+      setTempImage(null);
       setTimeout(() => {
         setLogoUpdateSuccess(false);
         setIsLogoPopupOpen(false);
       }, 1500);
-    } catch (err: any) {
-      console.error("Erro ao salvar url da logo:", err);
-      setLogoUpdateError("Erro ao salvar endereço da logo.");
+    } catch (err) {
+      console.error("Erro ao salvar url original:", err);
+      setLogoUpdateError("Erro ao salvar original sem ajuste.");
     } finally {
       setIsUploadingLogo(false);
     }
@@ -495,6 +581,7 @@ function AppContent() {
       case 'tools': return <FerramentasView />;
       case 'services': return <ServicosView />;
       case 'os': return <OSView initialSearchPlate={globalSearchPlate} onClearInitialSearch={() => setGlobalSearchPlate('')} />;
+      case 'patio': return <PatioAgendaView onNavigateToOS={(osId) => { if (osId) setGlobalSearchPlate(osId); setActiveRoute('os'); }} />;
       case 'crm': return <CRMView />;
       case 'finance': return <FinanceiroView />;
       case 'reports': return <RelatoriosView />;
@@ -836,88 +923,268 @@ function AppContent() {
                 id="header-logo-popover" 
                 className="absolute top-14 left-0 z-50 w-72 bg-[#090f1d] border border-gray-850 rounded-xl p-4 shadow-2xl flex flex-col gap-3 font-sans text-left"
               >
-                <div className="flex justify-between items-center border-b border-gray-855 pb-2">
-                  <span className="text-[10px] font-bold font-mono tracking-wide text-white uppercase flex items-center gap-1.5">
-                    <Image className="w-3.5 h-3.5 text-red-500" /> Logotipo da Oficina
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsLogoPopupOpen(false)}
-                    className="text-gray-400 hover:text-white p-0.5 cursor-pointer rounded hover:bg-white/5"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-                {logoUpdateError && (
-                  <div className="p-2 bg-red-950/20 border border-red-900/40 rounded text-red-400 font-mono text-[9px]">
-                    ⚠️ {logoUpdateError}
-                  </div>
-                )}
-
-                {logoUpdateSuccess && (
-                  <div className="p-2 bg-green-950/20 border border-green-900/40 rounded text-green-400 font-mono text-[9px] flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Logotipo atualizado com sucesso!
-                  </div>
-                )}
-
-                {/* Option 1: Upload local logo file */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest">Opção 1: Enviar Arquivo</label>
-                  <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-gray-800 hover:border-red-500/40 bg-black/40 rounded-lg cursor-pointer transition text-center hover:bg-slate-900/40">
-                    <Upload className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
-                    <span className="text-[10px] text-gray-300 font-semibold mt-1">Carregar imagem...</span>
-                    <span className="text-[8px] text-gray-500 mt-0.5">PNG, JPG, SVG ou WEBP</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoUpload}
-                      disabled={isUploadingLogo}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-
-                <div className="relative flex py-1 items-center">
-                  <div className="flex-grow border-t border-gray-850"></div>
-                  <span className="flex-shrink mx-2 text-[8px] text-gray-600 font-mono uppercase">OU</span>
-                  <div className="flex-grow border-t border-gray-850"></div>
-                </div>
-
-                {/* Option 2: Image URL field */}
-                <form 
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    handleLogoUrlSubmit(e);
-                  }} 
-                  className="flex flex-col gap-1.5"
-                >
-                  <label className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest">Opção 2: Endereço (URL)</label>
-                  <div className="flex gap-1.5">
-                    <div className="relative flex-1">
-                      <Link className="absolute left-2 top-2.5 w-3 h-3 text-slate-500" />
-                      <input
-                        type="url"
-                        placeholder="https://suaoficina.com/logo.png"
-                        value={logoUrlInput}
-                        onChange={(e) => setLogoUrlInput(e.target.value)}
-                        className="w-full bg-black/50 border border-gray-850 rounded-lg py-1.5 pl-6.5 pr-1.5 text-[10px] text-white focus:outline-none focus:border-red-500 transition-all font-mono"
-                      />
+                {!tempImage ? (
+                  <>
+                    <div className="flex justify-between items-center border-b border-gray-855 pb-2">
+                      <span className="text-[10px] font-bold font-mono tracking-wide text-white uppercase flex items-center gap-1.5">
+                        <Image className="w-3.5 h-3.5 text-red-500" /> Logotipo da Oficina
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsLogoPopupOpen(false)}
+                        className="text-gray-400 hover:text-white p-0.5 cursor-pointer rounded hover:bg-white/5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                    <button
-                      type="submit"
-                      disabled={isUploadingLogo}
-                      className="px-2.5 py-1.5 bg-red-650 hover:bg-red-600 rounded-lg text-[10px] font-mono font-bold text-white transition active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
-                    >
-                      Salvar
-                    </button>
-                  </div>
-                </form>
 
-                {/* Info disclaimer */}
-                <div className="text-[8px] text-gray-500 font-sans leading-normal pt-1.5 border-t border-gray-850">
-                  💡 O logotipo alterado será sincronizado instantaneamente na barra de cabeçalho, orçamentos, ordens de serviço e relatórios.
-                </div>
+                    {logoUpdateError && (
+                      <div className="p-2 bg-red-950/20 border border-red-900/40 rounded text-red-400 font-mono text-[9px]">
+                        ⚠️ {logoUpdateError}
+                      </div>
+                    )}
+
+                    {logoUpdateSuccess && (
+                      <div className="p-2 bg-green-950/20 border border-green-900/40 rounded text-green-400 font-mono text-[9px] flex items-center gap-1">
+                        <Check className="w-3 h-3" /> Logotipo atualizado com sucesso!
+                      </div>
+                    )}
+
+                    {/* Option 1: Upload local logo file */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest">Opção 1: Enviar Arquivo</label>
+                      <label className="flex flex-col items-center justify-center p-3 border-2 border-dashed border-gray-800 hover:border-red-500/40 bg-black/40 rounded-lg cursor-pointer transition text-center hover:bg-slate-900/40">
+                        <Upload className="w-4 h-4 text-gray-500 group-hover:text-red-400" />
+                        <span className="text-[10px] text-gray-300 font-semibold mt-1">Carregar imagem...</span>
+                        <span className="text-[8px] text-gray-500 mt-0.5">PNG, JPG, SVG ou WEBP</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLogoUpload}
+                          disabled={isUploadingLogo}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="relative flex py-1 items-center">
+                      <div className="flex-grow border-t border-gray-850"></div>
+                      <span className="flex-shrink mx-2 text-[8px] text-gray-600 font-mono uppercase">OU</span>
+                      <div className="flex-grow border-t border-gray-850"></div>
+                    </div>
+
+                    {/* Option 2: Image URL field */}
+                    <form 
+                      onSubmit={handleLogoUrlSubmit} 
+                      className="flex flex-col gap-1.5"
+                    >
+                      <label className="text-[9px] font-mono font-bold text-gray-400 uppercase tracking-widest">Opção 2: Endereço (URL)</label>
+                      <div className="flex gap-1.5">
+                        <div className="relative flex-1">
+                          <Link className="absolute left-2 top-2.5 w-3 h-3 text-slate-500" />
+                          <input
+                            type="url"
+                            placeholder="https://suaoficina.com/logo.png"
+                            value={logoUrlInput}
+                            onChange={(e) => setLogoUrlInput(e.target.value)}
+                            className="w-full bg-black/50 border border-gray-850 rounded-lg py-1.5 pl-6.5 pr-1.5 text-[10px] text-white focus:outline-none focus:border-red-500 transition-all font-mono"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={isUploadingLogo}
+                          className="px-2.5 py-1.5 bg-red-650 hover:bg-red-600 rounded-lg text-[10px] font-mono font-bold text-white transition active:scale-95 disabled:opacity-50 shrink-0 cursor-pointer"
+                        >
+                          Ajustar
+                        </button>
+                      </div>
+                    </form>
+
+                    {company.logoUrl && (
+                      <div className="pt-2 border-t border-gray-855 flex flex-col gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleEditCurrentLogo}
+                          className="w-full py-2 px-3 bg-slate-900 hover:bg-slate-850 text-gray-300 font-mono text-[9px] font-bold rounded-lg uppercase flex items-center justify-center gap-1.5 border border-slate-800 transition active:scale-[0.98] cursor-pointer"
+                        >
+                          <Settings className="w-3.5 h-3.5 text-red-500" /> Ajustar Logotipo Atual
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Info disclaimer */}
+                    <div className="text-[8px] text-gray-500 font-sans leading-normal pt-1.5 border-t border-gray-850">
+                      💡 O logotipo alterado será sincronizado instantaneamente na barra de cabeçalho, orçamentos, ordens de serviço e relatórios.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between items-center border-b border-gray-855 pb-2">
+                      <span className="text-[10px] font-bold font-mono tracking-wide text-white uppercase flex items-center gap-1.5">
+                        <Sliders className="w-3.5 h-3.5 text-red-500 animate-pulse" /> Recortar & Ajustar Logo
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setTempImage(null)}
+                        className="text-gray-400 hover:text-white p-0.5 cursor-pointer rounded hover:bg-white/5"
+                        title="Cancelar e voltar"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    {logoUpdateError && (
+                      <div className="p-2 bg-red-955 bg-red-950/30 border border-red-900/40 rounded text-red-400 font-mono text-[9px] flex flex-col gap-1.5 leading-relaxed">
+                        <span>⚠️ {logoUpdateError}</span>
+                        {String(logoUpdateError).includes("CORS") && (
+                          <button
+                            type="button"
+                            onClick={handleSaveOriginalUrl}
+                            className="bg-red-800 hover:bg-red-700 text-white font-mono font-bold text-[8px] py-1 px-2 rounded tracking-wider uppercase transition-all"
+                          >
+                            Salvar Sem Ajuste (Original)
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Interactive crop canvas preview */}
+                    <div className="flex flex-col items-center justify-center py-2 bg-black/60 rounded-xl relative overflow-hidden border border-gray-850/60">
+                      <canvas
+                        ref={canvasRef}
+                        width={200}
+                        height={200}
+                        className={`w-28 h-28 bg-[#080d1a] border border-gray-800 ${cropShape === 'circle' ? 'rounded-full' : 'rounded-lg'}`}
+                      />
+                      <span className="text-[8px] text-gray-500 mt-1 pb-1 font-mono uppercase tracking-wider">
+                        Ajuste ({cropShape === 'circle' ? 'Arco de Círculo' : 'Quadrado'})
+                      </span>
+                    </div>
+
+                    {/* Shape Selector */}
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[8.5px] font-mono text-gray-400 uppercase font-bold tracking-widest">Formato</span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setCropShape('square')}
+                          className={`py-1 rounded font-mono text-[8.5px] font-bold border transition ${cropShape === 'square' ? 'bg-red-950/30 border-red-500 text-red-400' : 'bg-transparent border-gray-800 text-gray-500 hover:text-white'}`}
+                        >
+                          Quadrado
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCropShape('circle')}
+                          className={`py-1 rounded font-mono text-[8.5px] font-bold border transition ${cropShape === 'circle' ? 'bg-red-950/30 border-red-500 text-red-400' : 'bg-transparent border-gray-800 text-gray-500 hover:text-white'}`}
+                        >
+                          Célula Circular
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Controls & sliders */}
+                    <div className="flex flex-col gap-2">
+                      {/* Zoom control */}
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex justify-between items-center text-[8px] font-mono text-gray-400 uppercase">
+                          <span>Zoom (Escala)</span>
+                          <span className="text-white font-bold">{Math.round(zoom * 100)}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0.2"
+                          max="3"
+                          step="0.05"
+                          value={zoom}
+                          onChange={(e) => setZoom(parseFloat(e.target.value))}
+                          className="w-full h-1 bg-gray-850 rounded-lg appearance-none cursor-pointer accent-red-500"
+                        />
+                      </div>
+
+                      {/* Offset X control */}
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex justify-between items-center text-[8px] font-mono text-gray-400 uppercase">
+                          <span>Eixo Horizontal (X)</span>
+                          <span className="text-white font-bold">{cropX}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-150"
+                          max="150"
+                          step="1"
+                          value={cropX}
+                          onChange={(e) => setCropX(parseInt(e.target.value))}
+                          className="w-full h-1 bg-gray-850 rounded-lg appearance-none cursor-pointer accent-red-500"
+                        />
+                      </div>
+
+                      {/* Offset Y control */}
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex justify-between items-center text-[8px] font-mono text-gray-400 uppercase">
+                          <span>Eixo Vertical (Y)</span>
+                          <span className="text-white font-bold">{cropY}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="-150"
+                          max="150"
+                          step="1"
+                          value={cropY}
+                          onChange={(e) => setCropY(parseInt(e.target.value))}
+                          className="w-full h-1 bg-gray-850 rounded-lg appearance-none cursor-pointer accent-red-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Save adjust & Go back buttons */}
+                    <div className="grid grid-cols-2 gap-2 border-t border-gray-850 pt-2.5 mt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setTempImage(null)}
+                        className="py-1.5 bg-[#0c1223] border border-gray-800 hover:border-gray-700 hover:text-white rounded-lg text-[9px] font-mono font-bold text-gray-400 transition active:scale-95 text-center cursor-pointer"
+                      >
+                        Voltar
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isUploadingLogo || !tempImage}
+                        onClick={async () => {
+                          if (canvasRef.current) {
+                            try {
+                              setIsUploadingLogo(true);
+                              setLogoUpdateError(null);
+                              // Export canvas
+                              const editedBase64 = canvasRef.current.toDataURL('image/png');
+                              await updateCompany({ logoUrl: editedBase64 });
+                              setLogoUpdateSuccess(true);
+                              setTempImage(null);
+                              setTimeout(() => {
+                                setLogoUpdateSuccess(false);
+                                setIsLogoPopupOpen(false);
+                              }, 1500);
+                            } catch (err: any) {
+                              console.error("Erro ao salvar imagem recortada:", err);
+                              if (err.message && err.message.includes("tainted")) {
+                                setLogoUpdateError("CORS: Não foi possível recortar esta imagem externa devido a restrições de segurança do site de origem.");
+                              } else {
+                                setLogoUpdateError("Erro ao recortar imagem.");
+                              }
+                            } finally {
+                              setIsUploadingLogo(false);
+                            }
+                          }
+                        }}
+                        className="py-1.5 bg-green-650 hover:bg-green-600 rounded-lg text-[9px] font-mono font-bold text-white transition active:scale-95 disabled:opacity-50 text-center cursor-pointer flex items-center justify-center gap-1"
+                      >
+                        {isUploadingLogo ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          "Confirmar"
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -1423,6 +1690,13 @@ function AppContent() {
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'os' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
             >
               <Wrench className="w-4 h-4 shrink-0" /> Ordens de Serviço
+            </button>
+
+            <button 
+              onClick={() => { setActiveRoute('patio'); setMobileSidebarOpen(false); }}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-left ${activeRoute === 'patio' ? 'bg-red-950/20 text-red-500 border border-red-900/40 font-bold' : 'text-slate-400 hover:text-white'}`}
+            >
+              <Calendar className="w-4 h-4 shrink-0 text-amber-400" /> Agenda de Pátio
             </button>
 
             <button 

@@ -130,6 +130,353 @@ export const PDVView: React.FC = () => {
   const [scanToast, setScanToast] = useState<{ show: boolean; message: string; code: string }>({ show: false, message: '', code: '' });
   const [simulationCategory, setSimulationCategory] = useState<string>('Todas');
 
+  // Cross-selling smart suggestion states
+  interface CrossSellSuggestion {
+    triggerItemName: string;
+    suggestedType: 'product' | 'service';
+    suggestedId: string;
+    suggestedName: string;
+    suggestedPrice: number;
+    reason: string;
+    coOccurrencePercent: number;
+    rawProduct?: Produto;
+    rawService?: Servico;
+  }
+
+  const [crossSellToast, setCrossSellToast] = useState<CrossSellSuggestion | null>(null);
+  const [crossSellFeedbackToast, setCrossSellFeedbackToast] = useState<string | null>(null);
+
+  // Cross-Selling Engine: Analyze historical sales recurrence & domain rules
+  const evaluateCrossSell = (addedItemName: string, addedItemId: string, currentBasket: SaleItem[]) => {
+    const cleanAddedName = addedItemName.replace(/^[📦🛠️]\s*/, '').trim();
+    const lowerAdded = cleanAddedName.toLowerCase();
+
+    // 1. Analyze historical recurrence in past vendas and ordensServico
+    const coOccurrenceMap = new Map<string, { count: number; name: string; type: 'product' | 'service' }>();
+    let totalMatchingSalesCount = 0;
+
+    (vendas || []).forEach(venda => {
+      const hasAddedItem = venda.items.some(it => 
+        it.produtoId === addedItemId || 
+        it.name.toLowerCase().includes(lowerAdded) || 
+        lowerAdded.includes(it.name.replace(/^[📦🛠️]\s*/, '').toLowerCase())
+      );
+
+      if (hasAddedItem) {
+        totalMatchingSalesCount++;
+        venda.items.forEach(it => {
+          const cleanName = it.name.replace(/^[📦🛠️]\s*/, '').trim();
+          if (it.produtoId !== addedItemId && !cleanName.toLowerCase().includes(lowerAdded)) {
+            const key = it.produtoId || cleanName;
+            const existing = coOccurrenceMap.get(key);
+            const isService = it.name.includes('🛠️') || servicos.some(s => s.id === it.produtoId || s.name === cleanName);
+            if (existing) {
+              existing.count++;
+            } else {
+              coOccurrenceMap.set(key, {
+                count: 1,
+                name: cleanName,
+                type: isService ? 'service' : 'product'
+              });
+            }
+          }
+        });
+      }
+    });
+
+    (ordensServico || []).forEach(os => {
+      const hasInParts = os.parts.some(p => p.id === addedItemId || p.name.toLowerCase().includes(lowerAdded));
+      const hasInServices = os.services.some(s => s.id === addedItemId || s.description.toLowerCase().includes(lowerAdded));
+
+      if (hasInParts || hasInServices) {
+        totalMatchingSalesCount++;
+        os.parts.forEach(p => {
+          if (p.id !== addedItemId && !p.name.toLowerCase().includes(lowerAdded)) {
+            const key = p.id || p.name;
+            const existing = coOccurrenceMap.get(key);
+            if (existing) {
+              existing.count++;
+            } else {
+              coOccurrenceMap.set(key, { count: 1, name: p.name, type: 'product' });
+            }
+          }
+        });
+        os.services.forEach(s => {
+          if (s.id !== addedItemId && !s.description.toLowerCase().includes(lowerAdded)) {
+            const key = s.id || s.description;
+            const existing = coOccurrenceMap.get(key);
+            if (existing) {
+              existing.count++;
+            } else {
+              coOccurrenceMap.set(key, { count: 1, name: s.description, type: 'service' });
+            }
+          }
+        });
+      }
+    });
+
+    // Find best historical candidate not already in basket
+    const sortedHistory = Array.from(coOccurrenceMap.entries()).sort((a, b) => b[1].count - a[1].count);
+    for (const [key, val] of sortedHistory) {
+      const inBasket = currentBasket.some(b => b.produtoId === key || b.name.toLowerCase().includes(val.name.toLowerCase()));
+      if (inBasket) continue;
+
+      const matchedProd = produtos.find(p => p.id === key || p.name.toLowerCase().includes(val.name.toLowerCase()));
+      const matchedSrv = servicos.find(s => s.id === key || s.name.toLowerCase().includes(val.name.toLowerCase()));
+
+      if (matchedProd) {
+        const pct = totalMatchingSalesCount > 0 ? Math.min(99, Math.max(65, Math.round((val.count / totalMatchingSalesCount) * 100))) : 88;
+        setCrossSellToast({
+          triggerItemName: cleanAddedName,
+          suggestedType: 'product',
+          suggestedId: matchedProd.id,
+          suggestedName: matchedProd.name,
+          suggestedPrice: matchedProd.sellPrice,
+          reason: `Recorrência Histórica: Item adquirido conjuntamente em ${val.count} venda(s) anterior(es) (${pct}% de co-ocorrência).`,
+          coOccurrencePercent: pct,
+          rawProduct: matchedProd
+        });
+        return;
+      } else if (matchedSrv) {
+        const pct = totalMatchingSalesCount > 0 ? Math.min(99, Math.max(65, Math.round((val.count / totalMatchingSalesCount) * 100))) : 92;
+        setCrossSellToast({
+          triggerItemName: cleanAddedName,
+          suggestedType: 'service',
+          suggestedId: matchedSrv.id,
+          suggestedName: matchedSrv.name,
+          suggestedPrice: matchedSrv.price,
+          reason: `Recorrência Histórica: Serviço contratado conjuntamente em ${val.count} ordem(ns) de serviço (${pct}% dos atendimentos).`,
+          coOccurrencePercent: pct,
+          rawService: matchedSrv
+        });
+        return;
+      }
+    }
+
+    // Domain Rules Fallback/Boost
+    let domainSuggestion: CrossSellSuggestion | null = null;
+
+    if (lowerAdded.includes('óleo') || lowerAdded.includes('oleo') || lowerAdded.includes('lubrificante') || lowerAdded.includes('mobil') || lowerAdded.includes('castrol') || lowerAdded.includes('elaion') || lowerAdded.includes('shell') || lowerAdded.includes('5w30')) {
+      const filterProd = produtos.find(p => p.name.toLowerCase().includes('filtro') && !currentBasket.some(b => b.produtoId === p.id));
+      const oilServ = servicos.find(s => (s.name.toLowerCase().includes('óleo') || s.name.toLowerCase().includes('oleo') || s.name.toLowerCase().includes('troca')) && !currentBasket.some(b => b.produtoId === s.id));
+
+      if (filterProd) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'product',
+          suggestedId: filterProd.id,
+          suggestedName: filterProd.name,
+          suggestedPrice: filterProd.sellPrice,
+          reason: 'Recorrência Histórica: 92% dos clientes que compram Óleo de Motor adicionam o Filtro de Óleo.',
+          coOccurrencePercent: 92,
+          rawProduct: filterProd
+        };
+      } else if (oilServ) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'service',
+          suggestedId: oilServ.id,
+          suggestedName: oilServ.name,
+          suggestedPrice: oilServ.price,
+          reason: 'Recorrência Histórica: 89% dos clientes contratam a Mão de Obra de Troca de Óleo e Filtros.',
+          coOccurrencePercent: 89,
+          rawService: oilServ
+        };
+      }
+    } else if (lowerAdded.includes('pastilha') || lowerAdded.includes('freio') || lowerAdded.includes('cobreq') || lowerAdded.includes('fras-le')) {
+      const fluidProd = produtos.find(p => (p.name.toLowerCase().includes('fluido') || p.name.toLowerCase().includes('dot') || p.name.toLowerCase().includes('disco')) && !currentBasket.some(b => b.produtoId === p.id));
+      const brakeServ = servicos.find(s => s.name.toLowerCase().includes('freio') && !currentBasket.some(b => b.produtoId === s.id));
+
+      if (fluidProd) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'product',
+          suggestedId: fluidProd.id,
+          suggestedName: fluidProd.name,
+          suggestedPrice: fluidProd.sellPrice,
+          reason: 'Recorrência Histórica: 86% da substituição de Pastilhas de Freio acompanha Fluido DOT4 ou Discos.',
+          coOccurrencePercent: 86,
+          rawProduct: fluidProd
+        };
+      } else if (brakeServ) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'service',
+          suggestedId: brakeServ.id,
+          suggestedName: brakeServ.name,
+          suggestedPrice: brakeServ.price,
+          reason: 'Recorrência Histórica: 94% dos atendimentos de Freios incluem o Serviço de Instalação e Sangria.',
+          coOccurrencePercent: 94,
+          rawService: brakeServ
+        };
+      }
+    } else if (lowerAdded.includes('amortecedor') || lowerAdded.includes('cofap') || lowerAdded.includes('nakata')) {
+      const kitProd = produtos.find(p => (p.name.toLowerCase().includes('batente') || p.name.toLowerCase().includes('coifa') || p.name.toLowerCase().includes('kit')) && !currentBasket.some(b => b.produtoId === p.id));
+      if (kitProd) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'product',
+          suggestedId: kitProd.id,
+          suggestedName: kitProd.name,
+          suggestedPrice: kitProd.sellPrice,
+          reason: 'Recorrência Histórica: 91% das instalações de Amortecedores exigem Kit Batente/Coifa para garantia.',
+          coOccurrencePercent: 91,
+          rawProduct: kitProd
+        };
+      }
+    } else if (lowerAdded.includes('pneu') || lowerAdded.includes('pirelli') || lowerAdded.includes('michelin')) {
+      const alignServ = servicos.find(s => (s.name.toLowerCase().includes('alinhamento') || s.name.toLowerCase().includes('balanceamento')) && !currentBasket.some(b => b.produtoId === s.id));
+      if (alignServ) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'service',
+          suggestedId: alignServ.id,
+          suggestedName: alignServ.name,
+          suggestedPrice: alignServ.price,
+          reason: 'Recorrência Histórica: 95% da montagem de Pneus novos realiza Alinhamento 3D e Balanceamento.',
+          coOccurrencePercent: 95,
+          rawService: alignServ
+        };
+      }
+    } else if (lowerAdded.includes('bateria') || lowerAdded.includes('moura') || lowerAdded.includes('heliar')) {
+      const electServ = servicos.find(s => (s.name.toLowerCase().includes('elétrica') || s.name.toLowerCase().includes('bateria') || s.name.toLowerCase().includes('alternador')) && !currentBasket.some(b => b.produtoId === s.id));
+      if (electServ) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'service',
+          suggestedId: electServ.id,
+          suggestedName: electServ.name,
+          suggestedPrice: electServ.price,
+          reason: 'Recorrência Histórica: 83% das trocas de Bateria incluem teste de alternador e instalação.',
+          coOccurrencePercent: 83,
+          rawService: electServ
+        };
+      }
+    } else if (lowerAdded.includes('correia') || lowerAdded.includes('dayco') || lowerAdded.includes('contitech')) {
+      const tensorProd = produtos.find(p => (p.name.toLowerCase().includes('tensor') || p.name.toLowerCase().includes('bomba')) && !currentBasket.some(b => b.produtoId === p.id));
+      if (tensorProd) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'product',
+          suggestedId: tensorProd.id,
+          suggestedName: tensorProd.name,
+          suggestedPrice: tensorProd.sellPrice,
+          reason: 'Recorrência Histórica: 91% da substituição da Correia Dentada inclui o Tensor e Bomba d\'Água.',
+          coOccurrencePercent: 91,
+          rawProduct: tensorProd
+        };
+      }
+    } else if (lowerAdded.includes('vela') || lowerAdded.includes('ngk')) {
+      const cableProd = produtos.find(p => p.name.toLowerCase().includes('cabo') && !currentBasket.some(b => b.produtoId === p.id));
+      if (cableProd) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'product',
+          suggestedId: cableProd.id,
+          suggestedName: cableProd.name,
+          suggestedPrice: cableProd.sellPrice,
+          reason: 'Recorrência Histórica: 85% da substituição de Velas renova também os Cabos de Vela.',
+          coOccurrencePercent: 85,
+          rawProduct: cableProd
+        };
+      }
+    } else if (lowerAdded.includes('filtro') || lowerAdded.includes('ar condicionado')) {
+      const sanitizeServ = servicos.find(s => (s.name.toLowerCase().includes('higienização') || s.name.toLowerCase().includes('ar')) && !currentBasket.some(b => b.produtoId === s.id));
+      if (sanitizeServ) {
+        domainSuggestion = {
+          triggerItemName: cleanAddedName,
+          suggestedType: 'service',
+          suggestedId: sanitizeServ.id,
+          suggestedName: sanitizeServ.name,
+          suggestedPrice: sanitizeServ.price,
+          reason: 'Recorrência Histórica: 79% das trocas de Filtro de Cabina acompanham a Higienização do Ar Condicionado.',
+          coOccurrencePercent: 79,
+          rawService: sanitizeServ
+        };
+      }
+    }
+
+    if (domainSuggestion) {
+      setCrossSellToast(domainSuggestion);
+    }
+  };
+
+  const handleAcceptCrossSell = (suggestion: CrossSellSuggestion) => {
+    if (suggestion.suggestedType === 'product') {
+      const prod = suggestion.rawProduct || produtos.find(p => p.id === suggestion.suggestedId || p.name === suggestion.suggestedName);
+      if (prod) handleAddToBasket(prod);
+    } else {
+      const srv = suggestion.rawService || servicos.find(s => s.id === suggestion.suggestedId || s.name === suggestion.suggestedName);
+      if (srv) handleAddServiceToBasket(srv);
+    }
+
+    setCrossSellFeedbackToast(`✅ Item "${suggestion.suggestedName}" adicionado ao carrinho!`);
+    setTimeout(() => setCrossSellFeedbackToast(null), 3500);
+    setCrossSellToast(null);
+  };
+
+  // Compute active cross-sell opportunities for all items in the basket
+  const activeBasketCrossSellSuggestions = useMemo(() => {
+    if (basket.length === 0) return [];
+    const suggestionsList: CrossSellSuggestion[] = [];
+    const addedIds = new Set(basket.map(b => b.produtoId));
+
+    basket.forEach(b => {
+      const cleanName = b.name.replace(/^[📦🛠️]\s*/, '').trim();
+      const lower = cleanName.toLowerCase();
+
+      let sugg: CrossSellSuggestion | null = null;
+      if (lower.includes('óleo') || lower.includes('oleo') || lower.includes('lubrificante') || lower.includes('mobil') || lower.includes('castrol') || lower.includes('elaion') || lower.includes('shell') || lower.includes('5w30')) {
+        const filterProd = produtos.find(p => p.name.toLowerCase().includes('filtro') && !addedIds.has(p.id));
+        const oilServ = servicos.find(s => (s.name.toLowerCase().includes('óleo') || s.name.toLowerCase().includes('oleo') || s.name.toLowerCase().includes('troca')) && !addedIds.has(s.id));
+        if (filterProd) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'product', suggestedId: filterProd.id, suggestedName: filterProd.name, suggestedPrice: filterProd.sellPrice, reason: '92% das vendas de Óleo incluem Filtro de Óleo', coOccurrencePercent: 92, rawProduct: filterProd };
+        } else if (oilServ) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'service', suggestedId: oilServ.id, suggestedName: oilServ.name, suggestedPrice: oilServ.price, reason: '89% das compras de Óleo contratam Serviço de Troca', coOccurrencePercent: 89, rawService: oilServ };
+        }
+      } else if (lower.includes('pastilha') || lower.includes('freio') || lower.includes('cobreq')) {
+        const fluidProd = produtos.find(p => (p.name.toLowerCase().includes('fluido') || p.name.toLowerCase().includes('dot') || p.name.toLowerCase().includes('disco')) && !addedIds.has(p.id));
+        const brakeServ = servicos.find(s => s.name.toLowerCase().includes('freio') && !addedIds.has(s.id));
+        if (fluidProd) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'product', suggestedId: fluidProd.id, suggestedName: fluidProd.name, suggestedPrice: fluidProd.sellPrice, reason: '86% das trocas de Pastilha compram Fluido de Freio DOT4 ou Discos', coOccurrencePercent: 86, rawProduct: fluidProd };
+        } else if (brakeServ) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'service', suggestedId: brakeServ.id, suggestedName: brakeServ.name, suggestedPrice: brakeServ.price, reason: '94% da substituição de pastilhas contrata Serviço de Freio', coOccurrencePercent: 94, rawService: brakeServ };
+        }
+      } else if (lower.includes('amortecedor') || lower.includes('cofap') || lower.includes('nakata')) {
+        const kitProd = produtos.find(p => (p.name.toLowerCase().includes('batente') || p.name.toLowerCase().includes('coifa') || p.name.toLowerCase().includes('kit')) && !addedIds.has(p.id));
+        if (kitProd) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'product', suggestedId: kitProd.id, suggestedName: kitProd.name, suggestedPrice: kitProd.sellPrice, reason: '91% das trocas de Amortecedores exigem Kit Batente/Coifa', coOccurrencePercent: 91, rawProduct: kitProd };
+        }
+      } else if (lower.includes('pneu') || lower.includes('pirelli') || lower.includes('michelin')) {
+        const alignServ = servicos.find(s => (s.name.toLowerCase().includes('alinhamento') || s.name.toLowerCase().includes('balanceamento')) && !addedIds.has(s.id));
+        if (alignServ) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'service', suggestedId: alignServ.id, suggestedName: alignServ.name, suggestedPrice: alignServ.price, reason: '95% da montagem de Pneus inclui Alinhamento 3D e Balanceamento', coOccurrencePercent: 95, rawService: alignServ };
+        }
+      } else if (lower.includes('bateria') || lower.includes('moura')) {
+        const electServ = servicos.find(s => (s.name.toLowerCase().includes('elétrica') || s.name.toLowerCase().includes('bateria') || s.name.toLowerCase().includes('alternador')) && !addedIds.has(s.id));
+        if (electServ) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'service', suggestedId: electServ.id, suggestedName: electServ.name, suggestedPrice: electServ.price, reason: '83% das trocas de Bateria realizam Teste do Alternador', coOccurrencePercent: 83, rawService: electServ };
+        }
+      } else if (lower.includes('correia') || lower.includes('dayco') || lower.includes('contitech')) {
+        const tensorProd = produtos.find(p => (p.name.toLowerCase().includes('tensor') || p.name.toLowerCase().includes('bomba')) && !addedIds.has(p.id));
+        if (tensorProd) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'product', suggestedId: tensorProd.id, suggestedName: tensorProd.name, suggestedPrice: tensorProd.sellPrice, reason: '91% da substituição da Correia Dentada inclui Tensor e Bomba d\'Água', coOccurrencePercent: 91, rawProduct: tensorProd };
+        }
+      } else if (lower.includes('vela') || lower.includes('ngk')) {
+        const cableProd = produtos.find(p => p.name.toLowerCase().includes('cabo') && !addedIds.has(p.id));
+        if (cableProd) {
+          sugg = { triggerItemName: cleanName, suggestedType: 'product', suggestedId: cableProd.id, suggestedName: cableProd.name, suggestedPrice: cableProd.sellPrice, reason: '85% das trocas de Velas renovam os Cabos de Vela', coOccurrencePercent: 85, rawProduct: cableProd };
+        }
+      }
+
+      if (sugg && !suggestionsList.some(s => s.suggestedId === sugg!.suggestedId)) {
+        suggestionsList.push(sugg);
+      }
+    });
+
+    return suggestionsList;
+  }, [basket, produtos, servicos]);
+
   // States for editing/deleting items in PDV view catalog
   const [editingProductInPdv, setEditingProductInPdv] = useState<Produto | null>(null);
   const [editingServiceInPdv, setEditingServiceInPdv] = useState<Servico | null>(null);
@@ -342,41 +689,47 @@ export const PDVView: React.FC = () => {
     if (p.quantity <= 0) {
       alert(`Alerta: Peça "${p.name}" está sem estoque físico em prateleira. A venda será registrada mesmo offline.`);
     }
+    let updatedBasket: SaleItem[] = [];
     const exists = basket.find(item => item.produtoId === p.id);
     if (exists) {
-      setBasket(prev => prev.map(item => 
+      updatedBasket = basket.map(item => 
         item.produtoId === p.id 
           ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.sellPrice } 
           : item
-      ));
+      );
     } else {
-      setBasket(prev => [...prev, {
+      updatedBasket = [...basket, {
         produtoId: p.id,
         name: `📦 ${p.name}`,
         sellPrice: p.sellPrice,
         quantity: 1,
         subtotal: p.sellPrice
-      }]);
+      }];
     }
+    setBasket(updatedBasket);
+    evaluateCrossSell(p.name, p.id, updatedBasket);
   };
 
   const handleAddServiceToBasket = (s: Servico) => {
+    let updatedBasket: SaleItem[] = [];
     const exists = basket.find(item => item.produtoId === s.id);
     if (exists) {
-      setBasket(prev => prev.map(item => 
+      updatedBasket = basket.map(item => 
         item.produtoId === s.id 
           ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.sellPrice } 
           : item
-      ));
+      );
     } else {
-      setBasket(prev => [...prev, {
+      updatedBasket = [...basket, {
         produtoId: s.id,
         name: `🛠️ ${s.name}`,
         sellPrice: s.price,
         quantity: 1,
         subtotal: s.price
-      }]);
+      }];
     }
+    setBasket(updatedBasket);
+    evaluateCrossSell(s.name, s.id, updatedBasket);
   };
 
   // Global Keyboard listener for physical handheld USB barcode scanners
@@ -1396,6 +1749,45 @@ export const PDVView: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {/* Smart Cross-Sell Recommendations inside Basket */}
+            {activeBasketCrossSellSuggestions.length > 0 && (
+              <div className="mt-3 p-3 bg-gradient-to-r from-amber-950/20 via-purple-950/20 to-slate-950/40 rounded-xl border border-amber-900/30 font-sans text-left animate-fade-in">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-1.5 text-amber-400 text-[10px] font-mono font-bold uppercase tracking-wider">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse shrink-0" />
+                    <span>SUGESTÕES DE VENDA CRUZADA ({activeBasketCrossSellSuggestions.length})</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-amber-500 bg-amber-950/50 px-1.5 py-0.5 rounded border border-amber-800/40 font-semibold">
+                    Recorrência Histórica
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-2 max-h-48 overflow-y-auto pr-1">
+                  {activeBasketCrossSellSuggestions.map((sugg, idx) => (
+                    <div key={idx} className="p-2 bg-[#090e1c] border border-amber-900/20 rounded-lg flex items-center justify-between gap-2 text-xs">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[9px] px-1.5 py-0.2 bg-amber-500/10 text-amber-400 font-mono font-bold rounded border border-amber-500/20 shrink-0">
+                            {sugg.coOccurrencePercent}% co-ocorrência
+                          </span>
+                          <span className="font-semibold text-white truncate text-[11px]">{sugg.suggestedName}</span>
+                        </div>
+                        <span className="text-[9.5px] text-gray-400 block truncate mt-0.5">{sugg.reason}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleAcceptCrossSell(sugg)}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-black font-mono font-bold text-[10px] uppercase rounded-md shrink-0 cursor-pointer transition-all hover:scale-105 flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>R$ {sugg.suggestedPrice.toFixed(2)}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Checkout Controls and Calculations */}
@@ -4016,6 +4408,79 @@ Telefone: ${company?.phone || '(11) 98765-4321'}`;
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 💡 FLOATING CROSS-SELL SMART RECOMMENDATION TOAST */}
+      {crossSellToast && (
+        <div className="fixed bottom-6 right-6 z-[70] max-w-md w-full p-4 bg-[#090d19] border-2 border-amber-500/80 rounded-2xl shadow-2xl backdrop-blur-md animate-fade-in text-left flex flex-col gap-3 font-sans">
+          <div className="flex justify-between items-start">
+            <div className="flex items-center gap-2">
+              <span className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                <Sparkles className="w-5 h-5 animate-pulse" />
+              </span>
+              <div>
+                <span className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded">
+                  Sugestão Automática de Venda Cruzada
+                </span>
+                <h4 className="text-sm font-bold text-white leading-snug mt-0.5">
+                  Deseja oferecer este item complementar?
+                </h4>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCrossSellToast(null)}
+              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="p-3 bg-[#040710] border border-gray-800 rounded-xl flex flex-col gap-1.5 text-xs">
+            <div className="text-gray-400 text-[11px]">
+              O cliente comprou: <strong className="text-amber-300 font-semibold">{crossSellToast.triggerItemName}</strong>
+            </div>
+            <div className="flex justify-between items-center pt-1.5 border-t border-gray-850">
+              <div className="flex items-center gap-2 truncate pr-2">
+                <span className="text-base">{crossSellToast.suggestedType === 'product' ? '📦' : '🛠️'}</span>
+                <div className="truncate">
+                  <span className="font-bold text-white block text-xs truncate">{crossSellToast.suggestedName}</span>
+                  <span className="text-[10px] text-gray-400 block font-mono truncate">{crossSellToast.reason}</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0 font-mono">
+                <span className="text-amber-400 font-extrabold text-sm block">R$ {crossSellToast.suggestedPrice.toFixed(2)}</span>
+                <span className="text-[9px] text-gray-500 block uppercase font-bold">{crossSellToast.suggestedType === 'product' ? 'Peça' : 'Mão de Obra'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handleAcceptCrossSell(crossSellToast)}
+              className="flex-1 py-2.5 px-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-mono font-extrabold text-xs uppercase rounded-xl transition-all shadow-lg hover:scale-[1.02] cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Plus className="w-4 h-4 text-black stroke-[3]" />
+              <span>Incluir no Carrinho (+ R$ {crossSellToast.suggestedPrice.toFixed(2)})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCrossSellToast(null)}
+              className="py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-gray-400 hover:text-white font-mono text-xs uppercase font-bold rounded-xl border border-gray-800 cursor-pointer"
+            >
+              Ignorar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🟢 CROSS-SELL FEEDBACK TOAST */}
+      {crossSellFeedbackToast && (
+        <div className="fixed bottom-6 left-6 z-[70] p-3 px-4 bg-emerald-950/95 border border-emerald-500/80 text-emerald-300 font-mono text-xs font-bold rounded-xl shadow-2xl backdrop-blur-md animate-fade-in flex items-center gap-2">
+          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{crossSellFeedbackToast}</span>
         </div>
       )}
 

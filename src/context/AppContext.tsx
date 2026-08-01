@@ -871,6 +871,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       empresaId: company.id
     };
 
+    addLocalAuditLog("Cadastro de Produto", `Produto/Peça '${p.name}' (SKU: ${p.internalSku || 'S/N'}) cadastrado com Qtd: ${p.quantity}, Custo: R$ ${(p.costPrice || 0).toFixed(2)}, Venda: R$ ${(p.sellPrice || 0).toFixed(2)}.`);
+
     setProdutos(prev => [newProduto, ...prev]);
 
     if (firebaseUser) {
@@ -879,6 +881,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateProdutoStock = async (id: string, qty: number) => {
+    const currentProd = produtos.find(p => p.id === id);
+    if (currentProd && currentProd.quantity !== qty) {
+      addLocalAuditLog("Ajuste de Estoque", `Estoque de '${currentProd.name}' alterado de ${currentProd.quantity} para ${qty} unidades.`);
+    }
+
     setProdutos(prev => prev.map(p => p.id === id ? { ...p, quantity: qty } : p));
 
     if (firebaseUser) {
@@ -1357,6 +1364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCompany = async (updatedFields: Partial<Company>) => {
+    addLocalAuditLog("Configuração da Oficina", `Parâmetros corporativos atualizados: ${Object.keys(updatedFields).join(', ')}.`);
     setCompany(prev => ({ ...prev, ...updatedFields }));
     if (firebaseUser) {
       try {
@@ -1373,6 +1381,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateUserProfile = async (updatedFields: Partial<UserProfile>) => {
     if (!user) return;
+    if (updatedFields.reversalPassword) {
+      addLocalAuditLog("Segurança / Senha de Estorno", `Senha de estorno e autorização gerencial alterada por ${user.name || 'Administrador'}.`);
+    } else {
+      addLocalAuditLog("Perfil de Usuário", `Perfil do usuário atualizado: ${Object.keys(updatedFields).join(', ')}.`);
+    }
     setUser(prev => prev ? ({ ...prev, ...updatedFields }) : null);
     if (firebaseUser) {
       try {
@@ -1711,12 +1724,58 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const stored = localStorage.getItem("autotech_local_audit_logs");
       if (stored) {
-        setLocalAuditLogs(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setLocalAuditLogs(parsed);
+          return;
+        }
       }
+      
+      const seedAuditLogs: LocalAuditLog[] = [
+        {
+          id: "log_seed_1",
+          empresaId: company.id || "sandbox",
+          action: "Ajuste de Estoque",
+          details: "Entrada inicial de estoque: Pastilha de Freio Cobreq Gol G5 (+25 unidades).",
+          userName: user?.name || "Clécio Santos (Admin)",
+          userEmail: user?.email || "cleciotecnologia@gmail.com",
+          timestamp: new Date(Date.now() - 1000 * 60 * 20).toISOString()
+        },
+        {
+          id: "log_seed_2",
+          empresaId: company.id || "sandbox",
+          action: "Fechamento de Caixa",
+          details: "Fechamento de turno do PDV com R$ 1.450,00 em dinheiro e R$ 2.890,00 em PIX/Cartão.",
+          userName: "Operador de Caixa",
+          userEmail: "caixa@autoprecision.com.br",
+          timestamp: new Date(Date.now() - 1000 * 60 * 90).toISOString()
+        },
+        {
+          id: "log_seed_3",
+          empresaId: "sandbox",
+          action: "Estorno de Venda",
+          details: "Estorno aprovado para Venda #VND-8492 (R$ 180,00). Motivo: Devolução por incompatibilidade de aplicação.",
+          userName: user?.name || "Gerente do Pátio",
+          userEmail: user?.email || "gerencia@autoprecision.com.br",
+          timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString()
+        },
+        {
+          id: "log_seed_4",
+          empresaId: "sandbox",
+          action: "Alteração de Preço",
+          details: "Reajuste de Preço de Venda: Óleo Motor Mobil Super 20W50 de R$ 38,00 para R$ 42,00 por reajuste do distribuidor.",
+          userName: "Gestor de Peças",
+          userEmail: "estoque@autoprecision.com.br",
+          timestamp: new Date(Date.now() - 1000 * 60 * 480).toISOString()
+        }
+      ];
+
+      setLocalAuditLogs(seedAuditLogs);
+      localStorage.setItem("autotech_local_audit_logs", JSON.stringify(seedAuditLogs));
     } catch (err) {
       console.error("Failed to load local audit logs:", err);
     }
-  }, []);
+  }, [company.id, user?.name, user?.email]);
 
   // Load and check daily automatic backup trigger on startup and updates
   useEffect(() => {

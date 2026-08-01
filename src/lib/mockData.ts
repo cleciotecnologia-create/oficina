@@ -20,22 +20,22 @@ export const MOCK_SERVICES: Servico[] = [
 
 export const INITIAL_COMPANY = {
   id: "comp_demo_1",
-  name: "AutoPrecision Premium",
-  cnpj: "12.345.678/0001-90",
-  phone: "(11) 98765-4321",
+  name: "Oficina do Rafael",
+  cnpj: "18.349.525/0001-30",
+  phone: "(11) 98765-5544",
   address: "Av. das Nações Unidas, 1040 - São Paulo, SP",
   planId: "Premium" as const,
   createdAt: "2026-01-10T12:00:00Z",
   logoUrl: "https://picsum.photos/seed/autotech_logo/200/200",
-  email: "contato@autoprecision.com.br",
-  whatsapp: "(11) 98765-4321",
+  email: "contato@oficinadorafael.com.br",
+  whatsapp: "(11) 98765-5544",
   latitude: -23.6015,
   longitude: -46.6974,
-  customDomain: "mecanica.autoprecision.com.br",
-  subdomain: "autoprecision",
+  customDomain: "www.oficinadorafael.com.br",
+  subdomain: "oficinadorafael",
   domainStatus: "Ativo" as const,
   pixKey: "cleciotecnologia@gmail.com",
-  pixBeneficiary: "AutoPrecision Premium",
+  pixBeneficiary: "Oficina do Rafael",
   pixCity: "SAO PAULO",
   defaultMarkup: 50
 };
@@ -270,7 +270,10 @@ export const MOCK_OS: OrdemServico[] = [
       "https://images.unsplash.com/photo-1486006920555-c77dce18193b?auto=format&fit=crop&q=80&w=200"
     ],
     total: 579.90,
-    createdAt: "2026-05-24T10:00:00Z"
+    createdAt: "2026-07-30T10:00:00Z",
+    scheduledDate: "2026-07-30",
+    scheduledTime: "08:30",
+    elevadorBox: "Elevador 1"
   },
   {
     id: "OS-2026-002",
@@ -298,7 +301,10 @@ export const MOCK_OS: OrdemServico[] = [
     checklist: DEFAULT_CHECKLIST.map(item => ({ ...item, status: 'ok' as const })),
     signature: "Assinado eletronicamente por Mariana Souza Santos - Token: OS_SIGN_02b",
     total: 889.90,
-    createdAt: "2026-05-20T08:30:00Z"
+    createdAt: "2026-07-28T08:30:00Z",
+    scheduledDate: "2026-07-28",
+    scheduledTime: "10:00",
+    elevadorBox: "Elevador 2"
   },
   {
     id: "OS-2026-003",
@@ -321,7 +327,90 @@ export const MOCK_OS: OrdemServico[] = [
     parts: [],
     checklist: DEFAULT_CHECKLIST,
     total: 150.00,
-    createdAt: "2026-05-25T11:00:00Z"
+    createdAt: "2026-07-30T11:00:00Z",
+    scheduledDate: "2026-07-30",
+    scheduledTime: "11:00",
+    elevadorBox: "Elevador 2"
+  },
+  {
+    id: "OS-2026-004",
+    empresaId: "comp_demo_1",
+    clienteId: "cli_4",
+    clienteName: MOCK_CLIENTS[3].name,
+    clientePhone: MOCK_CLIENTS[3].phone,
+    veiculoId: "vei_4",
+    veiculoInfo: `${MOCK_VEHICLES[3].brand} ${MOCK_VEHICLES[3].model} (${MOCK_VEHICLES[3].plate})`,
+    plate: MOCK_VEHICLES[3].plate,
+    km: 120400,
+    problem: "Troca completa de amortecedores e alinhamento 3D da frota.",
+    diagnosis: "Substituição de cartuchos e batentes dianteiros necessária urgente.",
+    status: "Em execução" as const,
+    mechanicId: MOCK_MECHANICS[2].id,
+    mechanicName: MOCK_MECHANICS[2].name,
+    services: [
+      { id: "srv_7", description: "Mão de obra amortecedores + Alinhamento 3D", price: 340.00 }
+    ],
+    parts: [
+      { id: "prod_4", name: "Amortecedor Dianteiro Cofap", sellPrice: 450.00, quantity: 2 }
+    ],
+    checklist: DEFAULT_CHECKLIST,
+    total: 1240.00,
+    createdAt: "2026-07-30T09:00:00Z",
+    scheduledDate: "2026-07-30",
+    scheduledTime: "13:30",
+    elevadorBox: "Elevador 3"
+  },
+  {
+    id: "OS-2026-005",
+    empresaId: "comp_demo_1",
+    clienteId: "cli_1",
+    clienteName: "Roberto Lima",
+    clientePhone: "(11) 97788-1122",
+    veiculoId: "vei_1",
+    veiculoInfo: "Toyota Corolla 2.0 (JDK-8899)",
+    plate: "JDK-8899",
+    km: 55000,
+    problem: "Substituição do kit de correia dentada e bomba d'água.",
+    diagnosis: "Preventiva recomendada para 50k KM.",
+    status: "Agendada" as const,
+    mechanicId: MOCK_MECHANICS[1].id,
+    mechanicName: MOCK_MECHANICS[1].name,
+    services: [
+      { id: "srv_8", description: "Substituição de Correia Dentada", price: 380.00 }
+    ],
+    parts: [],
+    checklist: DEFAULT_CHECKLIST,
+    total: 380.00,
+    createdAt: "2026-07-30T14:00:00Z",
+    scheduledDate: "2026-07-30",
+    scheduledTime: "15:00",
+    elevadorBox: "Elevador 4"
+  },
+  {
+    id: "OS-2026-006",
+    empresaId: "comp_demo_1",
+    clienteId: "cli_2",
+    clienteName: "Fernanda Costa",
+    clientePhone: "(11) 96655-4433",
+    veiculoId: "vei_2",
+    veiculoInfo: "Hyundai HW20 1.0 (HYU-1020)",
+    plate: "HYU-1020",
+    km: 29000,
+    problem: "Higienização de ar condicionado e troca de óleo de motor.",
+    diagnosis: "Filtro de ar impregnado e fluido ressecado.",
+    status: "Agendada" as const,
+    mechanicId: MOCK_MECHANICS[2].id,
+    mechanicName: MOCK_MECHANICS[2].name,
+    services: [
+      { id: "srv_9", description: "Oxi-Sanitização + Óleo", price: 180.00 }
+    ],
+    parts: [],
+    checklist: DEFAULT_CHECKLIST,
+    total: 180.00,
+    createdAt: "2026-07-31T08:00:00Z",
+    scheduledDate: "2026-07-31",
+    scheduledTime: "09:00",
+    elevadorBox: "Elevador 1"
   }
 ];
 
