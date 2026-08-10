@@ -2835,6 +2835,40 @@ export const ConfigView: React.FC = () => {
                   Para que o seu domínio próprio ou subdomínio personalizado funcione como portal principal de faturamento, vendas e ordens de serviço, adicione os seguintes apontamentos de DNS no painel da sua hospedagem:
                 </p>
 
+                {/* Registro.br Step-by-Step Guidance Box */}
+                <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-3 text-amber-200 text-xs font-sans space-y-2">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold font-mono text-[11px]">
+                    <span className="bg-amber-500/20 text-amber-300 p-1 rounded">⚠️</span>
+                    Atenção às Regras Oficiais de Sintaxe do Registro.br:
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-amber-100/90">
+                    O Registro.br <strong>NÃO aceita o caractere "@" nem "*".</strong> Para apontar o domínio principal, deixe o campo <em>Nome</em> <strong>Totalmente em Branco</strong>.
+                  </p>
+                  <div className="bg-[#0b101d] p-2.5 rounded-lg border border-amber-900/30 text-[10.5px] space-y-1.5 font-mono text-gray-300">
+                    <p className="font-bold text-emerald-400 font-sans">Como preencher cada tipo de entrada na Tabela DNS do Registro.br:</p>
+                    <ol className="list-decimal pl-4 space-y-1 leading-snug">
+                      <li>Na página do seu domínio no Registro.br, acesse a opção <strong>"EDITAR ZONA"</strong> ou <strong>"MODIFICAR ZONA"</strong>.</li>
+                      <li>Clique em <strong>"NOVA ENTRADA"</strong> e cadastre exatamente assim:
+                        <ul className="list-disc pl-4 mt-1 space-y-1 text-purple-300">
+                          <li>
+                            <strong>Tipo A (Domínio Principal):</strong><br />
+                            Nome: <code className="text-amber-300 bg-slate-800 px-1.5 rounded font-bold">[DEIXAR EM BRANCO - Não coloque @]</code> ➔ IP IPv4: <code className="text-white bg-slate-800 px-1 rounded">185.199.108.153</code>
+                          </li>
+                          <li>
+                            <strong>Tipo CNAME (Subdomínio WWW):</strong><br />
+                            Nome: <code className="text-white bg-slate-800 px-1.5 rounded">www</code> ➔ Destino: <code className="text-white bg-slate-800 px-1 rounded">cname.oficinadorafael.com.br</code>
+                          </li>
+                          <li>
+                            <strong>Tipo TXT (Validação de Posse):</strong><br />
+                            Nome: <code className="text-white bg-slate-800 px-1.5 rounded">_registrobr-challenge</code> ➔ Texto: <code className="text-white bg-slate-800 px-1 rounded">{`oficinadorafael-verify-${company.id}`}</code>
+                          </li>
+                        </ul>
+                      </li>
+                      <li className="mt-1">Clique no botão verde <strong>"SALVAR ALTERAÇÕES"</strong>.</li>
+                    </ol>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto rounded-lg border border-gray-850 bg-[#080c16]">
                   <table className="w-full text-left font-mono text-[11px] border-collapse">
                     <thead>
@@ -2864,7 +2898,7 @@ export const ConfigView: React.FC = () => {
                       {/* Apex domain direct A-Record suggestion */}
                       <tr className="border-b border-gray-850 hover:bg-[#070d18] transition-colors">
                         <td className="p-2 text-amber-400 font-extrabold uppercase">A</td>
-                        <td className="p-2 font-bold text-white">@ (ou em branco)</td>
+                        <td className="p-2 font-bold text-white">Em branco (Sem @)</td>
                         <td className="p-2 text-gray-300">185.199.108.153</td>
                         <td className="p-2 text-right">
                           <button 
@@ -2895,12 +2929,12 @@ export const ConfigView: React.FC = () => {
                   </table>
                 </div>
 
-                {/* DNS Propagation Live test panel */}
-                <div className="flex flex-col gap-2 mt-1">
+                {/* DNS Propagation Live test panel & Diagnostic Tools */}
+                <div className="flex flex-col gap-3 mt-1">
                   <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center justify-between">
-                    <span className="text-[9px] text-gray-500 font-mono flex items-center gap-1">
-                      <Activity className="w-3 h-3 text-purple-400" />
-                      A propagação DNS geralmente leva de 1 a 24 horas. Deseja simular e testar agora?
+                    <span className="text-[9.5px] text-gray-400 font-mono flex items-center gap-1">
+                      <Activity className="w-3.5 h-3.5 text-purple-400" />
+                      A propagação DNS pode levar de 15 min a 24 horas. Valide as entradas registradas no Google DNS:
                     </span>
                     <button
                       type="button"
@@ -2908,24 +2942,75 @@ export const ConfigView: React.FC = () => {
                       onClick={async () => {
                         setIsTestingDns(true);
                         setDomainStatusVal('Verificando');
-                        setDnsTestLogs(["Iniciando escaneamento global de DNS..."]);
-                        
-                        // Fake trace delay steps
-                        const steps = [
-                          "[DNS_TRACE] Resolvendo domínio: " + customDomainStr,
-                          "[DNS_TRACE] Solicitando servidores IPv4 / IPv6 na nuvem Cloudflare...",
-                          "[DNS_CNAME] Verificando se registro CNAME 'saas.autoprecision.com.br' existe...",
-                          "[DNS_TXT_CHALLENGE] Validando código de posse '_autoprecision-challenge'...",
-                          "[DNS_SUCCESS] Apontamento verificado de forma segura com criptografia SSL Ativa!"
-                        ];
-                        
-                        for (let i = 0; i < steps.length; i++) {
-                          await new Promise(resolve => setTimeout(resolve, 600));
-                          setDnsTestLogs(prev => [...prev, steps[i]]);
+                        const domainClean = customDomainStr.trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+                        const apexDomain = domainClean.replace(/^www\./, '');
+                        const wwwDomain = domainClean.startsWith('www.') ? domainClean : `www.${domainClean}`;
+                        const txtChallengeName = `_registrobr-challenge.${apexDomain}`;
+
+                        setDnsTestLogs([
+                          `[INÍCIO] Verificando propagação global DNS para: ${apexDomain}`,
+                          `[DNS_SERVER] Consultando servidores do Google Public DNS (8.8.8.8 / dns.google)...`
+                        ]);
+
+                        let cnameOk = false;
+                        let aOk = false;
+                        let txtOk = false;
+
+                        // 1. Check CNAME
+                        try {
+                          const resCname = await fetch(`https://dns.google/resolve?name=${wwwDomain}&type=CNAME`);
+                          const dataCname = await resCname.json();
+                          if (dataCname.Answer && dataCname.Answer.length > 0) {
+                            const cnameValue = dataCname.Answer[dataCname.Answer.length - 1].data;
+                            cnameOk = true;
+                            setDnsTestLogs(prev => [...prev, `[DNS_CNAME] ✅ CNAME '${wwwDomain}' propagado ➔ ${cnameValue}`]);
+                          } else {
+                            setDnsTestLogs(prev => [...prev, `[DNS_CNAME] ⏳ CNAME '${wwwDomain}' ainda não detectado no DNS público (Propagando...).`]);
+                          }
+                        } catch {
+                          setDnsTestLogs(prev => [...prev, `[DNS_CNAME] ⚠️ Consulta CNAME em andamento...`]);
                         }
-                        
+
+                        // 2. Check A Record
+                        try {
+                          const resA = await fetch(`https://dns.google/resolve?name=${apexDomain}&type=A`);
+                          const dataA = await resA.json();
+                          if (dataA.Answer && dataA.Answer.length > 0) {
+                            const aValues = dataA.Answer.map((ans: { data: string }) => ans.data).join(', ');
+                            aOk = true;
+                            setDnsTestLogs(prev => [...prev, `[DNS_A] ✅ Registro A '@' (${apexDomain}) propagado ➔ IP(s): ${aValues}`]);
+                          } else {
+                            setDnsTestLogs(prev => [...prev, `[DNS_A] ⏳ Registro A '${apexDomain}' ainda pendente no DNS público.`]);
+                          }
+                        } catch {
+                          setDnsTestLogs(prev => [...prev, `[DNS_A] ⚠️ Consulta Registro A em andamento...`]);
+                        }
+
+                        // 3. Check TXT Challenge Record
+                        try {
+                          const resTxt = await fetch(`https://dns.google/resolve?name=${txtChallengeName}&type=TXT`);
+                          const dataTxt = await resTxt.json();
+                          if (dataTxt.Answer && dataTxt.Answer.length > 0) {
+                            const txtVal = dataTxt.Answer.map((ans: { data: string }) => ans.data).join(' ');
+                            txtOk = true;
+                            setDnsTestLogs(prev => [...prev, `[DNS_TXT] ✅ Entrada TXT Challenge '${txtChallengeName}' detectada ➔ ${txtVal}`]);
+                          } else {
+                            setDnsTestLogs(prev => [...prev, `[DNS_TXT] ⏳ TXT Challenge '${txtChallengeName}' pendente ou não localizado.`]);
+                          }
+                        } catch {
+                          setDnsTestLogs(prev => [...prev, `[DNS_TXT] ⚠️ Consulta TXT em andamento...`]);
+                        }
+
+                        // Final summary log
+                        if (cnameOk || aOk || txtOk) {
+                          setDnsTestLogs(prev => [...prev, `[RESULTADO] 🎉 Propagação em andamento detectada! As respostas do Firebase / DNS já estão sendo lidas.`]);
+                          setDomainStatusVal('Ativo');
+                        } else {
+                          setDnsTestLogs(prev => [...prev, `[RESULTADO] ℹ️ Apontamento salvo. Caso tenha inserido as entradas no Registro.br agora, aguarde a atualização de cache DNS (pode levar alguns minutos).`]);
+                          setDomainStatusVal('Pendente');
+                        }
+
                         setIsTestingDns(false);
-                        setDomainStatusVal('Ativo');
                       }}
                       className={`px-3 py-1.5 rounded-lg border text-[10px] font-mono font-bold flex items-center gap-1.5 transition-all ${
                         isTestingDns 
@@ -2934,20 +3019,58 @@ export const ConfigView: React.FC = () => {
                       }`}
                     >
                       <RefreshCw className={`w-3 h-3 ${isTestingDns ? 'animate-spin' : ''}`} />
-                      {isTestingDns ? "TESTANDO PROPAGAÇÃO..." : "TESTAR APONTAMENTO DNS"}
+                      {isTestingDns ? "TESTANDO PROPAGAÇÃO..." : "TESTAR PROPAGAÇÃO DNS"}
                     </button>
                   </div>
 
                   {/* DNS Live Log details console */}
                   {dnsTestLogs.length > 0 && (
-                    <div className="bg-[#050912] border border-gray-850 p-2.5 rounded-lg font-mono text-[9.5px] text-gray-400 leading-relaxed flex flex-col gap-1 max-h-36 overflow-y-auto">
+                    <div className="bg-[#050912] border border-gray-850 p-2.5 rounded-lg font-mono text-[9.5px] text-gray-400 leading-relaxed flex flex-col gap-1 max-h-40 overflow-y-auto">
                       {dnsTestLogs.map((log, lidx) => (
-                        <div key={lidx} className={`${log.includes('SUCCESS') ? 'text-green-400 font-bold' : log.includes('CNAME') ? 'text-purple-400' : 'text-gray-400'}`}>
+                        <div key={lidx} className={`${log.includes('✅') || log.includes('RESULTADO') ? 'text-green-400 font-bold' : log.includes('CNAME') ? 'text-purple-300' : log.includes('TXT') ? 'text-cyan-300' : 'text-gray-400'}`}>
                           {log}
                         </div>
                       ))}
                     </div>
                   )}
+
+                  {/* Diagnostic Terminal Script Box */}
+                  <div className="bg-[#080d19] border border-gray-800 rounded-xl p-3 text-left space-y-2 mt-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10.5px] font-bold font-mono text-purple-400 flex items-center gap-1.5">
+                        💻 Diagnóstico via Terminal (Cmd / PowerShell / Linux Terminal)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const domainClean = (customDomainStr || 'oficinadorafael.com.br').trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+                          const apexDomain = domainClean.replace(/^www\./, '');
+                          const scriptText = `# Comandos de validação DNS no Registro.br / Firebase Hosting:
+# 1. Validar CNAME
+nslookup -type=cname www.${apexDomain} 8.8.8.8
+
+# 2. Validar Registro A (IP)
+nslookup -type=a ${apexDomain} 8.8.8.8
+
+# 3. Validar Entrada TXT Challenge de Validação
+nslookup -type=txt _registrobr-challenge.${apexDomain} 8.8.8.8`;
+                          handleCopyText(scriptText, "CMD_SCRIPT");
+                        }}
+                        className="bg-slate-900 hover:bg-slate-800 border border-gray-800 text-[10px] text-gray-300 px-2 py-1 rounded font-mono cursor-pointer transition-all"
+                      >
+                        {copiedTemplateText === "CMD_SCRIPT" ? "Comandos Copiados!" : "Copiar Comandos CLI"}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-gray-400 font-sans">
+                      Abra o prompt de comando no seu computador e execute os comandos abaixo para testar a resposta direta dos servidores DNS globais (8.8.8.8):
+                    </p>
+                    <pre className="bg-[#040710] p-2.5 rounded-lg border border-gray-850 text-[10px] font-mono text-emerald-400 overflow-x-auto whitespace-pre leading-relaxed select-all">
+{`# Windows (Prompt de Comando / PowerShell) ou Mac/Linux Terminal:
+nslookup -type=cname www.${(customDomainStr || 'oficinadorafael.com.br').trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '')} 8.8.8.8
+nslookup -type=a ${(customDomainStr || 'oficinadorafael.com.br').trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '')} 8.8.8.8
+nslookup -type=txt _registrobr-challenge.${(customDomainStr || 'oficinadorafael.com.br').trim().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, '')} 8.8.8.8`}
+                    </pre>
+                  </div>
                 </div>
               </div>
             )}

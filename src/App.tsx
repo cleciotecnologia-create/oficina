@@ -185,6 +185,20 @@ function AppContent() {
 
   const [activeRoute, setActiveRoute] = useState<'landing' | 'dashboard' | 'pdv' | 'stock' | 'services' | 'os' | 'patio' | 'crm' | 'finance' | 'reports' | 'settings' | 'superadmin' | 'manual' | 'engineering' | 'tools'>('landing');
 
+  // Automatic HTTP -> HTTPS redirection check for custom domain security (e.g., www.oficinadorafael.com.br)
+  React.useEffect(() => {
+    if (
+      typeof window !== 'undefined' &&
+      window.location.protocol === 'http:' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1' &&
+      !window.location.hostname.includes('.run.app')
+    ) {
+      console.log('🔒 Redirecionando conexão HTTP para HTTPS seguro...');
+      window.location.replace(`https://${window.location.host}${window.location.pathname}${window.location.search}${window.location.hash}`);
+    }
+  }, []);
+
   // Training Mode & Interactive Onboarding States for keyboard shortcuts
   const [isTrainingMode, setIsTrainingMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('saas_training_mode_active');

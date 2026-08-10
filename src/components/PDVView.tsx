@@ -2579,7 +2579,7 @@ export const PDVView: React.FC = () => {
       {/* 🚨 COMPROVANTE DE ESTORNO DE VENDA DIALOG MODAL */}
       {showReversalReceipt && reversalReceiptSale && (
         <div id="reversal-receipt-modal" className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in text-left">
-          <div className="print-container-target bg-white text-black max-w-sm w-full rounded-2xl p-6 shadow-2xl relative">
+          <div className="print-container-target bg-white text-black max-w-sm w-full rounded-2xl p-4 sm:p-6 print:p-2 print:my-0 print:border-0 print:shadow-none print:rounded-none relative">
             
             <button 
               type="button"
@@ -2944,7 +2944,7 @@ export const PDVView: React.FC = () => {
           id={receiptType === 'thermal' ? "sale-finished-receipt-modal" : "sale-finished-nota-modal"} 
           className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in overflow-y-auto"
         >
-          <div className={`print-container-target bg-white text-black rounded-2xl p-6 shadow-2xl relative text-left my-8 ${receiptType === 'thermal' ? 'max-w-sm w-full' : 'max-w-4xl w-full'}`}>
+          <div className={`print-container-target bg-white text-black rounded-2xl p-4 sm:p-6 print:p-2 print:my-0 print:border-0 print:shadow-none print:rounded-none relative text-left my-4 sm:my-8 ${receiptType === 'thermal' ? 'max-w-sm w-full' : 'max-w-4xl w-full'}`}>
             
             <button 
               type="button"
@@ -2962,7 +2962,7 @@ export const PDVView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setReceiptType('thermal')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-sans transition flex items-center justify-center gap-1.5 cursor-pointer border-0 ${
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-sans transition flex items-center justify-center gap-1.5 cursor-pointer border-0 no-print ${
                   receiptType === 'thermal'
                     ? 'bg-neutral-900 text-white shadow'
                     : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
@@ -2973,7 +2973,7 @@ export const PDVView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setReceiptType('nota')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-sans transition flex items-center justify-center gap-1.5 cursor-pointer border-0 ${
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-sans transition flex items-center justify-center gap-1.5 cursor-pointer border-0 no-print ${
                   receiptType === 'nota'
                     ? 'bg-neutral-900 text-white shadow'
                     : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
@@ -3355,7 +3355,7 @@ export const PDVView: React.FC = () => {
                 onClick={() => {
                   window.print();
                 }}
-                className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0 font-sans"
+                className="w-full py-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0 font-sans no-print"
               >
                 <Printer className="w-4 h-4 text-white" /> {receiptType === 'thermal' ? 'Imprimir p/ Impressora Térmica' : 'Imprimir p/ Impressora A4 (Nota)'}
               </button>
@@ -3365,7 +3365,7 @@ export const PDVView: React.FC = () => {
                 onClick={() => {
                   window.print();
                 }}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0 font-sans"
+                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] uppercase border-0 font-sans no-print"
               >
                 <FileText className="w-4 h-4 text-white animate-pulse" /> {receiptType === 'thermal' ? 'Exportar para PDF / Salvar Recibo' : 'Gerar PDF de Nota de Balcão (A4)'}
               </button>
@@ -3376,7 +3376,7 @@ export const PDVView: React.FC = () => {
                   setSaleFinished(false);
                   setLastFinishedSale(null);
                 }}
-                className="w-full py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center mt-1 bg-transparent text-black font-sans"
+                className="w-full py-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center mt-1 bg-transparent text-black font-sans no-print"
               >
                 Fechar Recibo
               </button>
