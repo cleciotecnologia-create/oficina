@@ -2588,7 +2588,7 @@ export const PDVView: React.FC = () => {
                 setShowReversalReceipt(false);
                 setReversalReceiptSale(null);
               }}
-              className="absolute top-4 right-4 p-1 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 transition-colors"
+              className="absolute top-4 right-4 p-1 rounded-full bg-neutral-200 hover:bg-neutral-300 text-neutral-800 transition-colors no-print cursor-pointer border-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -2698,14 +2698,14 @@ export const PDVView: React.FC = () => {
             </div>
 
             {/* Actions */}
-            <div className="mt-4 flex gap-2 font-mono">
+            <div className="mt-4 flex gap-2 font-mono no-print">
               <button 
                 type="button"
                 id="btn-print-reversal"
                 onClick={() => {
                   window.print();
                 }}
-                className="flex-1 py-2 rounded-xl bg-red-650 hover:bg-red-750 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] border-0"
+                className="flex-1 py-2 rounded-xl bg-red-650 hover:bg-red-750 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow transition-all active:scale-[98%] border-0 no-print"
               >
                 <Printer className="w-4 h-4 text-white" /> Imprimir Comprovante
               </button>
@@ -2716,7 +2716,7 @@ export const PDVView: React.FC = () => {
                   setShowReversalReceipt(false);
                   setReversalReceiptSale(null);
                 }}
-                className="flex-1 py-1 px-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center bg-transparent text-black font-semibold"
+                className="flex-1 py-1 px-2.5 rounded-xl border border-neutral-300 hover:bg-neutral-100 text-xs text-neutral-800 font-bold cursor-pointer transition-all active:scale-[98%] text-center bg-transparent text-black font-semibold no-print"
               >
                 Fechar
               </button>
@@ -3096,12 +3096,12 @@ export const PDVView: React.FC = () => {
                         Aponte seu app do banco para pagar • Valor: <strong>R$ {lastFinishedSale.total.toFixed(2)}</strong>
                       </span>
                       
-                      <div className="flex gap-1 w-full mt-1">
+                      <div className="flex gap-1 w-full mt-1 no-print">
                         <input 
                           type="text" 
                           readOnly 
                           value={lastFinishedPixStringCode} 
-                          className="bg-white border border-neutral-300 rounded px-1.5 py-1 text-[8px] text-neutral-550 select-all truncate flex-1 outline-none text-left text-neutral-600"
+                          className="bg-white border border-neutral-300 rounded px-1.5 py-1 text-[8px] text-neutral-550 select-all truncate flex-1 outline-none text-left text-neutral-600 no-print"
                         />
                         <button
                           type="button"
@@ -3113,7 +3113,7 @@ export const PDVView: React.FC = () => {
                               console.error(err);
                             }
                           }}
-                          className="px-2 py-1 bg-black text-white font-mono text-[8.5px] font-bold uppercase rounded cursor-pointer shrink-0"
+                          className="px-2 py-1 bg-black text-white font-mono text-[8.5px] font-bold uppercase rounded cursor-pointer shrink-0 no-print"
                         >
                           COPIAR
                         </button>

@@ -132,6 +132,8 @@ interface AppContextType {
   localAuditLogs: LocalAuditLog[];
   addLocalAuditLog: (action: string, details: string) => void;
   resetToProduction: () => Promise<void>;
+  resetCaixaEFinanceiro: () => Promise<void>;
+  resetEstoqueEProdutos: () => Promise<void>;
 
   // High Contrast accessibility mode
   highContrast: boolean;
@@ -687,7 +689,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await signInWithPopup(auth, provider);
     } catch (error: any) {
       console.error("Authentication Error: ", error);
-      setLoginError(error.message || "Erro ao conectar com Google Auth.");
+      let msg = error.message || "Erro ao conectar com Google Auth.";
+      if (error?.code === "auth/unauthorized-domain" || error?.message?.includes("unauthorized-domain")) {
+        msg = `auth/unauthorized-domain: O domínio atual (${typeof window !== 'undefined' ? window.location.hostname : 'seu domínio'}) não está autorizado no Firebase Authentication. Adicione-o em Firebase Console ➔ Authentication ➔ Domínios Autorizados.`;
+      }
+      setLoginError(msg);
     } finally {
       setLoading(false);
     }
@@ -701,7 +707,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error: any) {
       console.error("Login Error: ", error);
       let translatedMessage = "Erro ao autenticar. Verifique suas credenciais.";
-      if (error?.code === "auth/user-not-found" || error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
+      if (error?.code === "auth/unauthorized-domain" || error?.message?.includes("unauthorized-domain")) {
+        translatedMessage = `auth/unauthorized-domain: O domínio atual (${typeof window !== 'undefined' ? window.location.hostname : 'seu domínio'}) não está autorizado no Firebase Authentication. Adicione-o no Firebase Console ➔ Authentication ➔ Configurações ➔ Domínios Autorizados.`;
+      } else if (error?.code === "auth/user-not-found" || error?.code === "auth/wrong-password" || error?.code === "auth/invalid-credential") {
         translatedMessage = "E-mail ou senha incorretos.";
       } else if (error?.code === "auth/invalid-email") {
         translatedMessage = "E-mail informado é inválido.";
@@ -726,7 +734,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (error: any) {
       console.error("Registration Error: ", error);
       let translatedMessage = "Erro ao cadastrar usuário.";
-      if (error?.code === "auth/email-already-in-use") {
+      if (error?.code === "auth/unauthorized-domain" || error?.message?.includes("unauthorized-domain")) {
+        translatedMessage = `auth/unauthorized-domain: O domínio atual (${typeof window !== 'undefined' ? window.location.hostname : 'seu domínio'}) não está autorizado no Firebase Authentication. Adicione-o no Firebase Console ➔ Authentication ➔ Configurações ➔ Domínios Autorizados.`;
+      } else if (error?.code === "auth/email-already-in-use") {
         translatedMessage = "Este e-mail já está em uso.";
       } else if (error?.code === "auth/weak-password") {
         translatedMessage = "A senha deve ter pelo menos 6 caracteres.";
@@ -1607,6 +1617,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addLocalAuditLog("ZERAR_DADOS_PRODUÇÃO", "Banco de dados limpo. Sistema inicializado do zero para operações de produção reais.");
   };
 
+  const resetCaixaEFinanceiro = async () => {
+    if (navigator.onLine && auth.currentUser && company?.id) {
+      const collectionsToClear = ['financeiro', 'caixa', 'vendas'];
+      const { getDocs, collection, query, where, writeBatch } = await import('firebase/firestore');
+
+      for (const colName of collectionsToClear) {
+        try {
+          const q = query(collection(db, colName), where('empresaId', '==', company.id));
+          const snap = await getDocs(q);
+          const batch = writeBatch(db);
+          snap.forEach((docSnap) => {
+            batch.delete(docSnap.ref);
+          });
+          await batch.commit();
+        } catch (err) {
+          console.error(`Error clearing collection ${colName}:`, err);
+        }
+      }
+    }
+
+    setFinanceiro([]);
+    setVendas([]);
+    setCaixaStatus({
+      id: "cx_" + new Date().toISOString().substring(0, 10),
+      empresaId: company?.id || INITIAL_COMPANY.id,
+      status: "Fechado",
+      initialAmount: 0,
+      currentAmount: 0,
+      openedAt: ""
+    });
+
+    addLocalAuditLog("ZERAR_CAIXA_FINANCEIRO", "Caixa e lançamentos financeiros zerados com sucesso para início de produção.");
+  };
+
+  const resetEstoqueEProdutos = async () => {
+    if (navigator.onLine && auth.currentUser && company?.id) {
+      const collectionsToClear = ['produtos', 'servicos'];
+      const { getDocs, collection, query, where, writeBatch } = await import('firebase/firestore');
+
+      for (const colName of collectionsToClear) {
+        try {
+          const q = query(collection(db, colName), where('empresaId', '==', company.id));
+          const snap = await getDocs(q);
+          const batch = writeBatch(db);
+          snap.forEach((docSnap) => {
+            batch.delete(docSnap.ref);
+          });
+          await batch.commit();
+        } catch (err) {
+          console.error(`Error clearing collection ${colName}:`, err);
+        }
+      }
+    }
+
+    setProdutos([]);
+    setServicos([]);
+
+    addLocalAuditLog("ZERAR_ESTOQUE_PRODUTOS", "Estoque de peças e catálogo de serviços zerados com sucesso para contagem inicial de produção.");
+  };
+
   const addFerramenta = async (f: Omit<Ferramenta, 'id' | 'empresaId' | 'history'>) => {
     const id = "fer_" + Math.random().toString(36).substr(2, 9);
     const newTool: Ferramenta = {
@@ -1884,6 +1954,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localAuditLogs,
       addLocalAuditLog,
       resetToProduction,
+      resetCaixaEFinanceiro,
+      resetEstoqueEProdutos,
 
       // High Contrast variables
       highContrast,

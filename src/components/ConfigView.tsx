@@ -63,6 +63,8 @@ export const ConfigView: React.FC = () => {
     localAuditLogs,
     addLocalAuditLog,
     resetToProduction,
+    resetCaixaEFinanceiro,
+    resetEstoqueEProdutos,
     user,
     updateUserProfile,
     highContrast,
@@ -752,6 +754,7 @@ export const ConfigView: React.FC = () => {
 
   // Reset to Production wizard states
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetTargetMode, setResetTargetMode] = useState<'all' | 'caixa' | 'estoque'>('all');
   const [resetConfirmationInput, setResetConfirmationInput] = useState('');
   const [isResetExecuting, setIsResetExecuting] = useState(false);
   const [resetFeedback, setResetFeedback] = useState<{ status: 'success' | 'error'; message: string } | null>(null);
@@ -765,18 +768,32 @@ export const ConfigView: React.FC = () => {
     setIsResetExecuting(true);
     setResetFeedback(null);
     try {
-      await resetToProduction();
-      setResetFeedback({
-        status: 'success',
-        message: '🎉 Banco de dados limpo e reinicializado com sucesso! Todos os dados de teste foram apagados. O sistema está pronto do zero para registrar dados reais.'
-      });
+      if (resetTargetMode === 'caixa') {
+        await resetCaixaEFinanceiro();
+        setResetFeedback({
+          status: 'success',
+          message: '🎉 Caixa e movimentações financeiras zerados com sucesso! O caixa está pronto do zero para novas operações de produção.'
+        });
+      } else if (resetTargetMode === 'estoque') {
+        await resetEstoqueEProdutos();
+        setResetFeedback({
+          status: 'success',
+          message: '🎉 Estoque de peças e produtos zerado com sucesso! Pronto para nova contagem de peças de produção.'
+        });
+      } else {
+        await resetToProduction();
+        setResetFeedback({
+          status: 'success',
+          message: '🎉 Banco de dados zerado e reinicializado com sucesso! Todos os dados fictícios foram removidos. O sistema está 100% pronto do zero para a Oficina do Rafael entrar em produção real.'
+        });
+      }
       setShowResetConfirm(false);
       setResetConfirmationInput('');
     } catch (err: any) {
       console.error(err);
       setResetFeedback({
         status: 'error',
-        message: `Houve um problema ao zerar o estoque e tabelas: ${err.message || err}`
+        message: `Houve um problema ao zerar o sistema: ${err.message || err}`
       });
     } finally {
       setIsResetExecuting(false);
@@ -2835,37 +2852,60 @@ export const ConfigView: React.FC = () => {
                   Para que o seu domínio próprio ou subdomínio personalizado funcione como portal principal de faturamento, vendas e ordens de serviço, adicione os seguintes apontamentos de DNS no painel da sua hospedagem:
                 </p>
 
-                {/* Registro.br Step-by-Step Guidance Box */}
-                <div className="bg-amber-950/20 border border-amber-800/40 rounded-xl p-3 text-amber-200 text-xs font-sans space-y-2">
-                  <div className="flex items-center gap-2 text-amber-400 font-bold font-mono text-[11px]">
-                    <span className="bg-amber-500/20 text-amber-300 p-1 rounded">⚠️</span>
-                    Atenção às Regras Oficiais de Sintaxe do Registro.br:
-                  </div>
-                  <p className="text-[11px] leading-relaxed text-amber-100/90">
-                    O Registro.br <strong>NÃO aceita o caractere "@" nem "*".</strong> Para apontar o domínio principal, deixe o campo <em>Nome</em> <strong>Totalmente em Branco</strong>.
-                  </p>
-                  <div className="bg-[#0b101d] p-2.5 rounded-lg border border-amber-900/30 text-[10.5px] space-y-1.5 font-mono text-gray-300">
-                    <p className="font-bold text-emerald-400 font-sans">Como preencher cada tipo de entrada na Tabela DNS do Registro.br:</p>
-                    <ol className="list-decimal pl-4 space-y-1 leading-snug">
-                      <li>Na página do seu domínio no Registro.br, acesse a opção <strong>"EDITAR ZONA"</strong> ou <strong>"MODIFICAR ZONA"</strong>.</li>
-                      <li>Clique em <strong>"NOVA ENTRADA"</strong> e cadastre exatamente assim:
-                        <ul className="list-disc pl-4 mt-1 space-y-1 text-purple-300">
-                          <li>
-                            <strong>Tipo A (Domínio Principal):</strong><br />
-                            Nome: <code className="text-amber-300 bg-slate-800 px-1.5 rounded font-bold">[DEIXAR EM BRANCO - Não coloque @]</code> ➔ IP IPv4: <code className="text-white bg-slate-800 px-1 rounded">185.199.108.153</code>
-                          </li>
-                          <li>
-                            <strong>Tipo CNAME (Subdomínio WWW):</strong><br />
-                            Nome: <code className="text-white bg-slate-800 px-1.5 rounded">www</code> ➔ Destino: <code className="text-white bg-slate-800 px-1 rounded">424c516cfd4137f1.vercel-dns-017.com</code>
-                          </li>
-                          <li>
-                            <strong>Tipo TXT (Validação de Posse):</strong><br />
-                            Nome: <code className="text-white bg-slate-800 px-1.5 rounded">_registrobr-challenge</code> ➔ Texto: <code className="text-white bg-slate-800 px-1 rounded">{`oficinadorafael-verify-${company.id}`}</code>
-                          </li>
-                        </ul>
-                      </li>
-                      <li className="mt-1">Clique no botão verde <strong>"SALVAR ALTERAÇÕES"</strong>.</li>
+                {/* Firebase Hosting & Registro.br Step-by-Step Guidance Box */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Firebase Console Hosting Guide */}
+                  <div className="bg-blue-950/30 border border-blue-800/50 rounded-xl p-3 text-blue-200 text-xs font-sans space-y-2">
+                    <div className="flex items-center justify-between text-blue-400 font-bold font-mono text-[11px]">
+                      <span className="flex items-center gap-1.5">
+                        <span className="bg-blue-500/20 text-blue-300 p-1 rounded">🔥</span>
+                        1. Firebase Hosting
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-gray-300 leading-relaxed">
+                      Projeto: <code className="text-white bg-slate-800 px-1 rounded font-bold">project-7e67bad4-9088-4537-aa1</code>
+                    </p>
+                    <ol className="list-decimal pl-4 space-y-1 text-[10.5px] text-gray-300 leading-snug">
+                      <li>Acesse o <a href="https://console.firebase.google.com/u/0/project/project-7e67bad4-9088-4537-aa1/hosting/sites" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-bold">Firebase Hosting Console</a>.</li>
+                      <li>Clique em <strong>Adicionar domínio personalizado</strong>.</li>
+                      <li>Adicione <code className="text-white bg-slate-800 px-1 rounded">oficinadorafael.com.br</code> e <code className="text-white bg-slate-800 px-1 rounded">www.oficinadorafael.com.br</code>.</li>
+                      <li>No Registro.br, altere o CNAME para <code className="text-emerald-400 bg-slate-900 px-1 rounded font-bold">project-7e67bad4-9088-4537-aa1.web.app</code>.</li>
                     </ol>
+                  </div>
+
+                  {/* Firebase Auth Authorized Domains Guide */}
+                  <div className="bg-emerald-950/30 border border-emerald-800/50 rounded-xl p-3 text-emerald-200 text-xs font-sans space-y-2">
+                    <div className="flex items-center justify-between text-emerald-400 font-bold font-mono text-[11px]">
+                      <span className="flex items-center gap-1.5">
+                        <span className="bg-emerald-500/20 text-emerald-300 p-1 rounded">🔑</span>
+                        2. Liberar Login (Auth)
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] text-gray-300 leading-relaxed">
+                      Evita o erro <code className="text-amber-300 font-bold font-mono">auth/unauthorized-domain</code> ao logar no site:
+                    </p>
+                    <ol className="list-decimal pl-4 space-y-1 text-[10.5px] text-gray-300 leading-snug">
+                      <li>Acesse o <a href="https://console.firebase.google.com/u/0/project/project-7e67bad4-9088-4537-aa1/authentication/settings" target="_blank" rel="noopener noreferrer" className="text-emerald-400 underline font-bold">Firebase Auth Settings</a>.</li>
+                      <li>Aba <strong>Domínios autorizados (Authorized domains)</strong>.</li>
+                      <li>Clique em <strong>Adicionar domínio</strong>.</li>
+                      <li>Cadastre <code className="text-white bg-slate-800 px-1 rounded">oficinadorafael.com.br</code> e <code className="text-white bg-slate-800 px-1 rounded">www.oficinadorafael.com.br</code>.</li>
+                    </ol>
+                  </div>
+
+                  {/* Vercel vs Firebase Error Explanation Box */}
+                  <div className="bg-amber-950/30 border border-amber-800/50 rounded-xl p-3 text-amber-200 text-xs font-sans space-y-2">
+                    <div className="flex items-center gap-2 text-amber-400 font-bold font-mono text-[11px]">
+                      <span className="bg-amber-500/20 text-amber-300 p-1 rounded">⚠️</span>
+                      Erro "404 DEPLOYMENT_NOT_FOUND"
+                    </div>
+                    <p className="text-[10.5px] text-amber-100/90 leading-relaxed">
+                      Seu DNS aponta para <code className="text-white bg-slate-800 px-1 rounded">vercel-dns-017.com</code>.
+                    </p>
+                    <div className="bg-[#0b101d] p-2 rounded-lg border border-amber-900/40 text-[10px] space-y-1 font-mono text-gray-300">
+                      <p className="font-bold text-amber-300">Como Corrigir:</p>
+                      <p><strong>• Se usar Vercel:</strong> Vá em Vercel ➔ Settings ➔ Domains e adicione <code className="text-white">www.oficinadorafael.com.br</code>.</p>
+                      <p><strong>• Se usar Firebase:</strong> No Registro.br, troque CNAME para <code className="text-emerald-300">project-7e67bad4-9088-4537-aa1.web.app</code>.</p>
+                    </div>
                   </div>
                 </div>
 
@@ -2880,18 +2920,33 @@ export const ConfigView: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {/* Standard CNAME suggestion */}
+                      {/* Firebase Hosting CNAME suggestion */}
                       <tr className="border-b border-gray-850 hover:bg-[#070d18] transition-colors">
-                        <td className="p-2 text-purple-400 font-extrabold uppercase">CNAME</td>
-                        <td className="p-2 font-bold text-white">{customDomainStr ? (customDomainStr.split('.')[0] === 'www' ? 'www' : customDomainStr.split('.')[0] || 'www') : 'www'}</td>
+                        <td className="p-2 text-purple-400 font-extrabold uppercase">CNAME (Firebase)</td>
+                        <td className="p-2 font-bold text-white">www</td>
+                        <td className="p-2 text-emerald-400 font-bold">project-7e67bad4-9088-4537-aa1.web.app</td>
+                        <td className="p-2 text-right">
+                          <button 
+                            type="button" 
+                            onClick={() => handleCopyText("project-7e67bad4-9088-4537-aa1.web.app", "CNAME_FB")}
+                            className="bg-slate-900 hover:bg-slate-800 p-1 rounded border border-gray-800 text-[10.5px] text-gray-300 cursor-pointer transition-all"
+                          >
+                            {copiedTemplateText === "CNAME_FB" ? "Copiado!" : "Copiar"}
+                          </button>
+                        </td>
+                      </tr>
+                      {/* Vercel CNAME suggestion */}
+                      <tr className="border-b border-gray-850 hover:bg-[#070d18] transition-colors">
+                        <td className="p-2 text-blue-400 font-extrabold uppercase">CNAME (Vercel)</td>
+                        <td className="p-2 font-bold text-white">www</td>
                         <td className="p-2 text-gray-300">424c516cfd4137f1.vercel-dns-017.com</td>
                         <td className="p-2 text-right">
                           <button 
                             type="button" 
-                            onClick={() => handleCopyText("424c516cfd4137f1.vercel-dns-017.com", "CNAME")}
+                            onClick={() => handleCopyText("424c516cfd4137f1.vercel-dns-017.com", "CNAME_VERCEL")}
                             className="bg-slate-900 hover:bg-slate-800 p-1 rounded border border-gray-800 text-[10.5px] text-gray-400 cursor-pointer transition-all"
                           >
-                            {copiedTemplateText === "CNAME" ? "Copiado!" : "Copiar"}
+                            {copiedTemplateText === "CNAME_VERCEL" ? "Copiado!" : "Copiar"}
                           </button>
                         </td>
                       </tr>
@@ -3647,29 +3702,86 @@ nslookup -type=txt _registrobr-challenge.${(customDomainStr || 'oficinadorafael.
                 </div>
               )}
 
-              {/* Confirm UI Controls */}
+              {/* Reset Mode Selector & Actions */}
               {!showResetConfirm ? (
-                <button
-                  type="button"
-                  id="btn-production-reset"
-                  onClick={() => {
-                    setShowResetConfirm(true);
-                    setResetFeedback(null);
-                  }}
-                  className="py-3 px-4 bg-red-950/20 hover:bg-red-900/30 border border-red-500/20 hover:border-red-500/50 rounded-xl text-xs font-mono font-bold text-red-400 transition-all flex items-center justify-center gap-2 cursor-pointer w-full text-center"
-                >
-                  <Trash2 className="w-4 h-4 text-red-500" />
-                  RESET DE PRODUÇÃO (LIMPAR BANCOS DE DADOS)
-                </button>
+                <div className="flex flex-col gap-3">
+                  <span className="text-[10px] text-gray-400 font-mono font-bold uppercase tracking-wider block">Opções de Limpeza para Produção (Oficina do Rafael):</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {/* Button 1: Zerar Caixa */}
+                    <button
+                      type="button"
+                      id="btn-reset-caixa"
+                      onClick={() => {
+                        setResetTargetMode('caixa');
+                        setShowResetConfirm(true);
+                        setResetFeedback(null);
+                      }}
+                      className="p-3 bg-emerald-950/20 hover:bg-emerald-900/30 border border-emerald-800/40 hover:border-emerald-500/60 rounded-xl text-left transition-all cursor-pointer group flex flex-col gap-1.5"
+                    >
+                      <div className="flex items-center justify-between text-emerald-400 font-mono text-[11px] font-bold">
+                        <span>💵 Zerar Caixa & Financeiro</span>
+                        <Trash2 className="w-3.5 h-3.5 text-emerald-500 group-hover:scale-110 transition-transform" />
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-sans leading-tight">
+                        Zera o saldo do caixa, fechamentos, vendas e faturamentos financeiros.
+                      </p>
+                    </button>
+
+                    {/* Button 2: Zerar Estoque */}
+                    <button
+                      type="button"
+                      id="btn-reset-estoque"
+                      onClick={() => {
+                        setResetTargetMode('estoque');
+                        setShowResetConfirm(true);
+                        setResetFeedback(null);
+                      }}
+                      className="p-3 bg-amber-950/20 hover:bg-amber-900/30 border border-amber-800/40 hover:border-amber-500/60 rounded-xl text-left transition-all cursor-pointer group flex flex-col gap-1.5"
+                    >
+                      <div className="flex items-center justify-between text-amber-400 font-mono text-[11px] font-bold">
+                        <span>📦 Zerar Estoque & Peças</span>
+                        <Trash2 className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" />
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-sans leading-tight">
+                        Zera a contagem e catálogo de peças no estoque para inventário inicial.
+                      </p>
+                    </button>
+
+                    {/* Button 3: Zerar Tudo (Reset Geral) */}
+                    <button
+                      type="button"
+                      id="btn-production-reset"
+                      onClick={() => {
+                        setResetTargetMode('all');
+                        setShowResetConfirm(true);
+                        setResetFeedback(null);
+                      }}
+                      className="p-3 bg-red-950/25 hover:bg-red-900/40 border border-red-800/50 hover:border-red-500/80 rounded-xl text-left transition-all cursor-pointer group flex flex-col gap-1.5"
+                    >
+                      <div className="flex items-center justify-between text-red-400 font-mono text-[11px] font-bold">
+                        <span>🚀 Zerar Tudo (Produção Total)</span>
+                        <Trash2 className="w-3.5 h-3.5 text-red-500 group-hover:scale-110 transition-transform" />
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-sans leading-tight">
+                        Limpa caixas, estoque, clientes, veículos e O.S. fictícias para iniciar do zero.
+                      </p>
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div className="bg-[#0e0708] border border-red-900/40 rounded-xl p-4 flex flex-col gap-3">
                   <div className="flex items-center gap-2.5 text-red-400">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
-                    <span className="font-mono text-xs font-bold uppercase tracking-wider">CONFIRMAÇÃO DE SEGURANÇA OBRIGATÓRIA</span>
+                    <span className="font-mono text-xs font-bold uppercase tracking-wider">
+                      {resetTargetMode === 'caixa' ? 'CONFIRMAR ZERAR CAIXA E FINANCEIRO' : resetTargetMode === 'estoque' ? 'CONFIRMAR ZERAR ESTOQUE E PEÇAS' : 'CONFIRMAR RESET GERAL DE PRODUÇÃO'}
+                    </span>
                   </div>
                   
                   <p className="text-[11px] text-gray-400 leading-normal font-sans">
-                    Você está prestes a apagar permanentemente todas as tabelas e bancos de dados (clientes, veículos, O.S., fluxo financeiro, vendas, produtos e fornecedores). Esta ação é irreversível. Para autorizar o reset para a produção, digite <strong className="text-white text-xs font-mono">CONFIRMAR</strong> no campo abaixo:
+                    {resetTargetMode === 'caixa' && 'Você está prestes a apagar o histórico de caixa, vendas e movimentações financeiras para iniciar o fluxo financeiro de produção do zero.'}
+                    {resetTargetMode === 'estoque' && 'Você está prestes a apagar a contagem atual de estoque e produtos para realizar um novo inventário real de peças.'}
+                    {resetTargetMode === 'all' && 'Você está prestes a apagar permanentemente todos os registros de teste do sistema (caixa, estoque, O.S., clientes e veículos) para entrar em produção real na Oficina do Rafael.'}
+                    {' '}Esta ação é irreversível. Para autorizar, digite <strong className="text-white text-xs font-mono">CONFIRMAR</strong> abaixo:
                   </p>
 
                   <div className="flex flex-col gap-1.5 mt-1">
@@ -3709,10 +3821,10 @@ nslookup -type=txt _registrobr-challenge.${(customDomainStr || 'oficinadorafael.
                       {isResetExecuting ? (
                         <>
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          REDEFININDO...
+                          ZERANDO...
                         </>
                       ) : (
-                        "CONFIRMAR RESET"
+                        resetTargetMode === 'caixa' ? 'ZERAR CAIXA AGORA' : resetTargetMode === 'estoque' ? 'ZERAR ESTOQUE AGORA' : 'CONFIRMAR RESET TOTAL'
                       )}
                     </button>
                   </div>

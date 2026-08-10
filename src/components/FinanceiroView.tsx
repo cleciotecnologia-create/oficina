@@ -1604,7 +1604,7 @@ export const FinanceiroView: React.FC = () => {
                   Lançamento efetuado via AutoPrecision Premium Cloud
                 </p>
 
-                <div className="flex flex-col gap-2 w-full font-mono">
+                <div className="flex flex-col gap-2 w-full font-mono no-print">
                   <div className="flex gap-2 w-full">
                     <button
                       type="button"

@@ -794,9 +794,48 @@ function AppContent() {
               </div>
 
               {(authFeedback || loginError) && (
-                <div className="text-[10px] text-red-400 font-mono bg-red-950/25 p-2.5 rounded-lg border border-red-900/35 leading-tight">
-                  ⚠️ {authFeedback || loginError}
-                </div>
+                (() => {
+                  const errText = authFeedback || loginError || '';
+                  const isUnauthorizedDomain = errText.includes('unauthorized-domain');
+                  if (isUnauthorizedDomain) {
+                    return (
+                      <div className="text-xs text-amber-200 font-sans bg-amber-950/40 p-3 rounded-xl border border-amber-800/60 leading-relaxed flex flex-col gap-2 my-1 text-left">
+                        <div className="flex items-center gap-1.5 text-amber-400 font-bold font-mono text-[11px]">
+                          <span>⚠️ Domínio Não Autorizado no Firebase Auth</span>
+                        </div>
+                        <p className="text-[10.5px] text-amber-100/90">
+                          O Firebase bloqueou a autenticação porque o domínio <code className="text-white bg-slate-900 px-1 rounded font-bold">{typeof window !== 'undefined' ? window.location.hostname : 'atual'}</code> não foi adicionado à lista de domínios autorizados do seu projeto.
+                        </p>
+                        <div className="bg-[#050810] p-2.5 rounded-lg border border-amber-900/40 font-mono text-[10px] space-y-1 text-gray-300">
+                          <p className="font-bold text-amber-300 font-sans">Passo a Passo para Liberar no Firebase Console:</p>
+                          <ol className="list-decimal pl-4 space-y-1 leading-snug">
+                            <li>
+                              Acesse <a href="https://console.firebase.google.com/u/0/project/project-7e67bad4-9088-4537-aa1/authentication/settings" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline font-bold">Firebase Console ➔ Configurações do Authentication</a>
+                            </li>
+                            <li>Clique na aba <strong>Domínios Autorizados</strong> (Authorized Domains).</li>
+                            <li>Clique em <strong>Adicionar domínio</strong> e insira: <code className="text-emerald-300 font-bold">{typeof window !== 'undefined' ? window.location.hostname : 'oficinadorafael.com.br'}</code></li>
+                            <li>Clique em <strong>Salvar</strong>. O login funcionará imediatamente!</li>
+                          </ol>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await loginDemo();
+                            setActiveRoute('dashboard');
+                          }}
+                          className="w-full py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg text-[10.5px] font-mono cursor-pointer transition-colors shadow flex items-center justify-center gap-1.5"
+                        >
+                          ⚡ Acessar em Modo Demo Sem Login (Temporário)
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="text-[10px] text-red-400 font-mono bg-red-950/25 p-2.5 rounded-lg border border-red-900/35 leading-tight">
+                      ⚠️ {errText}
+                    </div>
+                  );
+                })()
               )}
 
               <button
