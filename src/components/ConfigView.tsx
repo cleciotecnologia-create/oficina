@@ -2856,7 +2856,7 @@ export const ConfigView: React.FC = () => {
                           </li>
                           <li>
                             <strong>Tipo CNAME (Subdomínio WWW):</strong><br />
-                            Nome: <code className="text-white bg-slate-800 px-1.5 rounded">www</code> ➔ Destino: <code className="text-white bg-slate-800 px-1 rounded">cname.oficinadorafael.com.br</code>
+                            Nome: <code className="text-white bg-slate-800 px-1.5 rounded">www</code> ➔ Destino: <code className="text-white bg-slate-800 px-1 rounded">424c516cfd4137f1.vercel-dns-017.com</code>
                           </li>
                           <li>
                             <strong>Tipo TXT (Validação de Posse):</strong><br />
@@ -2883,12 +2883,12 @@ export const ConfigView: React.FC = () => {
                       {/* Standard CNAME suggestion */}
                       <tr className="border-b border-gray-850 hover:bg-[#070d18] transition-colors">
                         <td className="p-2 text-purple-400 font-extrabold uppercase">CNAME</td>
-                        <td className="p-2 font-bold text-white">{customDomainStr ? (customDomainStr.split('.')[0] === 'www' ? 'www' : customDomainStr.split('.')[0] || '@') : 'www'}</td>
-                        <td className="p-2 text-gray-300">{customDomainStr.includes('oficinadorafael') ? 'cname.oficinadorafael.com.br' : 'saas.autoprecision.com.br'}</td>
+                        <td className="p-2 font-bold text-white">{customDomainStr ? (customDomainStr.split('.')[0] === 'www' ? 'www' : customDomainStr.split('.')[0] || 'www') : 'www'}</td>
+                        <td className="p-2 text-gray-300">424c516cfd4137f1.vercel-dns-017.com</td>
                         <td className="p-2 text-right">
                           <button 
                             type="button" 
-                            onClick={() => handleCopyText(customDomainStr.includes('oficinadorafael') ? "cname.oficinadorafael.com.br" : "saas.autoprecision.com.br", "CNAME")}
+                            onClick={() => handleCopyText("424c516cfd4137f1.vercel-dns-017.com", "CNAME")}
                             className="bg-slate-900 hover:bg-slate-800 p-1 rounded border border-gray-800 text-[10.5px] text-gray-400 cursor-pointer transition-all"
                           >
                             {copiedTemplateText === "CNAME" ? "Copiado!" : "Copiar"}
