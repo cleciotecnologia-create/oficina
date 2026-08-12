@@ -30,6 +30,7 @@ export interface Company {
   customDomain?: string;
   subdomain?: string;
   domainStatus?: 'Pendente' | 'Verificando' | 'Ativo' | 'Falhado';
+  dnsLastUpdatedAt?: string;
   cep?: string;
   pixKey?: string;
   pixBeneficiary?: string;

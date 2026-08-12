@@ -66,7 +66,8 @@ body {
     background: #ffffff !important;
     color: #000000 !important;
     height: auto !important;
-    min-height: 100% !important;
+    min-height: 0 !important;
+    max-height: none !important;
     overflow: visible !important;
     display: block !important;
     margin: 0 !important;
@@ -93,6 +94,11 @@ body {
   .btn {
     display: none !important;
     visibility: hidden !important;
+    height: 0 !important;
+    max-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
   }
 
   /* 3. Make only designated printable target contents visible (strictly excluding .no-print) */
@@ -122,10 +128,13 @@ body {
     top: 0 !important;
     width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     z-index: 9999998 !important;
     display: block !important;
+    overflow: hidden !important;
   }
 
   /* 5. Position the printable container at the top left of page */
@@ -138,6 +147,7 @@ body {
     width: 100% !important;
     max-width: 100% !important;
     height: auto !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding: 0px !important;
     background: #ffffff !important;
@@ -152,10 +162,11 @@ body {
   /* 6. Thermal receipt continuous roll formatting (80mm & 58mm roll optimization) */
   #sale-finished-receipt-modal .print-container-target,
   #reversal-receipt-modal .print-container-target,
-  .thermal-receipt {
+  .thermal-receipt,
+  #pix-receipt-container {
     max-width: 80mm !important;
     width: 80mm !important;
-    padding: 0mm 1mm !important;
+    padding: 0mm 1mm 1mm 1mm !important;
     margin: 0 !important;
     border: none !important;
     border-radius: 0 !important;
@@ -163,62 +174,181 @@ body {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
-    line-height: 1.15 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: max-content !important;
+    line-height: 1.12 !important;
     font-family: "JetBrains Mono", "Courier New", Courier, monospace !important;
     background: #ffffff !important;
     color: #000000 !important;
     break-inside: avoid !important;
     page-break-inside: avoid !important;
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+    overflow: hidden !important;
+  }
+
+  /* Support for compact 58mm thermal printers (Knup POS-58) */
+  .thermal-receipt-58,
+  .thermal-58mm #sale-finished-receipt-modal .print-container-target,
+  .thermal-58mm .print-container-target {
+    max-width: 58mm !important;
+    width: 58mm !important;
+    font-size: 9.5px !important;
+  }
+
+  /* Rodapé do cupom #sale-finished-receipt-modal: corte de papel com exatamente 2mm de margem inferior após código de barras, assinatura ou informação fiscal/serviço */
+  #sale-finished-receipt-modal {
+    margin-bottom: 2mm !important;
+    padding-bottom: 0 !important;
+  }
+
+  #sale-finished-receipt-modal .print-container-target {
+    padding-bottom: 2mm !important;
+    margin-bottom: 0 !important;
+  }
+
+  #sale-finished-receipt-modal .print-container-target .receipt-footer {
+    min-height: 10mm !important;
+  }
+
+  /* Rodapé .receipt-footer do #sale-finished-receipt-modal: QR Code Pix dinâmico com pelo menos 15mm de margem superior para não interferir na assinatura */
+  #sale-finished-receipt-modal .receipt-footer .receipt-pix-qrcode,
+  #sale-finished-receipt-modal .receipt-pix-qrcode {
+    margin-top: 15mm !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  #sale-finished-receipt-modal .receipt-footer,
+  #sale-finished-receipt-modal .receipt-barcode,
+  #sale-finished-receipt-modal .receipt-signature,
+  #sale-finished-receipt-modal .receipt-fiscal-info,
+  #sale-finished-receipt-modal .print-container-target > div:last-child,
+  #sale-finished-receipt-modal .print-container-target > *:last-child {
+    margin-bottom: 2mm !important;
+    padding-bottom: 0 !important;
   }
 
   /* Eliminate empty vertical gaps, padding, and margins inside thermal cupoms for continuous paper stream */
   #sale-finished-receipt-modal .print-container-target *,
   #reversal-receipt-modal .print-container-target *,
-  .thermal-receipt * {
+  .thermal-receipt *,
+  #pix-receipt-container * {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
     color: #000000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
   }
 
   #sale-finished-receipt-modal .print-container-target div,
   #reversal-receipt-modal .print-container-target div,
-  .thermal-receipt div {
+  .thermal-receipt div,
+  #pix-receipt-container div,
+  #sale-finished-receipt-modal .print-container-target p,
+  #reversal-receipt-modal .print-container-target p,
+  .thermal-receipt p,
+  #pix-receipt-container p {
     margin-top: 0px !important;
     margin-bottom: 1px !important;
     padding-top: 0px !important;
     padding-bottom: 0px !important;
   }
 
+  /* Force compact margins on all Tailwind vertical margin classes for thermal printing */
   #sale-finished-receipt-modal .print-container-target .my-8,
   #sale-finished-receipt-modal .print-container-target .my-6,
   #sale-finished-receipt-modal .print-container-target .my-4,
   #sale-finished-receipt-modal .print-container-target .my-3,
   #sale-finished-receipt-modal .print-container-target .my-2,
   #sale-finished-receipt-modal .print-container-target .my-1,
+  #sale-finished-receipt-modal .print-container-target .mt-8,
+  #sale-finished-receipt-modal .print-container-target .mt-6,
+  #sale-finished-receipt-modal .print-container-target .mt-4,
+  #sale-finished-receipt-modal .print-container-target .mt-3,
+  #sale-finished-receipt-modal .print-container-target .mb-8,
+  #sale-finished-receipt-modal .print-container-target .mb-6,
+  #sale-finished-receipt-modal .print-container-target .mb-4,
   #reversal-receipt-modal .print-container-target .my-8,
   #reversal-receipt-modal .print-container-target .my-6,
   #reversal-receipt-modal .print-container-target .my-4,
   #reversal-receipt-modal .print-container-target .my-3,
   #reversal-receipt-modal .print-container-target .my-2,
-  #reversal-receipt-modal .print-container-target .my-1 {
+  #reversal-receipt-modal .print-container-target .my-1,
+  .thermal-receipt .my-8,
+  .thermal-receipt .my-6,
+  .thermal-receipt .my-4,
+  .thermal-receipt .my-3,
+  .thermal-receipt .my-2,
+  .thermal-receipt .my-1,
+  #pix-receipt-container .my-8,
+  #pix-receipt-container .my-6,
+  #pix-receipt-container .my-4,
+  #pix-receipt-container .my-3 {
     margin-top: 1px !important;
     margin-bottom: 1px !important;
   }
 
+  /* Force compact paddings on all Tailwind vertical padding classes for thermal printing */
+  #sale-finished-receipt-modal .print-container-target .py-8,
   #sale-finished-receipt-modal .print-container-target .py-6,
   #sale-finished-receipt-modal .print-container-target .py-4,
   #sale-finished-receipt-modal .print-container-target .py-3,
+  #sale-finished-receipt-modal .print-container-target .p-8,
   #sale-finished-receipt-modal .print-container-target .p-6,
   #sale-finished-receipt-modal .print-container-target .p-4,
   #sale-finished-receipt-modal .print-container-target .p-3,
+  #reversal-receipt-modal .print-container-target .py-8,
   #reversal-receipt-modal .print-container-target .py-6,
   #reversal-receipt-modal .print-container-target .py-4,
   #reversal-receipt-modal .print-container-target .py-3,
+  #reversal-receipt-modal .print-container-target .p-8,
   #reversal-receipt-modal .print-container-target .p-6,
   #reversal-receipt-modal .print-container-target .p-4,
-  #reversal-receipt-modal .print-container-target .p-3 {
+  #reversal-receipt-modal .print-container-target .p-3,
+  .thermal-receipt .p-8,
+  .thermal-receipt .p-6,
+  .thermal-receipt .p-4,
+  .thermal-receipt .p-3,
+  #pix-receipt-container .p-8,
+  #pix-receipt-container .p-6,
+  #pix-receipt-container .p-4,
+  #pix-receipt-container .p-3 {
     padding-top: 1px !important;
     padding-bottom: 1px !important;
+  }
+
+  /* Override gap and space-y utilities for continuous thermal output */
+  #sale-finished-receipt-modal .print-container-target .gap-8,
+  #sale-finished-receipt-modal .print-container-target .gap-6,
+  #sale-finished-receipt-modal .print-container-target .gap-4,
+  #sale-finished-receipt-modal .print-container-target .gap-3,
+  #reversal-receipt-modal .print-container-target .gap-8,
+  #reversal-receipt-modal .print-container-target .gap-6,
+  #reversal-receipt-modal .print-container-target .gap-4,
+  #reversal-receipt-modal .print-container-target .gap-3,
+  .thermal-receipt .gap-8,
+  .thermal-receipt .gap-6,
+  .thermal-receipt .gap-4,
+  .thermal-receipt .gap-3 {
+    gap: 2px !important;
+  }
+
+  #sale-finished-receipt-modal .print-container-target .space-y-6 > :not([hidden]) ~ :not([hidden]),
+  #sale-finished-receipt-modal .print-container-target .space-y-4 > :not([hidden]) ~ :not([hidden]),
+  #sale-finished-receipt-modal .print-container-target .space-y-3 > :not([hidden]) ~ :not([hidden]),
+  #reversal-receipt-modal .print-container-target .space-y-6 > :not([hidden]) ~ :not([hidden]),
+  #reversal-receipt-modal .print-container-target .space-y-4 > :not([hidden]) ~ :not([hidden]),
+  #reversal-receipt-modal .print-container-target .space-y-3 > :not([hidden]) ~ :not([hidden]),
+  .thermal-receipt .space-y-6 > :not([hidden]) ~ :not([hidden]),
+  .thermal-receipt .space-y-4 > :not([hidden]) ~ :not([hidden]),
+  .thermal-receipt .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1px !important;
   }
 
   /* 7. Force hide any interactive buttons, navigation, or .no-print elements with absolute rule priority */

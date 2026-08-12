@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Package, 
@@ -35,7 +35,13 @@ import {
   Bot,
   Sparkles,
   DollarSign,
-  Copy
+  Copy,
+  FlaskConical,
+  Wrench,
+  CheckCircle2,
+  FileSpreadsheet,
+  Download,
+  Scan
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Produto, Fornecedor, OrdemServico } from '../types';
@@ -73,6 +79,507 @@ export interface ParsedXMLDoc {
   date: string;
   items: ParsedXmlItem[];
 }
+
+export interface StockPresetItem {
+  id: string;
+  name: string;
+  category: string;
+  brand: string;
+  sku: string;
+  compatibility: string;
+  manufacturer: string;
+  costPrice: number;
+  sellPrice: number;
+  quantity: number;
+  minStock: number;
+  group: 'eletrica' | 'quimica' | 'insumos' | 'geral';
+  groupLabel: string;
+}
+
+export interface BarcodePartSample {
+  barcode: string;
+  name: string;
+  brand: string;
+  sku: string;
+  category: string;
+  compatibility: string;
+  manufacturer: string;
+  costPrice: number;
+  sellPrice: number;
+  quantity: number;
+  minStock: number;
+  iconType: 'lamp' | 'glue' | 'spray' | 'filter' | 'plug' | 'relay';
+}
+
+export const BARCODE_PARTS_DATABASE: BarcodePartSample[] = [
+  {
+    barcode: "7891002003001",
+    name: "Lâmpada H7 Halógena 12V 55W Philips Standard",
+    brand: "Philips",
+    sku: "LMP-H7-PHL",
+    category: "Elétrica",
+    compatibility: "Farol Baixo/Alto Universal 12V (VW, Fiat, GM, Ford, Hyundai, Renault)",
+    manufacturer: "Philips Automotive",
+    costPrice: 15.00,
+    sellPrice: 38.00,
+    quantity: 10,
+    minStock: 4,
+    iconType: 'lamp'
+  },
+  {
+    barcode: "7894561230002",
+    name: "Lâmpada H4 Halógena 12V 60/55W Osram Night Breaker",
+    brand: "Osram",
+    sku: "LMP-H4-OSR",
+    category: "Elétrica",
+    compatibility: "Farol Baixo/Alto Duplo - Gol, Uno, Palio, Ka, Corsa, Onix, HB20",
+    manufacturer: "Osram GmbH",
+    costPrice: 18.00,
+    sellPrice: 42.00,
+    quantity: 10,
+    minStock: 4,
+    iconType: 'lamp'
+  },
+  {
+    barcode: "7898001002001",
+    name: "Silicone RTV Alta Temperatura Cinza 50g Tekbond",
+    brand: "Tekbond",
+    sku: "SIL-RTV-50G",
+    category: "Química & Insumos",
+    compatibility: "Juntas de Motor, Cárter, Caixa de Câmbio, Bomba d'Água (Até 315°C)",
+    manufacturer: "Tekbond Saint-Gobain",
+    costPrice: 18.50,
+    sellPrice: 38.00,
+    quantity: 15,
+    minStock: 5,
+    iconType: 'glue'
+  },
+  {
+    barcode: "7896001003001",
+    name: "Cola Trava Rosca Média Torque 242 10g Loctite",
+    brand: "Loctite",
+    sku: "COL-LOC-242",
+    category: "Química & Insumos",
+    compatibility: "Fixação e Vedação de Parafusos M6 a M20 (Evita Afrouxamento por Vibração)",
+    manufacturer: "Henkel Loctite",
+    costPrice: 25.00,
+    sellPrice: 55.00,
+    quantity: 12,
+    minStock: 3,
+    iconType: 'glue'
+  },
+  {
+    barcode: "7897001004001",
+    name: "Desengripante e Lubrificante Spray WD-40 300ml",
+    brand: "WD-40",
+    sku: "SPR-WD40-300",
+    category: "Química & Insumos",
+    compatibility: "Remoção de Ferrugem, Destravamento de Porcas, Proteção Contra Umidade",
+    manufacturer: "WD-40 Company",
+    costPrice: 22.00,
+    sellPrice: 45.00,
+    quantity: 18,
+    minStock: 4,
+    iconType: 'spray'
+  },
+  {
+    barcode: "7892201103002",
+    name: "Filtro de Óleo Lubrificante Fram ExtraGuard PH5548",
+    brand: "Fram",
+    sku: "FLT-OIL-FRM",
+    category: "Filtros",
+    compatibility: "Linha Leve VW/Fiat 1.0, 1.4, 1.6 8V/16V",
+    manufacturer: "Fram Filtration",
+    costPrice: 18.00,
+    sellPrice: 39.90,
+    quantity: 25,
+    minStock: 8,
+    iconType: 'filter'
+  },
+  {
+    barcode: "7893004005001",
+    name: "Jogo de Velas de Ignição NGK Green Plug BKR6E-11",
+    brand: "NGK",
+    sku: "VEL-NGK-BKR6E",
+    category: "Ignição",
+    compatibility: "VW Gol, Fox, Voyage 1.0/1.6 TotalFlex, Fiat Palio 1.0 Fire",
+    manufacturer: "NGK Spark Plug",
+    costPrice: 58.00,
+    sellPrice: 120.00,
+    quantity: 12,
+    minStock: 4,
+    iconType: 'plug'
+  },
+  {
+    barcode: "7895001006001",
+    name: "Relé Auxiliar 4 Pinos 12V 40A DNI com Suporte",
+    brand: "DNI",
+    sku: "RLE-AUX-4P",
+    category: "Elétrica",
+    compatibility: "Buzina, Farol de Milha, Ventoinha, Bomba de Combustível 12V",
+    manufacturer: "DNI Indústria",
+    costPrice: 12.00,
+    sellPrice: 28.00,
+    quantity: 10,
+    minStock: 3,
+    iconType: 'relay'
+  }
+];
+
+export const STOCK_PRESET_ITEMS: StockPresetItem[] = [
+  // ⚡ LÂMPADAS & ELÉTRICA
+  {
+    id: 'prst_h7',
+    name: 'Lâmpada H7 Halógena 12V 55W',
+    category: 'Elétrica',
+    brand: 'Philips',
+    sku: 'LMP-H7-PHL',
+    compatibility: 'Farol Baixo/Alto - Universal 12V (VW, Fiat, GM, Ford, Hyundai, Renault)',
+    manufacturer: 'Philips Automotive',
+    costPrice: 15.00,
+    sellPrice: 38.00,
+    quantity: 10,
+    minStock: 4,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+  {
+    id: 'prst_h4',
+    name: 'Lâmpada H4 Halógena 12V 60/55W',
+    category: 'Elétrica',
+    brand: 'Osram',
+    sku: 'LMP-H4-OSR',
+    compatibility: 'Farol Baixo/Alto Duplo - Gol, Uno, Palio, Ka, Corsa, Onix, HB20',
+    manufacturer: 'Osram GmbH',
+    costPrice: 18.00,
+    sellPrice: 42.00,
+    quantity: 10,
+    minStock: 4,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+  {
+    id: 'prst_h1',
+    name: 'Lâmpada H1 Halógena 12V 55W',
+    category: 'Elétrica',
+    brand: 'Philips',
+    sku: 'LMP-H1-PHL',
+    compatibility: 'Farol Alto / Farol de Milha - Linha Leve Universal 12V',
+    manufacturer: 'Philips Automotive',
+    costPrice: 14.00,
+    sellPrice: 35.00,
+    quantity: 8,
+    minStock: 3,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+  {
+    id: 'prst_h11',
+    name: 'Lâmpada H11 Halógena 12V 55W (Farol de Milha)',
+    category: 'Elétrica',
+    brand: 'Osram',
+    sku: 'LMP-H11-OSR',
+    compatibility: 'Farol de Neblina / Milha - Honda Civic, Corolla, Renegade, Compass',
+    manufacturer: 'Osram GmbH',
+    costPrice: 22.00,
+    sellPrice: 55.00,
+    quantity: 6,
+    minStock: 2,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+  {
+    id: 'prst_t10',
+    name: 'Lâmpada Pingão LED T10 12V W5W Branca',
+    category: 'Elétrica',
+    brand: 'Osram',
+    sku: 'LMP-T10-LED',
+    compatibility: 'Luz de Placa, Teto, Lanterna Dianteira - Universal 12V',
+    manufacturer: 'Osram GmbH',
+    costPrice: 4.50,
+    sellPrice: 15.00,
+    quantity: 20,
+    minStock: 6,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+  {
+    id: 'prst_p21w',
+    name: 'Lâmpada P21W 1156 1 Polo Amarela (Seta/Pisca)',
+    category: 'Elétrica',
+    brand: 'Philips',
+    sku: 'LMP-P21W-AMR',
+    compatibility: 'Lanterna de Seta / Pisca / Ré - Universal 12V',
+    manufacturer: 'Philips Automotive',
+    costPrice: 3.00,
+    sellPrice: 10.00,
+    quantity: 20,
+    minStock: 6,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+  {
+    id: 'prst_fusivel_kit',
+    name: 'Kit Fusíveis Lâmina Automotivo (10A, 15A, 20A, 30A)',
+    category: 'Elétrica',
+    brand: 'DNI',
+    sku: 'FUS-LAM-KIT',
+    compatibility: 'Caixa de Fusíveis de Veículos Leves e Utilitários 12V',
+    manufacturer: 'DNI Indústria',
+    costPrice: 1.20,
+    sellPrice: 5.00,
+    quantity: 50,
+    minStock: 15,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+  {
+    id: 'prst_rele_4p',
+    name: 'Relé Auxiliar 4 Pinos 12V 40A com Suporte',
+    category: 'Elétrica',
+    brand: 'DNI',
+    sku: 'RLE-AUX-4P',
+    compatibility: 'Buzina, Farol de Milha, Ventoinha, Bomba de Combustível',
+    manufacturer: 'DNI Indústria',
+    costPrice: 12.00,
+    sellPrice: 28.00,
+    quantity: 10,
+    minStock: 3,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+  {
+    id: 'prst_limp_contato',
+    name: 'Limpador de Contato Elétrico Spray 300ml',
+    category: 'Elétrica',
+    brand: 'Orbi Química',
+    sku: 'LMP-CNT-300',
+    compatibility: 'Limpeza de conectores, sensores MAP/MAF, relés e chicotes',
+    manufacturer: 'Orbi Química',
+    costPrice: 14.00,
+    sellPrice: 32.00,
+    quantity: 12,
+    minStock: 4,
+    group: 'eletrica',
+    groupLabel: '⚡ Lâmpadas & Elétrica'
+  },
+
+  // 🧪 COLAS, SILICONES & QUÍMICOS
+  {
+    id: 'prst_sili_rtv_cinza',
+    name: 'Silicone de Alta Temperatura RTV Cinza 50g',
+    category: 'Química & Insumos',
+    brand: 'Orbi Química',
+    sku: 'SIL-RTV-CINZA',
+    compatibility: 'Vedação de Cárter, Tampa de Válvula, Bomba d\'Água e Flanges',
+    manufacturer: 'Orbi Química',
+    costPrice: 11.50,
+    sellPrice: 28.00,
+    quantity: 12,
+    minStock: 4,
+    group: 'quimica',
+    groupLabel: '🧪 Colas, Silicones & Química'
+  },
+  {
+    id: 'prst_sili_rtv_preto',
+    name: 'Silicone de Alta Temperatura RTV Preto 50g',
+    category: 'Química & Insumos',
+    brand: 'Tekbond',
+    sku: 'SIL-RTV-PRETO',
+    compatibility: 'Vedação de Cárter, Transmissão e Tampa de Válvula',
+    manufacturer: 'Tekbond Saint-Gobain',
+    costPrice: 11.50,
+    sellPrice: 28.00,
+    quantity: 12,
+    minStock: 4,
+    group: 'quimica',
+    groupLabel: '🧪 Colas, Silicones & Química'
+  },
+  {
+    id: 'prst_trava_242',
+    name: 'Cola Trava Química Rosca Média 242 (Loctite / Tekbond 10g)',
+    category: 'Química & Insumos',
+    brand: 'Loctite',
+    sku: 'TRV-LOCT-242',
+    compatibility: 'Fixação e vedação de parafusos de motor, freios e suspensão',
+    manufacturer: 'Henkel Loctite',
+    costPrice: 22.00,
+    sellPrice: 48.00,
+    quantity: 8,
+    minStock: 2,
+    group: 'quimica',
+    groupLabel: '🧪 Colas, Silicones & Química'
+  },
+  {
+    id: 'prst_cola_instant',
+    name: 'Adesivo/Cola Instantânea Cianoacrilato 20g',
+    category: 'Química & Insumos',
+    brand: 'Tekbond',
+    sku: 'CLA-INST-20G',
+    compatibility: 'Colagem rápida de borracha, plástico, frisos e acabamentos',
+    manufacturer: 'Tekbond Saint-Gobain',
+    costPrice: 6.00,
+    sellPrice: 16.00,
+    quantity: 15,
+    minStock: 5,
+    group: 'quimica',
+    groupLabel: '🧪 Colas, Silicones & Química'
+  },
+  {
+    id: 'prst_cola_parabrisa',
+    name: 'Cola de Para-brisa Poliuretano PU 55 Preto 400g',
+    category: 'Química & Insumos',
+    brand: '3M',
+    sku: 'CLA-PU55-PAR',
+    compatibility: 'Colagem de vidro de para-brisa, vigias e vedação de carroceria',
+    manufacturer: '3M do Brasil',
+    costPrice: 28.00,
+    sellPrice: 65.00,
+    quantity: 6,
+    minStock: 2,
+    group: 'quimica',
+    groupLabel: '🧪 Colas, Silicones & Química'
+  },
+  {
+    id: 'prst_cola_junta',
+    name: 'Cola Veda Junta de Motor Automotivo 73g',
+    category: 'Química & Insumos',
+    brand: '3M',
+    sku: 'CLA-JNT-MTR',
+    compatibility: 'Juntas de papel, cortiça e feltro de motores automotivos',
+    manufacturer: '3M do Brasil',
+    costPrice: 9.00,
+    sellPrice: 22.00,
+    quantity: 10,
+    minStock: 3,
+    group: 'quimica',
+    groupLabel: '🧪 Colas, Silicones & Química'
+  },
+
+  // 🛠️ INSUMOS & SPRAY DA OFICINA
+  {
+    id: 'prst_desengri_wd40',
+    name: 'Desengripante Spray WD-40 / White Lub 300ml',
+    category: 'Química & Insumos',
+    brand: 'WD-40',
+    sku: 'DSG-WD40-300',
+    compatibility: 'Lubrificação de dobradiças, soltar parafusos emperrados e proteção',
+    manufacturer: 'WD-40 Company',
+    costPrice: 18.00,
+    sellPrice: 38.00,
+    quantity: 15,
+    minStock: 5,
+    group: 'insumos',
+    groupLabel: '🛠️ Insumos & Oficina'
+  },
+  {
+    id: 'prst_fita_3m',
+    name: 'Fita Isolante 19mm x 20m PVC Imperial 3M',
+    category: 'Elétrica',
+    brand: '3M',
+    sku: 'FT-ISO-3M20',
+    compatibility: 'Isolamento térmico e elétrico de chicotes automotivos até 600V',
+    manufacturer: '3M do Brasil',
+    costPrice: 5.50,
+    sellPrice: 14.00,
+    quantity: 25,
+    minStock: 8,
+    group: 'insumos',
+    groupLabel: '🛠️ Insumos & Oficina'
+  },
+  {
+    id: 'prst_fita_autofusao',
+    name: 'Fita de Auto-Fusão 19mm x 5m 3M',
+    category: 'Elétrica',
+    brand: '3M',
+    sku: 'FT-AUT-FUS',
+    compatibility: 'Isolamento impermeável à prova d\'água em conexões elétricas externas',
+    manufacturer: '3M do Brasil',
+    costPrice: 16.00,
+    sellPrice: 38.00,
+    quantity: 8,
+    minStock: 2,
+    group: 'insumos',
+    groupLabel: '🛠️ Insumos & Oficina'
+  },
+  {
+    id: 'prst_limpa_tbi',
+    name: 'Desengraxante / CarboCleaner Spray Limpa TBI 300ml',
+    category: 'Química & Insumos',
+    brand: 'Orbi Química',
+    sku: 'LMP-TBI-300',
+    compatibility: 'Desincrustação de borboleta TBI, carburadores e válvulas EGR',
+    manufacturer: 'Orbi Química',
+    costPrice: 15.00,
+    sellPrice: 35.00,
+    quantity: 12,
+    minStock: 4,
+    group: 'insumos',
+    groupLabel: '🛠️ Insumos & Oficina'
+  },
+  {
+    id: 'prst_graxa_litio',
+    name: 'Graxa Branca com Lítio Spray 300ml',
+    category: 'Lubrificantes',
+    brand: 'White Lub',
+    sku: 'GRX-LIT-300',
+    compatibility: 'Lubrificação de fechaduras, canaletas, cabos e engrenagens',
+    manufacturer: 'Orbi Química',
+    costPrice: 13.00,
+    sellPrice: 30.00,
+    quantity: 10,
+    minStock: 3,
+    group: 'insumos',
+    groupLabel: '🛠️ Insumos & Oficina'
+  },
+
+  // ⚙️ GERAL (PEÇAS E FLUIDOS)
+  {
+    id: 'prst_pastilha_freio',
+    name: 'Pastilha de Freio Dianteira Cerâmica',
+    category: 'Freios',
+    brand: 'Bosch',
+    sku: 'PST-BSH-CER',
+    compatibility: 'VW Gol, Voyage, Fox, Polo 1.0/1.6 (2012 em diante)',
+    manufacturer: 'Bosch GmbH',
+    costPrice: 65.00,
+    sellPrice: 140.00,
+    quantity: 10,
+    minStock: 3,
+    group: 'geral',
+    groupLabel: '⚙️ Freios, Filtros & Óleos'
+  },
+  {
+    id: 'prst_filtro_oleo',
+    name: 'Filtro de Óleo Lubrificante Motor 1.0/1.6',
+    category: 'Filtros',
+    brand: 'Tecfil',
+    sku: 'FLT-TCF-01',
+    compatibility: 'VW, Fiat, GM Linha Leve 1.0 e 1.6 Flex',
+    manufacturer: 'Tecfil S/A',
+    costPrice: 12.00,
+    sellPrice: 28.00,
+    quantity: 20,
+    minStock: 5,
+    group: 'geral',
+    groupLabel: '⚙️ Freios, Filtros & Óleos'
+  },
+  {
+    id: 'prst_oleo_5w30',
+    name: 'Óleo de Motor 5W30 Sintético 1L',
+    category: 'Lubrificantes',
+    brand: 'Mobil',
+    sku: 'OLE-5W30-MOB',
+    compatibility: 'Atende especificações API SP / ILSAC GF-6 (GM, Ford, Fiat)',
+    manufacturer: 'Mobil Super',
+    costPrice: 24.00,
+    sellPrice: 48.00,
+    quantity: 24,
+    minStock: 8,
+    group: 'geral',
+    groupLabel: '⚙️ Freios, Filtros & Óleos'
+  }
+];
 
 const SAMPLE_XML_BOSCH = `<?xml version="1.0" encoding="UTF-8"?>
 <nfeProc xmlns="http://www.portalfiscal.inf.br/nfe" versao="4.00">
@@ -375,7 +882,45 @@ export const EstoqueView: React.FC = () => {
   const [editingSupEmail, setEditingSupEmail] = useState('');
 
   // Categories preset
-  const categoriesList = ['Todas', 'Freios', 'Filtros', 'Lubrificantes', 'Suspensão', 'Ignição', 'Carroceria', 'Elétrica'];
+  const categoriesList = ['Todas', 'Freios', 'Filtros', 'Lubrificantes', 'Suspensão', 'Ignição', 'Carroceria', 'Elétrica', 'Química & Insumos', 'Acessórios'];
+
+  // Presets and Autocomplete states
+  const [selectedPresetGroup, setSelectedPresetGroup] = useState<'all' | 'eletrica' | 'quimica' | 'insumos' | 'geral'>('all');
+  const [showNameAutocomplete, setShowNameAutocomplete] = useState(false);
+  const [presetSuccessNotice, setPresetSuccessNotice] = useState('');
+  const [batchModeKeepCategory, setBatchModeKeepCategory] = useState(false);
+
+  // Apply preset helper
+  const applyStockPreset = (preset: StockPresetItem) => {
+    setNewProdName(preset.name);
+    setNewProdCategory(preset.category);
+    setNewProdBrand(preset.brand);
+    setNewProdManufacturer(preset.manufacturer || preset.brand);
+    setNewProdSku(preset.sku);
+    setNewProdCompatibility(preset.compatibility);
+    setNewProdCost(preset.costPrice.toFixed(2));
+    setNewProdSell(preset.sellPrice.toFixed(2));
+    setNewProdQty(preset.quantity.toString());
+    setNewProdMin(preset.minStock.toString());
+    if (!newProdBarcode) {
+      setNewProdBarcode("789" + Math.floor(1000000000 + Math.random() * 900000000));
+    }
+  };
+
+  // Filtered presets
+  const filteredPresets = STOCK_PRESET_ITEMS.filter(item => {
+    if (selectedPresetGroup === 'all') return true;
+    return item.group === selectedPresetGroup;
+  });
+
+  // Autocomplete matches based on newProdName
+  const autocompleteMatches = newProdName.trim().length >= 2
+    ? STOCK_PRESET_ITEMS.filter(item => 
+        item.name.toLowerCase().includes(newProdName.toLowerCase()) ||
+        item.brand.toLowerCase().includes(newProdName.toLowerCase()) ||
+        item.category.toLowerCase().includes(newProdName.toLowerCase())
+      )
+    : [];
 
   // Movement logs
   const [movementsList, setMovementsList] = useState([
@@ -770,10 +1315,180 @@ export const EstoqueView: React.FC = () => {
   const [csvFileSelected, setCsvFileSelected] = useState<boolean>(false);
   const [csvFeedback, setCsvFeedback] = useState<string | null>(null);
 
+  // Modal 'Cadastro Rápido em Lote' via CSV states
+  const [showCsvBatchModal, setShowCsvBatchModal] = useState(false);
+  const [csvBatchFileName, setCsvBatchFileName] = useState('');
+  const [csvBatchParsedItems, setCsvBatchParsedItems] = useState<Array<{
+    id: string;
+    selected: boolean;
+    name: string;
+    brand: string;
+    sku: string;
+    barcode: string;
+    category: string;
+    compatibility: string;
+    costPrice: number;
+    sellPrice: number;
+    quantity: number;
+    minStock: number;
+    status: 'ok' | 'sku_exists' | 'invalid';
+    statusMessage: string;
+  }>>([]);
+  const [csvBatchFeedback, setCsvBatchFeedback] = useState<string | null>(null);
+  const [csvBatchSuccess, setCsvBatchSuccess] = useState(false);
+
   // Barcode helper states & quick scan simulated triggers
   const [showStockScannerModal, setShowStockScannerModal] = useState(false);
   const [stockScannerTarget, setStockScannerTarget] = useState<'new' | 'edit'>('new');
   const [stockScanToast, setStockScanToast] = useState<string | null>(null);
+
+  // Camera & AI Photo Recognition states for Part Registration
+  const [showAiPhotoScanModal, setShowAiPhotoScanModal] = useState(false);
+  const [aiScanTarget, setAiScanTarget] = useState<'new' | 'edit'>('new');
+  const [isAnalyzingPhoto, setIsAnalyzingPhoto] = useState(false);
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [aiScanError, setAiScanError] = useState<string | null>(null);
+  const [aiScanResult, setAiScanResult] = useState<{
+    name: string;
+    brand: string;
+    sku: string;
+    barcode: string;
+    category: string;
+    compatibility: string;
+    costPrice: number;
+    sellPrice: number;
+    quantity: number;
+    minStock: number;
+    confidence: string;
+    notes: string;
+  } | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+
+  const startLiveCamera = async () => {
+    try {
+      setAiScanError(null);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      mediaStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setCameraActive(true);
+    } catch (err: any) {
+      console.warn("Câmera indisponível:", err);
+      setAiScanError("⚠️ Câmera não detectada ou permissão negada. Utilize o envio de imagem ou uma das amostras para testar.");
+      setCameraActive(false);
+    }
+  };
+
+  const stopLiveCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setCameraActive(false);
+  };
+
+  const capturePhotoFromCamera = () => {
+    if (!videoRef.current) return;
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const base64Jpeg = canvas.toDataURL('image/jpeg', 0.85);
+        stopLiveCamera();
+        setPhotoPreviewUrl(base64Jpeg);
+        analyzePartPhotoWithAi(base64Jpeg);
+      }
+    } catch (e) {
+      setAiScanError("Erro ao capturar foto da câmera.");
+    }
+  };
+
+  const handlePhotoFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      stopLiveCamera();
+      setPhotoPreviewUrl(base64);
+      analyzePartPhotoWithAi(base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const analyzePartPhotoWithAi = async (base64Image: string) => {
+    setIsAnalyzingPhoto(true);
+    setAiScanError(null);
+    setAiScanResult(null);
+
+    try {
+      const response = await fetch('/api/gemini/scan-part', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: base64Image }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Servidor de IA indisponível");
+      }
+
+      const data = await response.json();
+      setAiScanResult(data);
+    } catch (err: any) {
+      console.error("Erro na leitura da imagem:", err);
+      setAiScanError("Falha na análise da imagem pela Inteligência Artificial.");
+    } finally {
+      setIsAnalyzingPhoto(false);
+    }
+  };
+
+  const applyAiScanToProductForm = () => {
+    if (!aiScanResult) return;
+
+    if (aiScanTarget === 'new') {
+      setActiveTab('cadastro');
+      setNewProdName(aiScanResult.name || '');
+      setNewProdBrand(aiScanResult.brand || '');
+      setNewProdSku(aiScanResult.sku || '');
+      setNewProdBarcode(aiScanResult.barcode || '');
+      setNewProdCategory(aiScanResult.category || 'Geral');
+      setNewProdCompatibility(aiScanResult.compatibility || '');
+      setNewProdCost((aiScanResult.costPrice || 0).toFixed(2));
+      setNewProdSell((aiScanResult.sellPrice || 0).toFixed(2));
+      setNewProdQty((aiScanResult.quantity || 10).toString());
+      setNewProdMin((aiScanResult.minStock || 3).toString());
+    } else {
+      setEditingProdName(aiScanResult.name || '');
+      setEditingProdBrand(aiScanResult.brand || '');
+      setEditingProdSku(aiScanResult.sku || '');
+      setEditingProdBarcode(aiScanResult.barcode || '');
+      setEditingProdCategory(aiScanResult.category || 'Geral');
+      setEditingProdCompatibility(aiScanResult.compatibility || '');
+      setEditingProdCost((aiScanResult.costPrice || 0).toFixed(2));
+      setEditingProdSell((aiScanResult.sellPrice || 0).toFixed(2));
+      setEditingProdQty((aiScanResult.quantity || 10).toString());
+      setEditingProdMin((aiScanResult.minStock || 3).toString());
+    }
+
+    setStockScanToast(`✨ Foto analisada! Cadastro de peça preenchido com (${aiScanResult.name}).`);
+    setTimeout(() => setStockScanToast(null), 4500);
+    setShowAiPhotoScanModal(false);
+    stopLiveCamera();
+  };
 
   const playStockBeeper = () => {
     try {
@@ -790,6 +1505,236 @@ export const EstoqueView: React.FC = () => {
       osc.start();
       osc.stop(ctx.currentTime + 0.08);
     } catch(e){}
+  };
+
+  // Auto-fill form fields by searching scanned barcode against catalog & sample database
+  const lookupBarcodeAndAutofill = (barcodeToSearch: string, target: 'new' | 'edit') => {
+    playStockBeeper();
+    const cleanCode = barcodeToSearch.trim();
+    if (!cleanCode) return false;
+
+    // Search in BARCODE_PARTS_DATABASE or STOCK_PRESET_ITEMS
+    const dbMatch = BARCODE_PARTS_DATABASE.find(b => b.barcode === cleanCode || b.sku.toLowerCase() === cleanCode.toLowerCase());
+    const presetMatch = !dbMatch ? STOCK_PRESET_ITEMS.find(p => p.sku.toLowerCase() === cleanCode.toLowerCase() || p.id.toLowerCase() === cleanCode.toLowerCase()) : null;
+
+    if (dbMatch) {
+      if (target === 'new') {
+        setNewProdName(dbMatch.name);
+        setNewProdBrand(dbMatch.brand);
+        setNewProdSku(dbMatch.sku);
+        setNewProdBarcode(dbMatch.barcode);
+        setNewProdCategory(dbMatch.category);
+        setNewProdCompatibility(dbMatch.compatibility);
+        setNewProdCost(dbMatch.costPrice.toFixed(2));
+        setNewProdSell(dbMatch.sellPrice.toFixed(2));
+        setNewProdQty(dbMatch.quantity.toString());
+        setNewProdMin(dbMatch.minStock.toString());
+      } else {
+        setEditingProdName(dbMatch.name);
+        setEditingProdBrand(dbMatch.brand);
+        setEditingProdSku(dbMatch.sku);
+        setEditingProdBarcode(dbMatch.barcode);
+        setEditingProdCategory(dbMatch.category);
+        setEditingProdCompatibility(dbMatch.compatibility);
+        setEditingProdCost(dbMatch.costPrice.toFixed(2));
+        setEditingProdSell(dbMatch.sellPrice.toFixed(2));
+        setEditingProdQty(dbMatch.quantity.toString());
+        setEditingProdMin(dbMatch.minStock.toString());
+      }
+      setStockScanToast(`✨ Peça RECONHECIDA (${dbMatch.name})! Todos os campos foram preenchidos automaticamente.`);
+      setTimeout(() => setStockScanToast(null), 4000);
+      return true;
+    } else if (presetMatch) {
+      if (target === 'new') {
+        setNewProdName(presetMatch.name);
+        setNewProdBrand(presetMatch.brand);
+        setNewProdSku(presetMatch.sku);
+        setNewProdBarcode(cleanCode);
+        setNewProdCategory(presetMatch.category);
+        setNewProdCompatibility(presetMatch.compatibility);
+        setNewProdCost(presetMatch.costPrice.toFixed(2));
+        setNewProdSell(presetMatch.sellPrice.toFixed(2));
+        setNewProdQty(presetMatch.quantity.toString());
+        setNewProdMin(presetMatch.minStock.toString());
+      } else {
+        setEditingProdName(presetMatch.name);
+        setEditingProdBrand(presetMatch.brand);
+        setEditingProdSku(presetMatch.sku);
+        setEditingProdBarcode(cleanCode);
+        setEditingProdCategory(presetMatch.category);
+        setEditingProdCompatibility(presetMatch.compatibility);
+        setEditingProdCost(presetMatch.costPrice.toFixed(2));
+        setEditingProdSell(presetMatch.sellPrice.toFixed(2));
+        setEditingProdQty(presetMatch.quantity.toString());
+        setEditingProdMin(presetMatch.minStock.toString());
+      }
+      setStockScanToast(`✨ Modelo RECONHECIDO (${presetMatch.name})! Campos preenchidos automaticamente.`);
+      setTimeout(() => setStockScanToast(null), 4000);
+      return true;
+    } else {
+      if (target === 'new') {
+        setNewProdBarcode(cleanCode);
+      } else {
+        setEditingProdBarcode(cleanCode);
+      }
+      setStockScanToast(`📷 Código EAN ${cleanCode} lido! Insira o nome do produto para concluir.`);
+      setTimeout(() => setStockScanToast(null), 3000);
+      return false;
+    }
+  };
+
+  // Download template CSV file for batch imports
+  const handleDownloadCsvTemplate = () => {
+    const csvContent = "\uFEFFnome;marca;sku;codigo_barras;categoria;compatibilidade;preco_custo;preco_venda;quantidade;estoque_minimo\n" +
+      "Lâmpada H7 LED Super Branca 12V;Philips;LMP-H7-LED;7891002003001;Elétrica;Universal Farol H7;35.00;89.90;15;4\n" +
+      "Silicone RTV Alta Temp Cinza 50g;Tekbond;SIL-RTV-50G;7898001002001;Química & Insumos;Vedação de Cárter e Tampa de Válvula;18.50;38.00;20;5\n" +
+      "Cola Trava Rosca Loctite 242 10g;Loctite;COL-LOC-242;7896001003001;Química & Insumos;Parafusos e Prisioneiros M6-M20;25.00;55.00;12;3\n" +
+      "Desengripante Spray WD-40 300ml;WD-40;SPR-WD40-300;7897001004001;Química & Insumos;Lubrificação Geral e Desengripante;22.00;45.00;18;4\n" +
+      "Filtro de Óleo Fram ExtraGuard;Fram;FLT-OIL-FRM;7892201103002;Filtros;Linha Leve VW 1.0/1.6 8V;18.00;39.90;25;8\n" +
+      "Lâmpada H4 Halógena 12V 60/55W;Osram;LMP-H4-OSR;7894561230002;Elétrica;Farol Baixo/Alto Duplo Gol/Palio;18.00;42.00;10;4\n" +
+      "Jogo Velas NGK Green Plug BKR6E;NGK;VEL-NGK-BKR6E;7893004005001;Ignição;VW Gol, Fox, Voyage 1.0/1.6 TotalFlex;58.00;120.00;12;4\n" +
+      "Relé Auxiliar 4 Pinos 12V 40A;DNI;RLE-AUX-4P;7895001006001;Elétrica;Buzina, Farol Milha, Ventoinha 12V;12.00;28.00;10;3\n";
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'modelo_cadastro_pecas.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Load 1-click sample batch for workshop testing
+  const handleLoadSampleCsvBatch = () => {
+    setCsvBatchSuccess(false);
+    const sampleItems = BARCODE_PARTS_DATABASE.map((item, idx) => {
+      const skuExists = produtos.some(p => p.internalSku?.toUpperCase() === item.sku.toUpperCase());
+      return {
+        id: `batch_sample_${idx}`,
+        selected: true,
+        name: item.name,
+        brand: item.brand,
+        sku: item.sku,
+        barcode: item.barcode,
+        category: item.category,
+        compatibility: item.compatibility,
+        costPrice: item.costPrice,
+        sellPrice: item.sellPrice,
+        quantity: item.quantity,
+        minStock: item.minStock,
+        status: skuExists ? ('sku_exists' as const) : ('ok' as const),
+        statusMessage: skuExists ? '⚠️ SKU já cadastrado no catálogo' : '✨ Pronto para cadastrar'
+      };
+    });
+    setCsvBatchParsedItems(sampleItems);
+    setCsvBatchFileName('lote_exemplo_oficina_autotech.csv');
+    setCsvBatchFeedback('✅ 8 produtos de exemplo carregados! Verifique a tabela abaixo e clique em Confirmar Importação.');
+  };
+
+  // Parse uploaded CSV file for batch imports
+  const handleCsvBatchFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCsvBatchSuccess(false);
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setCsvBatchFileName(file.name);
+    setCsvBatchFeedback('Lendo e analisando arquivo CSV...');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (!text || !text.trim()) {
+        setCsvBatchFeedback('❌ O arquivo CSV está vazio.');
+        return;
+      }
+
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length <= 1) {
+        setCsvBatchFeedback('❌ O arquivo CSV precisa ter cabeçalho e pelo menos 1 linha de produto.');
+        return;
+      }
+
+      // Detect delimiter (commas or semicolons)
+      const firstLine = lines[0];
+      const delimiter = firstLine.includes(';') ? ';' : ',';
+
+      const items = lines.slice(1).map((line, idx) => {
+        const cols = line.split(delimiter).map(c => c.replace(/^"|"$/g, '').trim());
+        const name = cols[0] || `Produto ${idx + 1}`;
+        const brand = cols[1] || 'Outros';
+        const sku = cols[2] || `SKU-LOTE-${idx + 101}`;
+        const barcode = cols[3] || '';
+        const category = cols[4] || 'Geral';
+        const compatibility = cols[5] || 'Universal';
+        const costPrice = parseFloat((cols[6] || '0').replace('R$', '').replace('.', '').replace(',', '.')) || 10.0;
+        const sellPrice = parseFloat((cols[7] || '0').replace('R$', '').replace('.', '').replace(',', '.')) || (costPrice * 2);
+        const quantity = parseInt(cols[8] || '10', 10) || 10;
+        const minStock = parseInt(cols[9] || '3', 10) || 3;
+
+        const skuExists = produtos.some(p => p.internalSku?.toUpperCase() === sku.toUpperCase());
+        const isValid = name.length >= 2;
+
+        return {
+          id: `batch_upload_${idx}_${Date.now()}`,
+          selected: isValid,
+          name,
+          brand,
+          sku,
+          barcode,
+          category,
+          compatibility,
+          costPrice,
+          sellPrice,
+          quantity,
+          minStock,
+          status: !isValid ? ('invalid' as const) : skuExists ? ('sku_exists' as const) : ('ok' as const),
+          statusMessage: !isValid ? '❌ Nome inválido' : skuExists ? '⚠️ SKU existente no sistema' : '✨ Pronto para cadastrar'
+        };
+      });
+
+      setCsvBatchParsedItems(items);
+      setCsvBatchFeedback(`✅ Arquivo analisado com sucesso! ${items.length} itens encontrados para revisão.`);
+    };
+
+    reader.onerror = () => {
+      setCsvBatchFeedback('❌ Erro de leitura do arquivo CSV.');
+    };
+
+    reader.readAsText(file);
+  };
+
+  // Commit selected batch items into database
+  const handleConfirmCsvBatchImport = async () => {
+    const selected = csvBatchParsedItems.filter(i => i.selected);
+    if (selected.length === 0) {
+      setCsvBatchFeedback('⚠️ Marque pelo menos 1 item na tabela para cadastrar.');
+      return;
+    }
+
+    setCsvBatchFeedback(`Gravando ${selected.length} produtos no estoque...`);
+    
+    let addedCount = 0;
+    for (const item of selected) {
+      await addProduto({
+        name: item.name,
+        brand: item.brand,
+        internalSku: item.sku,
+        barcode: item.barcode,
+        category: item.category,
+        compatibility: item.compatibility,
+        manufacturer: item.brand,
+        costPrice: item.costPrice,
+        sellPrice: item.sellPrice,
+        quantity: item.quantity,
+        minStock: item.minStock
+      });
+      addedCount++;
+    }
+
+    playStockBeeper();
+    setCsvBatchSuccess(true);
+    setCsvBatchFeedback(`🎉 Sucesso! ${addedCount} novos produtos foram adicionados ao estoque AutoTech.`);
   };
 
   const handleGenerateEan = (target: 'new' | 'edit') => {
@@ -830,17 +1775,7 @@ export const EstoqueView: React.FC = () => {
       if (e.key === 'Enter') {
         const barcodeText = rawBuffer.trim();
         if (barcodeText.length >= 3) {
-          playStockBeeper();
-          
-          if (editingProdId) {
-            setEditingProdBarcode(barcodeText);
-            setStockScanToast(`Bipado (Edição): ${barcodeText}`);
-            setTimeout(() => setStockScanToast(null), 3000);
-          } else {
-            setNewProdBarcode(barcodeText);
-            setStockScanToast(`Bipado (Novo Cadastro): ${barcodeText}`);
-            setTimeout(() => setStockScanToast(null), 3000);
-          }
+          lookupBarcodeAndAutofill(barcodeText, editingProdId ? 'edit' : 'new');
           rawBuffer = '';
           e.preventDefault();
         }
@@ -943,12 +1878,38 @@ export const EstoqueView: React.FC = () => {
     };
     setMovementsList(prev => [newLog, ...prev]);
 
+    if (batchModeKeepCategory) {
+      // Keep category, brand, supplier, manufacturer for continuous fast entry
+      const currentCat = newProdCategory;
+      const currentBrand = newProdBrand;
+      const currentSup = newProdFornecedorId;
+      const currentManuf = newProdManufacturer;
+
+      setNewProdName('');
+      setNewProdSku('');
+      setNewProdBarcode('');
+      setNewProdCost('');
+      setNewProdSell('');
+      setNewProdQty('');
+      setNewProdMin('');
+      setNewProdCompatibility('');
+
+      setNewProdCategory(currentCat);
+      setNewProdBrand(currentBrand);
+      setNewProdFornecedorId(currentSup);
+      setNewProdManufacturer(currentManuf);
+
+      setPresetSuccessNotice(`✅ "${payload.name}" cadastrado! Categoria e fornecedor mantidos para a próxima peça.`);
+      setTimeout(() => setPresetSuccessNotice(''), 5000);
+      return;
+    }
+
     // Reset inputs
     setNewProdName('');
     setNewProdBrand('');
     setNewProdSku('');
     setNewProdBarcode('');
-    setNewProdCategory('Freios');
+    setNewProdCategory('Elétrica');
     setNewProdCompatibility('');
     setNewProdManufacturer('');
     setNewProdCost('');
@@ -1369,6 +2330,15 @@ export const EstoqueView: React.FC = () => {
           >
             Importar XML (NF-e)
           </button>
+          <button 
+            type="button"
+            onClick={() => { playStockBeeper(); setShowAiPhotoScanModal(true); setAiScanTarget('new'); }}
+            className="bg-purple-900/80 hover:bg-purple-800 text-purple-200 border border-purple-500/40 font-bold flex items-center gap-1 shadow-sm px-3 py-1.5 rounded-lg text-xs font-mono"
+            title="Cadastrar peça fotografando a embalagem, caixa ou produto com Inteligência Artificial"
+          >
+            <Camera className="w-3.5 h-3.5 text-purple-300 animate-pulse" />
+            📷 Foto & Câmera IA
+          </button>
         </div>
       </div>
 
@@ -1433,15 +2403,34 @@ export const EstoqueView: React.FC = () => {
               </select>
             </div>
 
-            <div className="md:col-span-3">
+            <div className="md:col-span-3 flex gap-2">
+              <button
+                type="button"
+                id="btn-scan-part-photo-ai"
+                onClick={() => { playStockBeeper(); setShowAiPhotoScanModal(true); setAiScanTarget(editingProdId ? 'edit' : 'new'); }}
+                className="flex-1 bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 hover:from-purple-600 hover:to-indigo-600 text-white font-mono text-[10px] font-extrabold py-2.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer border border-purple-400/40 shadow-lg shadow-purple-950/30 uppercase"
+                title="Fotografar peça com câmera do celular ou webcam para cadastro automático"
+              >
+                <Camera className="w-3.5 h-3.5 text-purple-300 animate-pulse" />
+                Câmera IA
+              </button>
+              <button
+                type="button"
+                id="btn-import-csv-batch"
+                onClick={() => { playStockBeeper(); setShowCsvBatchModal(true); }}
+                className="flex-1 bg-emerald-650 hover:bg-emerald-700 bg-emerald-600 text-white font-mono text-[10px] font-extrabold py-2.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer border border-emerald-500/30 hover:border-emerald-500/60 shadow-lg shadow-emerald-950/20 uppercase"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                Lote CSV
+              </button>
               <button
                 type="button"
                 id="btn-import-xml-estoque"
                 onClick={() => { playStockBeeper(); setShowXmlImporterModal(true); }}
-                className="w-full bg-red-650 hover:bg-red-700 bg-red-600 text-white font-mono text-[11px] font-extrabold py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer border border-red-500/30 hover:border-red-500/60 shadow-lg shadow-red-950/20 uppercase"
+                className="flex-1 bg-red-650 hover:bg-red-700 bg-red-600 text-white font-mono text-[10px] font-extrabold py-2.5 px-2 rounded-xl transition-all flex items-center justify-center gap-1 cursor-pointer border border-red-500/30 hover:border-red-500/60 shadow-lg shadow-red-950/20 uppercase"
               >
-                <FileCode className="w-4 h-4" />
-                Importar XML
+                <FileCode className="w-3.5 h-3.5" />
+                XML NF-e
               </button>
             </div>
           </div>
@@ -2497,6 +3486,7 @@ export const EstoqueView: React.FC = () => {
                             className="text-gray-500 hover:text-red-500 p-1 rounded"
                             title="Deletar fornecedor"
                           >
+                               {/* CADASTRO TAB (Peça nova com presets inteligentes, seletores de margem e distribuidora) */}
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </>
@@ -2517,221 +3507,546 @@ export const EstoqueView: React.FC = () => {
         </div>
       )}
 
-      {/* CADASTRO TAB (Peça nova com seletores de margem e distribuidora) */}
+      {/* CADASTRO TAB (Peça nova com presets inteligentes, seletores de margem e distribuidora) */}
       {activeTab === 'cadastro' && (
-        <form onSubmit={handleCreateProduct} className="max-w-4xl mx-auto w-full bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6">
-          <div className="border-b border-gray-850 pb-4">
-            <h3 className="font-display font-extrabold text-white text-base">CADASTRAR NOVO COMPONENTE NO ESTOQUE</h3>
-            <span className="text-xs text-gray-400">
-              Insira o custo de lote de aquisição e a margem de faturamento para vendas no de balcão e de ordens de serviço.
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="max-w-4xl mx-auto w-full flex flex-col gap-6">
+          
+          {/* ASSISTENTE DE BUSCA POR CÂMERA & BANNER CSV LOTE */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
-            <div className="md:col-span-2 flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-400">DENOMINAÇÃO TÉCNICA DA PEÇA *</label>
-              <input 
-                type="text"
-                placeholder="Ex: Pastilha de Freio Dianteiro Bosch Cerâmica"
-                value={newProdName}
-                onChange={(e) => setNewProdName(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white"
-                required
-              />
+            {/* CARD 1: ASSISTENTE DE CÂMERA / AUTO-FILL POR CÓDIGO DE BARRAS */}
+            <div className="bg-gradient-to-br from-[#120f26] via-[#0d1226] to-[#0a0f1d] border border-purple-500/40 rounded-2xl p-4 shadow-xl relative overflow-hidden flex flex-col justify-between gap-3">
+              <div className="absolute -right-10 -bottom-10 w-36 h-36 rounded-full bg-purple-500/10 blur-2xl pointer-events-none" />
+              
+              <div>
+                <div className="flex items-center justify-between border-b border-gray-800/80 pb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-purple-950 border border-purple-500/50 text-purple-400">
+                      <Camera className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="font-display font-extrabold text-white text-sm tracking-tight flex items-center gap-1.5">
+                        ASSISTENTE DE CÂMERA & BARCODE
+                      </h3>
+                      <span className="text-[10px] text-purple-300/80 font-mono block">
+                        Auto-preenchimento instantâneo de peças por código EAN
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-extrabold bg-purple-950 text-purple-300 border border-purple-800">
+                    ⚡ Câmera HD
+                  </span>
+                </div>
+
+                <p className="text-xs text-gray-300 mt-2.5 leading-relaxed">
+                  Aponte a câmera do celular ou leitor USB para a caixa do produto. O assistente identifica <strong>Lâmpadas (H7, H4, LED)</strong>, <strong>Colas (Loctite, Tekbond, Silicone RTV)</strong>, <strong>Sprays</strong> e <strong>Filtros</strong> e preenche automaticamente Marca, SKU, Categoria, Custo e Venda!
+                </p>
+
+                {/* Sample barcode chips */}
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  <span className="text-[9.5px] text-gray-400 font-mono font-bold block w-full">TESTAR BIPAGEM DE EXEMPLO:</span>
+                  {[
+                    { label: "💡 Lâmpada H7 Philips", code: "7891002003001" },
+                    { label: "🧪 Silicone RTV Tekbond", code: "7898001002001" },
+                    { label: "🔒 Cola Trava Rosca Loctite", code: "7896001003001" },
+                    { label: "🛢️ Filtro Óleo Fram", code: "7892201103002" }
+                  ].map((chip, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => lookupBarcodeAndAutofill(chip.code, 'new')}
+                      className="px-2 py-1 rounded-lg bg-[#181135] hover:bg-purple-900/60 border border-purple-500/30 text-purple-200 text-[10.5px] font-mono transition-all cursor-pointer hover:scale-105"
+                      title={`Bipar ${chip.code}`}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-800/80 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-gray-400 font-mono flex items-center gap-1">
+                  <Scan className="w-3.5 h-3.5 text-purple-400" /> Bipagem rápida ativa
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { playStockBeeper(); setStockScannerTarget('new'); setShowStockScannerModal(true); }}
+                  className="py-2 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-mono text-[11px] font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Camera className="w-4 h-4" /> Bipar com a Câmera
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-400">CATEGORIA DE PEÇA</label>
-              <select
-                value={newProdCategory}
-                onChange={(e) => setNewProdCategory(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-3 px-3 text-xs text-white font-mono"
-              >
-                {categoriesList.filter(c => c !== 'Todas').map((cat, idx) => (
-                  <option key={idx} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
+            {/* CARD 2: CADASTRO EM LOTE VIA CSV */}
+            <div className="bg-gradient-to-br from-[#0c1e19] via-[#0a1714] to-[#07110e] border border-emerald-500/40 rounded-2xl p-4 shadow-xl relative overflow-hidden flex flex-col justify-between gap-3">
+              <div className="absolute -right-10 -bottom-10 w-36 h-36 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none" />
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-400">MARCA DO FABRICANTE</label>
-              <input 
-                type="text"
-                placeholder="Ex: Bosch, SKF, Cofap, TRW"
-                value={newProdBrand}
-                onChange={(e) => setNewProdBrand(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white"
-              />
-            </div>
+              <div>
+                <div className="flex items-center justify-between border-b border-gray-800/80 pb-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-xl bg-emerald-950 border border-emerald-500/50 text-emerald-400">
+                      <FileSpreadsheet className="w-5 h-5 animate-pulse" />
+                    </div>
+                    <div>
+                      <h3 className="font-display font-extrabold text-white text-sm tracking-tight flex items-center gap-1.5">
+                        CADASTRO EM LOTE (CSV)
+                      </h3>
+                      <span className="text-[10px] text-emerald-300/80 font-mono block">
+                        Importe dezenas de itens de uma só vez
+                      </span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-800">
+                    📊 Excel / CSV
+                  </span>
+                </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-400">SKU INTERNO (CÓDIGO DE GESTÃO)</label>
-              <input 
-                type="text"
-                placeholder="Ex: PST-BSH-01"
-                value={newProdSku}
-                onChange={(e) => setNewProdSku(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono"
-              />
-            </div>
+                <p className="text-xs text-gray-300 mt-2.5 leading-relaxed">
+                  Suba planilhas da oficina para cadastrar dezenas de produtos (lâmpadas, colas, silicones, buchas, filtros) em segundos. O sistema valida SKUs e valores antes de gravar.
+                </p>
 
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between items-center">
-                <label className="text-[10px] font-mono text-gray-400">CÓDIGO DE BARRAS (EAN)</label>
-                <div className="flex gap-1">
+                <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => handleGenerateEan('new')}
-                    className="text-[9px] font-mono bg-[#1a0f30]/60 text-purple-300 border border-purple-900/40 hover:bg-purple-600 hover:text-white px-2 py-0.5 rounded transition-all cursor-pointer font-bold uppercase"
+                    onClick={handleDownloadCsvTemplate}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#0d2820] hover:bg-emerald-900/60 border border-emerald-500/30 text-emerald-300 text-[10.5px] font-mono transition-all cursor-pointer flex items-center gap-1"
                   >
-                    ⚡ GERAR
+                    <Download className="w-3 h-3" /> Baixar Modelo .CSV
                   </button>
                   <button
                     type="button"
-                    onClick={() => { playStockBeeper(); setStockScannerTarget('new'); setShowStockScannerModal(true); }}
-                    className="text-[9px] font-mono bg-red-950/40 text-red-400 border border-red-900/40 hover:bg-red-650 hover:text-white px-2 py-0.5 rounded transition-all cursor-pointer font-bold uppercase flex items-center gap-0.5"
+                    onClick={() => { playStockBeeper(); handleLoadSampleCsvBatch(); setShowCsvBatchModal(true); }}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#143d31] hover:bg-emerald-800/60 border border-emerald-400/40 text-emerald-200 text-[10.5px] font-mono font-bold transition-all cursor-pointer flex items-center gap-1"
                   >
-                    <Camera className="w-2.5 h-2.5" /> SCAN
+                    ⚡ Testar Lote Exemplo (8 Peças)
                   </button>
                 </div>
               </div>
-              <div className="relative">
-                <Barcode className="absolute left-3 top-3 w-4 h-4 text-red-500/60" />
+
+              <div className="pt-2 border-t border-gray-800/80 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-gray-400 font-mono">
+                  Compatível com Excel, Google Sheets, ERPs
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { playStockBeeper(); setShowCsvBatchModal(true); }}
+                  className="py-2 px-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-[11px] font-bold transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Upload className="w-4 h-4" /> Abrir Modal em Lote
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          {/* BANNER / PAINEL DE MODELOS PRONTOS PARA CADASTRO RÁPIDO (LÂMPADAS, COLAS, ELÉTRICA & INSUMOS) */}
+          <div className="bg-gradient-to-br from-[#0e172a] via-[#0c1324] to-[#080d19] rounded-2xl border border-cyan-500/30 p-5 shadow-2xl relative overflow-hidden">
+            {/* Ambient subtle glow */}
+            <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+            
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-gray-800 pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-cyan-950/80 border border-cyan-500/40 text-cyan-400 font-mono font-bold text-sm flex items-center justify-center shrink-0 shadow-inner">
+                  <Sparkles className="w-5 h-5 text-cyan-300" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="font-display font-extrabold text-white text-sm sm:text-base tracking-tight">
+                      CADASTRO RÁPIDO EM 1-CLIQUE (PRESETS DA OFICINA)
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[9.5px] font-mono font-bold uppercase bg-cyan-950 border border-cyan-500/50 text-cyan-300">
+                      ⚡ Lâmpadas • Colas • Silicones • Sprays
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Selecione qualquer item comum da lista para preencher todo o formulário (marca, SKU, custo, venda e aplicação) em menos de 1 segundo!
+                  </p>
+                </div>
+              </div>
+
+              {/* Group Filter Chips */}
+              <div className="flex flex-wrap items-center gap-1.5 self-start md:self-auto font-mono text-[10.5px]">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPresetGroup('all')}
+                  className={`px-2.5 py-1 rounded-lg border transition-all cursor-pointer font-bold ${
+                    selectedPresetGroup === 'all'
+                      ? 'bg-cyan-500 text-black border-cyan-400 shadow-md'
+                      : 'bg-slate-900/80 text-gray-300 border-slate-700 hover:bg-slate-800'
+                  }`}
+                >
+                  Todos ({STOCK_PRESET_ITEMS.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPresetGroup('eletrica')}
+                  className={`px-2.5 py-1 rounded-lg border transition-all cursor-pointer font-bold flex items-center gap-1 ${
+                    selectedPresetGroup === 'eletrica'
+                      ? 'bg-amber-500 text-black border-amber-400 shadow-md'
+                      : 'bg-amber-950/40 text-amber-300 border-amber-800/60 hover:bg-amber-900/60'
+                  }`}
+                >
+                  <Zap className="w-3 h-3" /> ⚡ Lâmpadas & Elétrica
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPresetGroup('quimica')}
+                  className={`px-2.5 py-1 rounded-lg border transition-all cursor-pointer font-bold flex items-center gap-1 ${
+                    selectedPresetGroup === 'quimica'
+                      ? 'bg-purple-500 text-white border-purple-400 shadow-md'
+                      : 'bg-purple-950/40 text-purple-300 border-purple-800/60 hover:bg-purple-900/60'
+                  }`}
+                >
+                  <FlaskConical className="w-3 h-3" /> 🧪 Colas & Química
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPresetGroup('insumos')}
+                  className={`px-2.5 py-1 rounded-lg border transition-all cursor-pointer font-bold flex items-center gap-1 ${
+                    selectedPresetGroup === 'insumos'
+                      ? 'bg-emerald-500 text-black border-emerald-400 shadow-md'
+                      : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/60 hover:bg-emerald-900/60'
+                  }`}
+                >
+                  <Wrench className="w-3 h-3" /> 🛠️ Insumos & Sprays
+                </button>
+              </div>
+            </div>
+
+            {/* Presets Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-3.5 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+              {filteredPresets.map((preset) => (
+                <div
+                  key={preset.id}
+                  onClick={() => {
+                    applyStockPreset(preset);
+                    setPresetSuccessNotice(`✨ Modelo "${preset.name}" aplicado! Ajuste se necessário e clique em Registrar.`);
+                    setTimeout(() => setPresetSuccessNotice(''), 4000);
+                  }}
+                  className="group bg-[#080d1a] hover:bg-[#101930] border border-gray-800 hover:border-cyan-500/50 rounded-xl p-2.5 transition-all cursor-pointer flex flex-col justify-between gap-1.5 shadow-sm hover:shadow-cyan-950/30 active:scale-[98%]"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`p-1.5 rounded-lg text-xs shrink-0 ${
+                        preset.group === 'eletrica' 
+                          ? 'bg-amber-950/80 text-amber-400 border border-amber-800/50' 
+                          : preset.group === 'quimica'
+                          ? 'bg-purple-950/80 text-purple-400 border border-purple-800/50'
+                          : 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/50'
+                      }`}>
+                        {preset.group === 'eletrica' ? <Zap className="w-3.5 h-3.5" /> : preset.group === 'quimica' ? <FlaskConical className="w-3.5 h-3.5" /> : <Wrench className="w-3.5 h-3.5" />}
+                      </span>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-bold text-white group-hover:text-cyan-300 transition-colors truncate">
+                          {preset.name}
+                        </h4>
+                        <span className="text-[10px] text-gray-400 font-mono block truncate">
+                          {preset.brand} • {preset.sku}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[9px] font-mono font-bold bg-cyan-950/80 border border-cyan-800/60 text-cyan-300 px-1.5 py-0.5 rounded shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
+                      APLICAR
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[10.5px] font-mono pt-1 border-t border-gray-800/60 text-gray-300">
+                    <span>
+                      Custo: <strong className="text-red-400">R$ {preset.costPrice.toFixed(2)}</strong>
+                    </span>
+                    <span>
+                      Venda: <strong className="text-emerald-400">R$ {preset.sellPrice.toFixed(2)}</strong>
+                    </span>
+                    <span className="text-[9.5px] text-gray-400 font-sans">
+                      Qtd: {preset.quantity} un
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* FORMULARIO DE REGISTRO MANUAL */}
+          <form onSubmit={handleCreateProduct} className="w-full bg-[#0c1223] rounded-2xl border border-gray-800 p-6 flex flex-col gap-6 shadow-xl">
+            <div className="border-b border-gray-850 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+              <div>
+                <h3 className="font-display font-extrabold text-white text-base">FORMULÁRIO DE CADASTRO MANUAL DE COMPONENTE</h3>
+                <span className="text-xs text-gray-400">
+                  Insira os custos de aquisição e a margem de faturamento para vendas no balcão e de ordens de serviço.
+                </span>
+              </div>
+              {presetSuccessNotice && (
+                <span className="px-3 py-1 rounded-lg bg-cyan-950 border border-cyan-500/50 text-cyan-300 font-mono text-xs font-bold animate-pulse flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-cyan-400" /> {presetSuccessNotice}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* DENOMINACAO TECNICA COM AUTOCOMPLETE */}
+              <div className="md:col-span-2 flex flex-col gap-1 relative">
+                <label className="text-[10px] font-mono text-gray-400">DENOMINAÇÃO TÉCNICA DA PEÇA *</label>
+                <div className="relative">
+                  <input 
+                    type="text"
+                    placeholder="Ex: Lâmpada H7 12V 55W Philips ou Silicone RTV Cinza..."
+                    value={newProdName}
+                    onChange={(e) => {
+                      setNewProdName(e.target.value);
+                      setShowNameAutocomplete(true);
+                    }}
+                    onFocus={() => setShowNameAutocomplete(true)}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white w-full focus:border-cyan-500 focus:outline-none transition-colors"
+                    required
+                  />
+
+                  {/* Autocomplete Dropdown if typing matches presets */}
+                  {showNameAutocomplete && autocompleteMatches.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-[#090e1a] border border-cyan-500/50 rounded-xl shadow-2xl z-50 overflow-hidden max-h-56 overflow-y-auto custom-scrollbar">
+                      <div className="px-3 py-1.5 bg-cyan-950/90 border-b border-cyan-800/40 text-[10px] font-mono font-bold text-cyan-300 flex items-center justify-between">
+                        <span>💡 SUGESTÕES ENCONTRADAS (CLIQUE PARA PREENCHER):</span>
+                        <button 
+                          type="button" 
+                          onClick={() => setShowNameAutocomplete(false)}
+                          className="text-gray-400 hover:text-white text-[9px] underline cursor-pointer"
+                        >
+                          Fechar
+                        </button>
+                      </div>
+                      {autocompleteMatches.map((match) => (
+                        <div
+                          key={match.id}
+                          onClick={() => {
+                            applyStockPreset(match);
+                            setShowNameAutocomplete(false);
+                            setPresetSuccessNotice(`✨ "${match.name}" carregado!`);
+                            setTimeout(() => setPresetSuccessNotice(''), 3000);
+                          }}
+                          className="px-3 py-2.5 hover:bg-cyan-950/70 border-b border-gray-800/50 cursor-pointer flex items-center justify-between text-xs transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-amber-400 shrink-0">⚡</span>
+                            <div className="min-w-0">
+                              <div className="font-bold text-white truncate">{match.name}</div>
+                              <div className="text-[10px] text-gray-400 font-mono truncate">{match.brand} • Categoria: {match.category}</div>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 font-mono text-[11px] ml-2">
+                            <div className="text-emerald-400 font-bold">R$ {match.sellPrice.toFixed(2)}</div>
+                            <div className="text-[9px] text-gray-400">Custo R$ {match.costPrice.toFixed(2)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-gray-400">CATEGORIA DE PEÇA</label>
+                <select
+                  value={newProdCategory}
+                  onChange={(e) => setNewProdCategory(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-3 px-3 text-xs text-white font-mono"
+                >
+                  {categoriesList.filter(c => c !== 'Todas').map((cat, idx) => (
+                    <option key={idx} value={cat}>{cat}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-gray-400">MARCA DO FABRICANTE</label>
                 <input 
                   type="text"
-                  placeholder="Bipe com leitor óptico ou digite..."
-                  value={newProdBarcode}
-                  onChange={(e) => setNewProdBarcode(e.target.value)}
-                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 pl-9 text-xs text-white font-mono w-full font-bold"
+                  placeholder="Ex: Philips, Osram, 3M, Loctite, Bosch, SKF"
+                  value={newProdBrand}
+                  onChange={(e) => setNewProdBrand(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white"
                 />
               </div>
-            </div>
 
-            <div className="md:col-span-2 flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-450">COMPATIBILIDADE (MODELOS APLICAÇÃO)</label>
-              <input 
-                type="text"
-                placeholder="Ex: VW Golf 1.4 TSI 2017 a 2021, Audi A3 Sedan..."
-                value={newProdCompatibility}
-                onChange={(e) => setNewProdCompatibility(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white"
-              />
-            </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-gray-400">SKU INTERNO (CÓDIGO DE GESTÃO)</label>
+                <input 
+                  type="text"
+                  placeholder="Ex: LMP-H7-PHL ou SIL-RTV-50G"
+                  value={newProdSku}
+                  onChange={(e) => setNewProdSku(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono"
+                />
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-400">FORNECEDOR VINCULADO</label>
-              <select
-                value={newProdFornecedorId}
-                onChange={(e) => setNewProdFornecedorId(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-3 px-3 text-xs text-white"
-              >
-                <option value="">-- Sem Fornecedor / Outros --</option>
-                {fornecedores.map(sup => (
-                  <option key={sup.id} value={sup.id}>{sup.name}</option>
-                ))}
-              </select>
-            </div>
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-mono text-gray-400">CÓDIGO DE BARRAS (EAN)</label>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleGenerateEan('new')}
+                      className="text-[9px] font-mono bg-[#1a0f30]/60 text-purple-300 border border-purple-900/40 hover:bg-purple-600 hover:text-white px-2 py-0.5 rounded transition-all cursor-pointer font-bold uppercase"
+                    >
+                      ⚡ GERAR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { playStockBeeper(); setStockScannerTarget('new'); setShowStockScannerModal(true); }}
+                      className="text-[9px] font-mono bg-red-950/40 text-red-400 border border-red-900/40 hover:bg-red-650 hover:text-white px-2 py-0.5 rounded transition-all cursor-pointer font-bold uppercase flex items-center gap-0.5"
+                    >
+                      <Camera className="w-2.5 h-2.5" /> SCAN
+                    </button>
+                  </div>
+                </div>
+                <div className="relative">
+                  <Barcode className="absolute left-3 top-3 w-4 h-4 text-red-500/60" />
+                  <input 
+                    type="text"
+                    placeholder="Bipe com leitor óptico ou digite..."
+                    value={newProdBarcode}
+                    onChange={(e) => setNewProdBarcode(e.target.value)}
+                    className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 pl-9 text-xs text-white font-mono w-full font-bold"
+                  />
+                </div>
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-red-400">PREÇO DE CUSTO (FORNETECEDOR R$)</label>
-              <input 
-                type="number"
-                step="0.01"
-                placeholder="Ex: 120.00"
-                value={newProdCost}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setNewProdCost(val);
-                  const parsedCost = parseFloat(val);
-                  if (!isNaN(parsedCost) && parsedCost >= 0) {
-                    const markup = company?.defaultMarkup !== undefined ? company.defaultMarkup : 50;
-                    const suggestedSell = parsedCost + (parsedCost * markup / 100);
-                    setNewProdSell(suggestedSell.toFixed(2));
-                  } else {
-                    setNewProdSell('');
-                  }
-                }}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono font-bold"
-              />
-            </div>
+              <div className="md:col-span-2 flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-gray-450">COMPATIBILIDADE (MODELOS APLICAÇÃO)</label>
+                <input 
+                  type="text"
+                  placeholder="Ex: Universal 12V, Linha Leve VW/Fiat/GM ou Vedação de Motor/Cárter"
+                  value={newProdCompatibility}
+                  onChange={(e) => setNewProdCompatibility(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white"
+                />
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-green-400">PREÇO VENDA BALCÃO (R$) *</label>
-              <input 
-                type="number"
-                step="0.01;0.1"
-                placeholder="Ex: 249.90"
-                value={newProdSell}
-                onChange={(e) => setNewProdSell(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono font-bold"
-                required
-              />
-            </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-gray-400">FORNECEDOR VINCULADO</label>
+                <select
+                  value={newProdFornecedorId}
+                  onChange={(e) => setNewProdFornecedorId(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-3 px-3 text-xs text-white"
+                >
+                  <option value="">-- Sem Fornecedor / Outros --</option>
+                  {fornecedores.map(sup => (
+                    <option key={sup.id} value={sup.id}>{sup.name}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-300">SALDO EM ESTOQUE INICIAL *</label>
-              <input 
-                type="number"
-                placeholder="Ex: 25"
-                value={newProdQty}
-                onChange={(e) => setNewProdQty(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono"
-                required
-              />
-            </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-red-400">PREÇO DE CUSTO (FORNECEDOR R$)</label>
+                <input 
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 15.00"
+                  value={newProdCost}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewProdCost(val);
+                    const parsedCost = parseFloat(val);
+                    if (!isNaN(parsedCost) && parsedCost >= 0) {
+                      const markup = company?.defaultMarkup !== undefined ? company.defaultMarkup : 50;
+                      const suggestedSell = parsedCost + (parsedCost * markup / 100);
+                      setNewProdSell(suggestedSell.toFixed(2));
+                    } else {
+                      setNewProdSell('');
+                    }
+                  }}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono font-bold"
+                />
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-400">ESTOQUE MÍNIMO DE SEGURANÇA</label>
-              <input 
-                type="number"
-                placeholder="Ex: 5"
-                value={newProdMin}
-                onChange={(e) => setNewProdMin(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono"
-              />
-            </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-green-400">PREÇO VENDA BALCÃO (R$) *</label>
+                <input 
+                  type="number"
+                  step="0.01"
+                  placeholder="Ex: 38.00"
+                  value={newProdSell}
+                  onChange={(e) => setNewProdSell(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono font-bold"
+                  required
+                />
+              </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] font-mono text-gray-400">FABRICANTE (ORIGINAL)</label>
-              <input 
-                type="text"
-                placeholder="Ex: Bosch GmbH"
-                value={newProdManufacturer}
-                onChange={(e) => setNewProdManufacturer(e.target.value)}
-                className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white"
-              />
-            </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-gray-300">SALDO EM ESTOQUE INICIAL *</label>
+                <input 
+                  type="number"
+                  placeholder="Ex: 10"
+                  value={newProdQty}
+                  onChange={(e) => setNewProdQty(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono"
+                  required
+                />
+              </div>
 
-            {/* Price margin stats helper details */}
-            <div className="md:col-span-3 bg-gray-950/40 p-4 rounded-xl border border-gray-850 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs font-mono">
-              <div className="flex flex-wrap gap-x-6 gap-y-1">
-                <span>
-                  Markup Presumido: <strong className="text-cyan-400">{getMarginAndMarkup(parseFloat(newProdCost)||0, parseFloat(newProdSell)||0).markup.toFixed(1)}%</strong>
-                </span>
-                <span>
-                  Margem de Lucro: <strong className="text-green-500">{getMarginAndMarkup(parseFloat(newProdCost)||0, parseFloat(newProdSell)||0).margin.toFixed(1)}%</strong>
-                </span>
-                <span>
-                  Lucro por Peça: <strong className="text-white">R$ {Math.max(0, (parseFloat(newProdSell)||0) - (parseFloat(newProdCost)||0)).toFixed(2)}</strong>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-gray-400">ESTOQUE MÍNIMO DE SEGURANÇA</label>
+                <input 
+                  type="number"
+                  placeholder="Ex: 4"
+                  value={newProdMin}
+                  onChange={(e) => setNewProdMin(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white font-mono"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] font-mono text-gray-400">FABRICANTE (ORIGINAL)</label>
+                <input 
+                  type="text"
+                  placeholder="Ex: Philips Automotive ou 3M"
+                  value={newProdManufacturer}
+                  onChange={(e) => setNewProdManufacturer(e.target.value)}
+                  className="bg-[#080c16] border border-gray-800 rounded-xl py-2.5 px-3 text-xs text-white"
+                />
+              </div>
+
+              {/* Price margin stats helper details */}
+              <div className="md:col-span-3 bg-gray-950/40 p-4 rounded-xl border border-gray-850 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs font-mono">
+                <div className="flex flex-wrap gap-x-6 gap-y-1">
+                  <span>
+                    Markup Presumido: <strong className="text-cyan-400">{getMarginAndMarkup(parseFloat(newProdCost)||0, parseFloat(newProdSell)||0).markup.toFixed(1)}%</strong>
+                  </span>
+                  <span>
+                    Margem de Lucro: <strong className="text-green-500">{getMarginAndMarkup(parseFloat(newProdCost)||0, parseFloat(newProdSell)||0).margin.toFixed(1)}%</strong>
+                  </span>
+                  <span>
+                    Lucro por Peça: <strong className="text-white">R$ {Math.max(0, (parseFloat(newProdSell)||0) - (parseFloat(newProdCost)||0)).toFixed(2)}</strong>
+                  </span>
+                </div>
+                <span className="text-gray-500 font-sans text-[11px] leading-tight flex items-center gap-1">
+                  <Calculator className="w-3.5 h-3.5 text-gray-600" /> Auto-cálculo de faturamento do ERP.
                 </span>
               </div>
-              <span className="text-gray-500 font-sans text-[11px] leading-tight flex items-center gap-1">
-                <Calculator className="w-3.5 h-3.5 text-gray-600" /> Auto-cálculo de faturamento do ERP.
-              </span>
+
             </div>
 
-          </div>
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-4 border-t border-gray-850 pt-4">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-gray-300 font-mono hover:text-white transition-colors">
+                <input 
+                  type="checkbox"
+                  checked={batchModeKeepCategory}
+                  onChange={(e) => setBatchModeKeepCategory(e.target.checked)}
+                  className="w-4 h-4 rounded bg-gray-900 border-gray-700 text-red-600 focus:ring-0 cursor-pointer"
+                />
+                <span>⚡ Cadastrar em Lote (manter Categoria, Fornecedor e Marca para o próximo item)</span>
+              </label>
 
-          <div className="flex justify-end gap-3 mt-4 border-t border-gray-850 pt-4">
-            <button 
-              type="submit"
-              className="px-6 py-3.5 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl font-bold font-mono text-white text-xs tracking-wider"
-            >
-              📥 REGISTRAR COMPONENTE NO ESTOQUE
-            </button>
-          </div>
-        </form>
+              <button 
+                type="submit"
+                className="w-full sm:w-auto px-6 py-3.5 bg-red-650 hover:bg-red-700 bg-red-600 rounded-xl font-bold font-mono text-white text-xs tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[98%] transition-all"
+              >
+                📥 REGISTRAR COMPONENTE NO ESTOQUE
+              </button>
+            </div>
+          </form>
+
+        </div>
       )}
 
       {/* MOVIMENTACOES TAB WITH 6-MONTH LINE CHART */}
@@ -4383,6 +5698,635 @@ export const EstoqueView: React.FC = () => {
             </motion.div>
           );
         })()}
+      </AnimatePresence>
+
+      {/* 📥 MODAL DE 'CADASTRO RÁPIDO EM LOTE' VIA CSV */}
+      <AnimatePresence>
+        {showCsvBatchModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-6 backdrop-blur-md text-left font-sans"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="bg-[#0b1328] border border-emerald-500/30 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl relative overflow-hidden text-gray-200"
+            >
+              {/* Header Top Accent */}
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400" />
+
+              {/* Modal Header */}
+              <div className="p-5 sm:p-6 border-b border-gray-800 flex items-start justify-between gap-4 bg-[#080e1c]">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 rounded-2xl shadow-inner flex items-center justify-center shrink-0">
+                    <FileSpreadsheet className="w-7 h-7 text-emerald-300 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg sm:text-xl font-display font-black text-white tracking-wide">
+                        Cadastro Rápido em Lote (Importador CSV)
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-extrabold bg-emerald-950 text-emerald-300 border border-emerald-500/40 uppercase">
+                        ⚡ Lâmpadas, Colas, Silicones & Peças
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                      Suba planilhas ou teste com o lote pré-configurado da oficina. O sistema valida os campos, formata os preços e cadastra todos os itens automaticamente no estoque.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowCsvBatchModal(false)}
+                  className="text-gray-400 hover:text-white p-2 hover:bg-gray-800/80 rounded-xl transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Top Action Bar: Upload area & sample button */}
+              <div className="p-4 sm:p-5 bg-[#0c162f] border-b border-gray-800 flex flex-col md:flex-row items-center justify-between gap-4">
+                
+                {/* Drag / File selector */}
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <label className="py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-mono font-bold text-xs transition-all cursor-pointer shadow-lg flex items-center gap-2 border border-emerald-400/40 shrink-0">
+                    <Upload className="w-4 h-4" />
+                    {csvBatchFileName ? `📄 ${csvBatchFileName}` : "Selecionar Planilha CSV..."}
+                    <input
+                      type="file"
+                      accept=".csv,.txt"
+                      onChange={handleCsvBatchFileUpload}
+                      className="sr-only"
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={handleDownloadCsvTemplate}
+                    className="py-2.5 px-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-xs font-mono transition-all cursor-pointer flex items-center gap-1.5"
+                    title="Baixar arquivo de modelo preenchido com lâmpadas, colas e filtros"
+                  >
+                    <Download className="w-3.5 h-3.5 text-emerald-400" />
+                    Baixar Modelo .CSV
+                  </button>
+                </div>
+
+                {/* 1-Click Test Sample Batch */}
+                <button
+                  type="button"
+                  onClick={handleLoadSampleCsvBatch}
+                  className="py-2.5 px-4 rounded-xl bg-gradient-to-r from-emerald-950 via-teal-950 to-emerald-900 hover:from-emerald-900 hover:to-teal-900 border border-emerald-500/50 text-emerald-200 text-xs font-mono font-bold transition-all cursor-pointer shadow-md flex items-center gap-2 w-full md:w-auto justify-center"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-300 animate-spin" />
+                  ⚡ Carregar Lote Exemplo (8 Peças Diversas)
+                </button>
+              </div>
+
+              {/* Feedback Banner */}
+              {csvBatchFeedback && (
+                <div className={`px-6 py-3 font-mono text-xs flex items-center gap-2 border-b ${
+                  csvBatchSuccess
+                    ? 'bg-emerald-950/90 text-emerald-200 border-emerald-500/40'
+                    : csvBatchFeedback.startsWith('❌')
+                    ? 'bg-red-950/80 text-red-300 border-red-500/30'
+                    : 'bg-slate-900/90 text-cyan-300 border-cyan-500/30'
+                }`}>
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{csvBatchFeedback}</span>
+                </div>
+              )}
+
+              {/* Items Table Preview */}
+              <div className="p-5 overflow-y-auto max-h-[50vh] flex flex-col gap-3 custom-scrollbar">
+                {csvBatchParsedItems.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 font-mono text-xs flex flex-col items-center justify-center gap-3">
+                    <FileSpreadsheet className="w-12 h-12 text-emerald-400/40" />
+                    <p className="font-bold text-sm text-gray-200">Nenhum lote de arquivo carregado ainda</p>
+                    <p className="text-gray-400 text-xs max-w-md">
+                      Clique em <strong>"Carregar Lote Exemplo"</strong> para simular 8 peças comuns da oficina (lâmpadas, colas, silicones, filtros) ou selecione um arquivo .CSV do seu computador.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-xl border border-gray-800 bg-[#070d18]">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-gray-800 bg-[#091224] text-gray-400 text-[10px] font-mono uppercase tracking-wider">
+                          <th className="py-3 px-3 text-center w-10">
+                            <input
+                              type="checkbox"
+                              checked={csvBatchParsedItems.every(i => i.selected)}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setCsvBatchParsedItems(prev => prev.map(i => ({ ...i, selected: checked })));
+                              }}
+                              className="w-4 h-4 rounded text-emerald-500 bg-slate-950 border-gray-800 focus:ring-0 cursor-pointer"
+                            />
+                          </th>
+                          <th className="py-3 px-3">Peça / Descrição</th>
+                          <th className="py-3 px-3">Marca</th>
+                          <th className="py-3 px-3">SKU / Cód. Barras</th>
+                          <th className="py-3 px-3">Categoria</th>
+                          <th className="py-3 px-3 text-right">Custo</th>
+                          <th className="py-3 px-3 text-right">Venda</th>
+                          <th className="py-3 px-3 text-center">Qtd / Mín</th>
+                          <th className="py-3 px-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {csvBatchParsedItems.map((item) => (
+                          <tr key={item.id} className="border-b border-gray-800/60 hover:bg-slate-900/40 transition-colors">
+                            <td className="py-3 px-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={item.selected}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setCsvBatchParsedItems(prev => prev.map(i => i.id === item.id ? { ...i, selected: checked } : i));
+                                }}
+                                className="w-4 h-4 rounded text-emerald-500 bg-slate-950 border-gray-800 focus:ring-0 cursor-pointer"
+                              />
+                            </td>
+                            <td className="py-3 px-3 font-bold text-white max-w-xs truncate">
+                              {item.name}
+                              <span className="text-[9.5px] block text-gray-400 font-mono font-normal truncate">{item.compatibility}</span>
+                            </td>
+                            <td className="py-3 px-3 font-mono text-cyan-300 font-bold">
+                              {item.brand}
+                            </td>
+                            <td className="py-3 px-3 font-mono text-gray-300">
+                              <span className="block font-bold">{item.sku}</span>
+                              <span className="text-[9px] text-gray-500">{item.barcode || 'Sem EAN'}</span>
+                            </td>
+                            <td className="py-3 px-3 font-mono text-gray-300">
+                              <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px]">
+                                {item.category}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono text-red-400 font-bold">
+                              R$ {item.costPrice.toFixed(2)}
+                            </td>
+                            <td className="py-3 px-3 text-right font-mono text-emerald-400 font-bold">
+                              R$ {item.sellPrice.toFixed(2)}
+                            </td>
+                            <td className="py-3 px-3 text-center font-mono font-bold text-white">
+                              {item.quantity} un <span className="text-gray-500 text-[9px] font-normal">(mín {item.minStock})</span>
+                            </td>
+                            <td className="py-3 px-3 font-mono text-[10px]">
+                              <span className={`px-2 py-0.5 rounded-full border font-bold ${
+                                item.status === 'ok'
+                                  ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                  : item.status === 'sku_exists'
+                                  ? 'bg-amber-950 text-amber-300 border-amber-800'
+                                  : 'bg-red-950 text-red-300 border-red-800'
+                              }`}>
+                                {item.statusMessage}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="p-4 sm:p-5 border-t border-gray-800 bg-[#080e1c] flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs">
+                <div className="text-gray-400 text-[11px] flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    {csvBatchParsedItems.filter(i => i.selected).length} de {csvBatchParsedItems.length} produtos selecionados para gravação.
+                  </span>
+                </div>
+
+                <div className="flex gap-2.5 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setShowCsvBatchModal(false)}
+                    className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-xl font-bold uppercase cursor-pointer transition-colors"
+                  >
+                    Fechar
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={csvBatchParsedItems.filter(i => i.selected).length === 0}
+                    onClick={handleConfirmCsvBatchImport}
+                    className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-extrabold rounded-xl shadow-lg shadow-emerald-950/50 uppercase flex items-center gap-2 cursor-pointer transition-all border border-emerald-400/30"
+                  >
+                    <Upload className="w-4 h-4 text-emerald-200" />
+                    Confirmar Importação em Lote
+                  </button>
+                </div>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 📸 MODAL DE 'CÂMERA & RECONHECIMENTO DE PEÇA COM IA' */}
+      <AnimatePresence>
+        {showAiPhotoScanModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-3 sm:p-6 backdrop-blur-md text-left font-sans"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="bg-[#0b1226] border border-purple-500/40 rounded-3xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl relative overflow-hidden text-gray-200"
+            >
+              {/* Header Gradient Top Bar */}
+              <div className="h-1.5 bg-gradient-to-r from-purple-500 via-indigo-500 to-amber-400" />
+
+              {/* Modal Header */}
+              <div className="p-4 sm:p-6 border-b border-gray-800 bg-[#090e1f] flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-purple-950/60 border border-purple-500/40 text-purple-300 rounded-2xl shadow-inner">
+                    <Camera className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-base sm:text-lg font-display font-extrabold text-white">
+                        Cadastro Inteligente de Estoque por Foto & Câmera
+                      </h3>
+                      <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 text-[10px] font-mono font-bold flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-300" /> Gemini Vision IA
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 font-sans mt-0.5">
+                      Aponta a câmera para a caixa da peça, código de barras ou rótulo para preencher nome, marca, SKU e preços automaticamente!
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopLiveCamera();
+                    setShowAiPhotoScanModal(false);
+                  }}
+                  className="p-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded-xl transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1">
+
+                {/* AI Error Alert if any */}
+                {aiScanError && (
+                  <div className="p-3.5 bg-amber-950/40 border border-amber-500/40 rounded-2xl text-amber-300 text-xs flex items-center gap-2 font-mono">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span>{aiScanError}</span>
+                  </div>
+                )}
+
+                {/* Section 1: Capture or Upload Image */}
+                {!aiScanResult && !isAnalyzingPhoto && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                    {/* Column 1: Live Webcam Feed */}
+                    <div className="bg-[#070c1a] border border-gray-800 rounded-2xl p-4 flex flex-col items-center justify-between gap-4">
+                      <div className="w-full flex items-center justify-between border-b border-gray-850 pb-2">
+                        <span className="text-xs font-mono font-bold text-purple-300 flex items-center gap-2">
+                          <Camera className="w-4 h-4 text-purple-400" /> CÂMERA AO VIVO DO DISPOSITIVO
+                        </span>
+                        {cameraActive && (
+                          <span className="text-[10px] font-mono text-emerald-400 font-bold flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" /> ATIVA
+                          </span>
+                        )}
+                      </div>
+
+                      {cameraActive ? (
+                        <div className="relative w-full rounded-xl overflow-hidden border border-purple-500/30 bg-black aspect-video flex items-center justify-center">
+                          <video
+                            ref={videoRef}
+                            autoPlay
+                            playsInline
+                            muted
+                            className="w-full h-full object-cover"
+                          />
+                          {/* Target viewfinder box */}
+                          <div className="absolute inset-8 border-2 border-dashed border-purple-400/60 rounded-xl pointer-events-none flex items-center justify-center">
+                            <span className="bg-black/60 text-purple-200 px-3 py-1 rounded-full text-[10px] font-mono font-bold">
+                              Posicione a embalagem ou rótulo no centro
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="w-full aspect-video rounded-xl bg-black/40 border border-dashed border-gray-800 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                          <Camera className="w-10 h-10 text-gray-600" />
+                          <p className="text-xs text-gray-400 font-sans">
+                            Ative a câmera para escanear autopeças diretamente pela bancada ou pelo celular.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={startLiveCamera}
+                            className="mt-2 px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded-xl text-xs font-mono font-bold flex items-center gap-2 cursor-pointer shadow-md transition-all"
+                          >
+                            <Camera className="w-4 h-4" /> Abrir Câmera
+                          </button>
+                        </div>
+                      )}
+
+                      {cameraActive && (
+                        <div className="flex gap-2 w-full">
+                          <button
+                            type="button"
+                            onClick={capturePhotoFromCamera}
+                            className="flex-1 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-mono font-extrabold text-xs rounded-xl shadow-lg shadow-purple-950/50 flex items-center justify-center gap-2 cursor-pointer transition-all border border-purple-400/30 uppercase"
+                          >
+                            <Sparkles className="w-4 h-4 text-amber-300" />
+                            Fotografar e Analisar Peça
+                          </button>
+                          <button
+                            type="button"
+                            onClick={stopLiveCamera}
+                            className="px-3 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-xl text-xs font-mono font-bold cursor-pointer"
+                          >
+                            Parar
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Column 2: File Upload / Gallery Photo */}
+                    <div className="bg-[#070c1a] border border-gray-800 rounded-2xl p-4 flex flex-col justify-between gap-4">
+                      <div className="w-full border-b border-gray-850 pb-2">
+                        <span className="text-xs font-mono font-bold text-indigo-300 flex items-center gap-2">
+                          <Upload className="w-4 h-4 text-indigo-400" /> ENVIAR FOTO / RÓTULO / CAIXA
+                        </span>
+                      </div>
+
+                      <label className="flex-1 border-2 border-dashed border-indigo-500/30 hover:border-indigo-400/60 bg-indigo-950/10 hover:bg-indigo-950/20 rounded-xl p-6 flex flex-col items-center justify-center text-center cursor-pointer transition-all min-h-[160px]">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoFileUpload}
+                          className="hidden"
+                        />
+                        <Upload className="w-8 h-8 text-indigo-400 mb-2 animate-bounce" />
+                        <span className="text-xs font-bold text-white font-sans">
+                          Clique ou Arraste uma Foto da Peça
+                        </span>
+                        <span className="text-[11px] text-gray-400 font-sans mt-1">
+                          PNG, JPG, WEBP ou foto tirada no celular
+                        </span>
+                      </label>
+
+                      {/* Quick 1-Click Samples for Testing on Desktop */}
+                      <div className="border-t border-gray-850 pt-3">
+                        <span className="text-[10px] text-gray-400 font-mono font-bold uppercase block mb-2">
+                          ⚡ Testar Reconhecimento Rápido (Exemplos de Peças):
+                        </span>
+                        <div className="grid grid-cols-2 gap-2 font-mono text-[10px]">
+                          {[
+                            { name: "Lâmpada H7 Philips", tag: "LMP-H7-LED", bar: "7891002003001" },
+                            { name: "Trava Rosca Loctite 242", tag: "COL-LOC-242", bar: "7896001003001" },
+                            { name: "Silicone RTV Tekbond", tag: "SIL-RTV-50G", bar: "7898001002001" },
+                            { name: "Filtro Óleo Fram", tag: "FLT-OIL-FRM", bar: "7892201103002" },
+                          ].map((sample, sIdx) => (
+                            <button
+                              key={sIdx}
+                              type="button"
+                              onClick={() => {
+                                const dbMatch = BARCODE_PARTS_DATABASE.find(b => b.barcode === sample.bar);
+                                if (dbMatch) {
+                                  setAiScanResult({
+                                    name: dbMatch.name,
+                                    brand: dbMatch.brand,
+                                    sku: dbMatch.sku,
+                                    barcode: dbMatch.barcode,
+                                    category: dbMatch.category,
+                                    compatibility: dbMatch.compatibility,
+                                    costPrice: dbMatch.costPrice,
+                                    sellPrice: dbMatch.sellPrice,
+                                    quantity: dbMatch.quantity,
+                                    minStock: dbMatch.minStock,
+                                    confidence: "98% (Identificado por rótulo)",
+                                    notes: "Identificação confirmada via catálogo da montadora e embalagem oficial."
+                                  });
+                                }
+                              }}
+                              className="p-2 bg-gray-900/80 hover:bg-purple-950/50 border border-gray-800 hover:border-purple-500/40 rounded-lg text-left text-gray-300 hover:text-white transition-all cursor-pointer truncate"
+                            >
+                              <strong className="block truncate text-purple-300">{sample.name}</strong>
+                              <span className="text-[9px] text-gray-500">Ref: {sample.tag}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                )}
+
+                {/* Section 2: Loading State when Gemini AI is Analyzing Photo */}
+                {isAnalyzingPhoto && (
+                  <div className="p-12 bg-[#070c1a] border border-purple-500/30 rounded-2xl flex flex-col items-center justify-center gap-4 text-center">
+                    <div className="relative">
+                      <div className="w-16 h-16 rounded-full border-4 border-purple-500/20 border-t-purple-500 animate-spin" />
+                      <Sparkles className="w-6 h-6 text-amber-300 absolute inset-0 m-auto animate-pulse" />
+                    </div>
+                    <div>
+                      <h4 className="text-white font-extrabold text-base font-display">
+                        Inteligência Artificial Analisando a Peça...
+                      </h4>
+                      <p className="text-xs text-gray-400 font-sans mt-1">
+                        Lendo texto da caixa, código de barras EAN, marca do fabricante e especificações técnicas.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 3: AI Recognition Results Preview */}
+                {aiScanResult && !isAnalyzingPhoto && (
+                  <div className="space-y-4">
+                    {/* Confidence & Confirmation Banner */}
+                    <div className="p-4 bg-emerald-950/30 border border-emerald-500/40 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/40">
+                          <CheckCircle className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-sm font-extrabold text-white font-display">
+                              Peça Reconhecida com Sucesso!
+                            </h4>
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-bold">
+                              Confiança: {aiScanResult.confidence || '95%'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-300 font-sans mt-0.5">
+                            {aiScanResult.notes || "Dados extraídos e estruturados prontos para inserção no estoque de autopeças."}
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAiScanResult(null);
+                          setPhotoPreviewUrl(null);
+                        }}
+                        className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-mono font-bold cursor-pointer shrink-0"
+                      >
+                        🔄 Fotografar Outra
+                      </button>
+                    </div>
+
+                    {/* Extracted Fields Detail Box */}
+                    <div className="bg-[#070c1a] border border-gray-800 rounded-2xl p-4 sm:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 font-mono text-xs">
+                      
+                      <div className="sm:col-span-2">
+                        <span className="text-[10px] text-gray-400 uppercase block">Nome / Descrição da Peça:</span>
+                        <input
+                          type="text"
+                          value={aiScanResult.name}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, name: e.target.value })}
+                          className="w-full mt-1 bg-[#0a1020] border border-purple-500/30 rounded-xl p-2.5 text-white font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase block">Marca / Fabricante:</span>
+                        <input
+                          type="text"
+                          value={aiScanResult.brand}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, brand: e.target.value })}
+                          className="w-full mt-1 bg-[#0a1020] border border-gray-700 rounded-xl p-2.5 text-white font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase block">SKU / Código Interno:</span>
+                        <input
+                          type="text"
+                          value={aiScanResult.sku}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, sku: e.target.value })}
+                          className="w-full mt-1 bg-[#0a1020] border border-gray-700 rounded-xl p-2.5 text-white font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase block">Código de Barras EAN:</span>
+                        <input
+                          type="text"
+                          value={aiScanResult.barcode}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, barcode: e.target.value })}
+                          className="w-full mt-1 bg-[#0a1020] border border-gray-700 rounded-xl p-2.5 text-purple-300 font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase block">Categoria:</span>
+                        <select
+                          value={aiScanResult.category}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, category: e.target.value })}
+                          className="w-full mt-1 bg-[#0a1020] border border-gray-700 rounded-xl p-2.5 text-white font-bold"
+                        >
+                          {categoriesList.filter(c => c !== 'Todas').map((c, i) => (
+                            <option key={i} value={c}>{c}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-3">
+                        <span className="text-[10px] text-gray-400 uppercase block">Compatibilidade / Aplicação em Veículos:</span>
+                        <input
+                          type="text"
+                          value={aiScanResult.compatibility}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, compatibility: e.target.value })}
+                          className="w-full mt-1 bg-[#0a1020] border border-gray-700 rounded-xl p-2.5 text-gray-200"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-red-400 uppercase block">Preço de Custo (R$):</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={aiScanResult.costPrice}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, costPrice: parseFloat(e.target.value) || 0 })}
+                          className="w-full mt-1 bg-[#0a1020] border border-gray-700 rounded-xl p-2.5 text-red-400 font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-emerald-400 uppercase block">Preço de Venda (R$):</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={aiScanResult.sellPrice}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, sellPrice: parseFloat(e.target.value) || 0 })}
+                          className="w-full mt-1 bg-[#0a1020] border border-gray-700 rounded-xl p-2.5 text-emerald-400 font-bold"
+                        />
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] text-gray-400 uppercase block">Estoque Inicial (Qtd):</span>
+                        <input
+                          type="number"
+                          value={aiScanResult.quantity}
+                          onChange={(e) => setAiScanResult({ ...aiScanResult, quantity: parseInt(e.target.value) || 1 })}
+                          className="w-full mt-1 bg-[#0a1020] border border-gray-700 rounded-xl p-2.5 text-white font-bold"
+                        />
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="p-4 sm:p-5 border-t border-gray-800 bg-[#090e1f] flex flex-col sm:flex-row items-center justify-between gap-3 font-mono text-xs">
+                <div className="text-gray-400 text-[11px] flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                  <span>Os dados preenchidos poderão ser revisados antes da gravação final no banco de dados.</span>
+                </div>
+
+                <div className="flex gap-2.5 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopLiveCamera();
+                      setShowAiPhotoScanModal(false);
+                    }}
+                    className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-xl font-bold uppercase cursor-pointer transition-colors"
+                  >
+                    Cancelar
+                  </button>
+
+                  {aiScanResult && (
+                    <button
+                      type="button"
+                      onClick={applyAiScanToProductForm}
+                      className="px-5 py-2.5 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold rounded-xl shadow-lg shadow-purple-950/50 uppercase flex items-center gap-2 cursor-pointer transition-all border border-purple-400/30"
+                    >
+                      <Check className="w-4 h-4 text-amber-300" />
+                      Preencher Formulário de Estoque
+                    </button>
+                  )}
+                </div>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
     </div>

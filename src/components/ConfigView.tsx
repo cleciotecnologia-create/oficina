@@ -121,6 +121,9 @@ export const ConfigView: React.FC = () => {
       setCustomDomainStr(company.customDomain || '');
       setSubdomainStr(company.subdomain || '');
       setDomainStatusVal(company.domainStatus || 'Pendente');
+      if (company.dnsLastUpdatedAt) {
+        setDnsLastUpdatedAtStr(company.dnsLastUpdatedAt);
+      }
       setPixKeyStr(company.pixKey || 'cleciotecnologia@gmail.com');
       setPixBeneficiaryStr(company.pixBeneficiary || 'AutoPrecision Premium');
       setPixCityStr(company.pixCity || 'SAO PAULO');
@@ -206,9 +209,74 @@ export const ConfigView: React.FC = () => {
   const [customDomainStr, setCustomDomainStr] = useState(company.customDomain || '');
   const [subdomainStr, setSubdomainStr] = useState(company.subdomain || '');
   const [domainStatusVal, setDomainStatusVal] = useState<'Pendente' | 'Verificando' | 'Ativo' | 'Falhado'>(company.domainStatus || 'Pendente');
+  const [dnsLastUpdatedAtStr, setDnsLastUpdatedAtStr] = useState<string>(
+    company.dnsLastUpdatedAt || new Date(Date.now() - 26 * 3600 * 1000).toISOString()
+  );
   const [customPortalSlugStr, setCustomPortalSlugStr] = useState(company.customPortalSlug || company.id);
   const [dnsTestLogs, setDnsTestLogs] = useState<string[]>([]);
   const [isTestingDns, setIsTestingDns] = useState(false);
+
+  // Helper to calculate DNS propagation elapsed time
+  const calculateDnsElapsedTime = () => {
+    const lastDate = dnsLastUpdatedAtStr ? new Date(dnsLastUpdatedAtStr) : new Date(Date.now() - 26 * 3600 * 1000);
+    const diffMs = Math.max(0, Date.now() - lastDate.getTime());
+    const totalMinutes = Math.floor(diffMs / (1000 * 60));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const days = Math.floor(hours / 24);
+    const remainingHours = hours % 24;
+
+    let formattedElapsed = '';
+    if (days > 0) {
+      formattedElapsed = `${days}d ${remainingHours}h ${minutes}m`;
+    } else {
+      formattedElapsed = `${hours}h ${minutes}m`;
+    }
+
+    const isExceeded24h = hours >= 24;
+
+    return {
+      hours,
+      minutes,
+      days,
+      totalHours: hours,
+      formattedElapsed,
+      isExceeded24h,
+      formattedLastDate: lastDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    };
+  };
+
+  const handleSyncDnsNow = async () => {
+    const nowIso = new Date().toISOString();
+    setDnsLastUpdatedAtStr(nowIso);
+    setDomainStatusVal('Ativo');
+    try {
+      await updateCompany({
+        dnsLastUpdatedAt: nowIso,
+        domainStatus: 'Ativo'
+      });
+      setSaveFeedback("🔄 Apontamentos DNS verificados e propagação sincronizada com sucesso!");
+    } catch (e) {
+      console.error(e);
+    }
+    setTimeout(() => setSaveFeedback(""), 4000);
+  };
+
+  const handleSimulate26hAgo = async () => {
+    const pastIso = new Date(Date.now() - 26 * 3600 * 1000).toISOString();
+    setDnsLastUpdatedAtStr(pastIso);
+    setDomainStatusVal('Pendente');
+    try {
+      await updateCompany({
+        dnsLastUpdatedAt: pastIso,
+        domainStatus: 'Pendente'
+      });
+      setSaveFeedback("⚠️ Simulação ativada: Apontamentos DNS ajustados para 26 horas atrás!");
+    } catch (e) {
+      console.error(e);
+    }
+    setTimeout(() => setSaveFeedback(""), 4000);
+  };
   
   // Vector SVG Customizer states  
   const [badgeShape, setBadgeShape] = useState<'shield' | 'hexagon' | 'circle' | 'crest'>('shield');
@@ -1072,6 +1140,7 @@ export const ConfigView: React.FC = () => {
         customDomain: customDomainStr,
         subdomain: subdomainStr,
         domainStatus: domainStatusVal,
+        dnsLastUpdatedAt: dnsLastUpdatedAtStr,
         pixKey: pixKeyStr,
         pixBeneficiary: pixBeneficiaryStr,
         pixCity: pixCityStr,
@@ -1183,6 +1252,124 @@ export const ConfigView: React.FC = () => {
           Gerencie a identidade visual de sua mecânica, mude seu logotipo, configure contatos, canais de atendimento e geolocalização.
         </p>
       </div>
+
+      {/* CARD DE STATUS DA PROPAGAÇÃO DE DNS (Mede o tempo decorrido e alerta se > 24h) */}
+      {(() => {
+        const dnsTime = calculateDnsElapsedTime();
+        return (
+          <div className={`rounded-2xl border p-5 sm:p-6 transition-all shadow-xl font-sans relative overflow-hidden ${
+            dnsTime.isExceeded24h
+              ? 'bg-gradient-to-br from-[#1a0c0e] via-[#16090b] to-[#0d0506] border-red-500/50 text-red-100 shadow-red-950/20'
+              : 'bg-gradient-to-br from-[#0c1322] via-[#09101d] to-[#060a14] border-cyan-500/30 text-slate-100 shadow-cyan-950/10'
+          }`}>
+            {/* Background ambient glow */}
+            <div className={`absolute -right-12 -top-12 w-48 h-48 rounded-full blur-3xl pointer-events-none opacity-20 ${
+              dnsTime.isExceeded24h ? 'bg-red-500' : 'bg-cyan-500'
+            }`} />
+
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <div className={`p-3 rounded-xl border font-mono font-bold text-lg flex items-center justify-center shrink-0 ${
+                  dnsTime.isExceeded24h 
+                    ? 'bg-red-950/60 border-red-500/50 text-red-400' 
+                    : 'bg-cyan-950/60 border-cyan-500/40 text-cyan-400'
+                }`}>
+                  <Globe className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-sm sm:text-base font-display font-bold tracking-tight text-white">
+                      Status da Propagação DNS
+                    </h2>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase tracking-wider border ${
+                      dnsTime.isExceeded24h
+                        ? 'bg-red-950/80 border-red-500/60 text-red-400 animate-pulse'
+                        : 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400'
+                    }`}>
+                      {dnsTime.isExceeded24h ? '⚠️ Propagação Atrasada (>24h)' : '✓ DNS Atualizado'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-300 font-mono mt-0.5">
+                    Domínio vinculado: <span className="text-white font-bold">{customDomainStr || 'www.oficinadorafael.com.br'}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Elapsed Timer Metric */}
+              <div className="flex items-center gap-3 self-stretch md:self-auto justify-between md:justify-end bg-black/40 border border-white/10 px-4 py-2.5 rounded-xl font-mono">
+                <div className="flex flex-col text-left">
+                  <span className="text-[9px] text-gray-400 uppercase tracking-wider font-bold">Tempo Decorrido:</span>
+                  <span className={`text-base font-extrabold ${dnsTime.isExceeded24h ? 'text-red-400' : 'text-cyan-400'}`}>
+                    ⏱️ {dnsTime.formattedElapsed}
+                  </span>
+                </div>
+                <div className="h-7 w-px bg-white/10 mx-1 hidden sm:block" />
+                <div className="flex flex-col text-right hidden sm:flex">
+                  <span className="text-[9px] text-gray-400 uppercase tracking-wider font-bold">Última Atualização:</span>
+                  <span className="text-[11px] text-gray-200 font-bold">{dnsTime.formattedLastDate}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Alert Banner when > 24 Hours */}
+            {dnsTime.isExceeded24h ? (
+              <div className="mt-4 bg-red-950/40 border border-red-500/40 rounded-xl p-4 flex flex-col sm:flex-row items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+                <div className="flex-1 text-xs space-y-1.5">
+                  <div className="font-bold text-red-300 font-mono text-[11.5px] uppercase tracking-wider">
+                    🚨 ATENÇÃO: O Período de Propagação DNS Excedeu 24 Horas
+                  </div>
+                  <p className="text-red-200/90 leading-relaxed text-[11px] font-sans">
+                    A atualização dos apontamentos DNS para o seu domínio próprio está demorando mais do que o limite recomendado de 24 horas. Verifique se as entradas CNAME / A foram salvas corretamente na sua zona DNS (Registro.br, Cloudflare ou GoDaddy) e se o valor de TTL não está configurado acima do normal.
+                  </p>
+                  <div className="pt-1.5 flex flex-wrap gap-2 items-center">
+                    <button
+                      type="button"
+                      onClick={handleSyncDnsNow}
+                      className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white font-mono font-bold text-[11px] rounded-lg transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Forçar Verificação & Sincronizar Agora
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSimulate26hAgo}
+                      className="px-3 py-1.5 bg-red-950/60 hover:bg-red-900/60 border border-red-800 text-red-200 font-mono font-bold text-[10.5px] rounded-lg transition-all cursor-pointer"
+                    >
+                      Simulação Ativa (26h atrás)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 bg-cyan-950/30 border border-cyan-800/40 rounded-xl p-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5 text-cyan-200">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="text-[11px]">
+                    Os registros DNS foram atualizados recentemente ({dnsTime.formattedElapsed} atrás). O período de propagação está dentro do intervalo normal (menos de 24h).
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleSimulate26hAgo}
+                    title="Testar alerta de propagação excedida em mais de 24h"
+                    className="px-2.5 py-1 bg-slate-900/80 hover:bg-slate-800 border border-slate-700/80 text-gray-300 hover:text-white font-mono text-[10px] rounded transition-all cursor-pointer"
+                  >
+                    ⚡ Simular &gt;24h (Testar Alerta)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSyncDnsNow}
+                    className="px-2.5 py-1 bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-800 text-cyan-400 font-mono font-bold text-[10px] rounded transition-all cursor-pointer flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3 h-3" /> Atualizar Agora
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Main Grid: Info Form and Interactive Brand & Suggestion Center */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

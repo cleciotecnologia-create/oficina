@@ -636,6 +636,8 @@ export const PDVView: React.FC = () => {
   const [saleFinished, setSaleFinished] = useState(false);
   const [lastFinishedSale, setLastFinishedSale] = useState<any | null>(null);
   const [receiptType, setReceiptType] = useState<'thermal' | 'nota'>('thermal');
+  const [receiptWidth, setReceiptWidth] = useState<'80mm' | '58mm'>('80mm');
+  const [showPrinterTips, setShowPrinterTips] = useState(true);
 
   // PIX verification/approval modal states
   const [showPixApprovalModal, setShowPixApprovalModal] = useState(false);
@@ -893,7 +895,7 @@ export const PDVView: React.FC = () => {
   }, [paymentMethod, grandTotal, company]);
 
   useEffect(() => {
-    if (lastFinishedSale && lastFinishedSale.paymentMethod === 'PIX') {
+    if (lastFinishedSale) {
       const pKey = company?.pixKey || 'cleciotecnologia@gmail.com';
       const pBeneficiary = company?.pixBeneficiary || company?.name || 'AutoPrecision Premium';
       const pCity = company?.pixCity || 'SAO PAULO';
@@ -903,7 +905,7 @@ export const PDVView: React.FC = () => {
           chave: pKey,
           beneficiario: pBeneficiary,
           cidade: pCity,
-          valor: lastFinishedSale.total,
+          valor: lastFinishedSale.total || 0,
           descricao: `Venda ${lastFinishedSale.id}`
         });
 
@@ -2944,7 +2946,13 @@ export const PDVView: React.FC = () => {
           id={receiptType === 'thermal' ? "sale-finished-receipt-modal" : "sale-finished-nota-modal"} 
           className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in overflow-y-auto"
         >
-          <div className={`print-container-target bg-white text-black rounded-2xl p-4 sm:p-6 print:p-2 print:my-0 print:border-0 print:shadow-none print:rounded-none relative text-left my-4 sm:my-8 ${receiptType === 'thermal' ? 'max-w-sm w-full' : 'max-w-4xl w-full'}`}>
+          <div className={`print-container-target bg-white text-black rounded-2xl p-4 sm:p-6 print:p-1 print:my-0 print:border-0 print:shadow-none print:rounded-none relative text-left my-4 sm:my-8 ${
+            receiptType === 'thermal'
+              ? receiptWidth === '58mm'
+                ? 'max-w-[260px] w-full thermal-receipt-58'
+                : 'max-w-sm w-full'
+              : 'max-w-4xl w-full'
+          }`}>
             
             <button 
               type="button"
@@ -2958,30 +2966,70 @@ export const PDVView: React.FC = () => {
             </button>
 
             {/* Selector de tipo de recibo format - no-print */}
-            <div className="flex bg-neutral-100 p-1 rounded-xl mb-4 no-print gap-1 select-none border border-neutral-200">
+            <div className="flex bg-neutral-100 p-1 rounded-xl mb-3 no-print gap-1 select-none border border-neutral-200 text-xs">
               <button
                 type="button"
-                onClick={() => setReceiptType('thermal')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-sans transition flex items-center justify-center gap-1.5 cursor-pointer border-0 no-print ${
-                  receiptType === 'thermal'
+                onClick={() => {
+                  setReceiptType('thermal');
+                  setReceiptWidth('80mm');
+                }}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold font-sans transition flex items-center justify-center gap-1 cursor-pointer border-0 no-print ${
+                  receiptType === 'thermal' && receiptWidth === '80mm'
                     ? 'bg-neutral-900 text-white shadow'
-                    : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
                 }`}
               >
-                <Printer className="w-3.5 h-3.5" /> Cupom de Bobina (80mm)
+                <Printer className="w-3.5 h-3.5" /> Bobina 80mm
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReceiptType('thermal');
+                  setReceiptWidth('58mm');
+                }}
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold font-sans transition flex items-center justify-center gap-1 cursor-pointer border-0 no-print ${
+                  receiptType === 'thermal' && receiptWidth === '58mm'
+                    ? 'bg-neutral-900 text-white shadow'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
+                }`}
+              >
+                <Printer className="w-3.5 h-3.5" /> Bobina 58mm (Knup)
               </button>
               <button
                 type="button"
                 onClick={() => setReceiptType('nota')}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold font-sans transition flex items-center justify-center gap-1.5 cursor-pointer border-0 no-print ${
+                className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold font-sans transition flex items-center justify-center gap-1 cursor-pointer border-0 no-print ${
                   receiptType === 'nota'
                     ? 'bg-neutral-900 text-white shadow'
-                    : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200 bg-transparent'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" /> Nota de Balcão (A4)
+                <FileText className="w-3.5 h-3.5" /> Nota A4
               </button>
             </div>
+
+            {/* Quick configuration alert for thermal printer paper saving */}
+            {receiptType === 'thermal' && showPrinterTips && (
+              <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-900 font-sans no-print relative">
+                <button 
+                  type="button"
+                  onClick={() => setShowPrinterTips(false)}
+                  className="absolute top-2 right-2 text-amber-700 hover:text-amber-950 font-bold text-xs"
+                  title="Fechar dica"
+                >
+                  ✕
+                </button>
+                <div className="font-bold flex items-center gap-1.5 text-amber-950 mb-1">
+                  <Printer className="w-4 h-4 text-amber-700" />
+                  <span>💡 Ajustes na tela de Impressão para a Knup não gastar papel:</span>
+                </div>
+                <ul className="list-disc list-inside space-y-0.5 text-[10.5px] leading-tight text-amber-900">
+                  <li><strong>Margens:</strong> Altere para <span className="bg-amber-100 px-1 rounded font-bold">NENHUM</span> (0mm).</li>
+                  <li><strong>Cabeçalhos e Rodapés:</strong> <span className="bg-amber-100 px-1 rounded font-bold">DESMARQUE</span> essa opção no Chrome.</li>
+                  <li><strong>Tamanho do Papel:</strong> Selecione <span className="bg-amber-100 px-1 rounded font-bold">{receiptWidth === '58mm' ? '58 x ROLL (ou 58mm)' : '80 x ROLL (ou 80mm)'}</span> em vez de A4.</li>
+                </ul>
+              </div>
+            )}
 
             {receiptType === 'thermal' ? (
               <>
@@ -3122,7 +3170,48 @@ export const PDVView: React.FC = () => {
                   )}
                 </div>
 
-                <div className="text-center text-[10px] font-mono border-t border-black pt-3 flex flex-col gap-0.5 text-neutral-505 text-gray-600">
+                <div className="receipt-footer receipt-fiscal-info text-center text-[10px] font-mono border-t border-black pt-2 mt-2 flex flex-col gap-1 text-neutral-800">
+                  {/* Assinatura do Cliente no rodapé */}
+                  <div className="receipt-signature flex flex-col items-center justify-center my-2 text-[9px]">
+                    <div className="w-48 border-b border-black mb-1"></div>
+                    <span className="font-bold text-black uppercase">Assinatura do Cliente</span>
+                  </div>
+
+                  {/* Gerador de QR Code do Pix Dinâmico no rodapé */}
+                  <div className="receipt-pix-qrcode flex flex-col items-center justify-center my-2" style={{ marginTop: '15mm' }}>
+                    {receiptPixQrBase64 ? (
+                      <img 
+                        src={receiptPixQrBase64} 
+                        alt="QR Code Pix" 
+                        className="w-24 h-24 object-contain bg-white p-1 border border-black" 
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-24 h-24 bg-white border border-black flex items-center justify-center text-[8px] font-bold">
+                        QR CODE PIX
+                      </div>
+                    )}
+                    <span className="text-[8.5px] font-mono font-bold mt-1 text-black uppercase">
+                      PIX DINÂMICO • R$ {lastFinishedSale.total.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Código de barras do cupom / pedido fiscal */}
+                  <div className="receipt-barcode flex flex-col items-center justify-center my-1">
+                    <div className="flex justify-center items-center gap-[1.5px] h-6 my-0.5 px-2 bg-white">
+                      {[1,3,1,2,1,1,3,1,2,1,3,1,1,2,1,3,1,2,1,1,3,2,1].map((w, i) => (
+                        <div 
+                          key={i} 
+                          className={`h-full ${i % 2 === 0 ? 'bg-black' : 'bg-transparent'}`} 
+                          style={{ width: `${w * 1.5}px` }}
+                        />
+                      ))}
+                    </div>
+                    <span className="font-mono text-[9px] font-extrabold tracking-widest text-black uppercase">
+                      *{lastFinishedSale.id}*
+                    </span>
+                  </div>
+
                   <span>Volte sempre! Obrigado pela preferência.</span>
                   <span className="block italic text-[8.5px] text-neutral-500">AutoTech Cloud ERP Systems Software v1.2</span>
                 </div>
@@ -3327,8 +3416,8 @@ export const PDVView: React.FC = () => {
                 )}
 
                 {/* Corporate signatures, legal status disclaimer */}
-                <div className="mt-6 border-t border-neutral-300 pt-6 text-black">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-[11px] font-mono text-center">
+                <div className="receipt-footer mt-6 border-t border-neutral-300 pt-6 text-black">
+                  <div className="receipt-signature grid grid-cols-1 md:grid-cols-2 gap-8 text-[11px] font-mono text-center">
                     <div className="flex flex-col items-center">
                       <div className="w-full max-w-xs border-b border-black mb-1"></div>
                       <span className="font-bold text-neutral-900 uppercase">{lastFinishedSale.sellerName || "Operador Responsável"}</span>
@@ -3341,7 +3430,29 @@ export const PDVView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="text-center text-[9px] text-gray-500 mt-6 pt-3 border-t border-neutral-100 uppercase tracking-widest leading-loose font-mono">
+                  {/* Gerador de QR Code do Pix Dinâmico no rodapé */}
+                  <div className="receipt-pix-qrcode flex flex-col items-center justify-center my-4" style={{ marginTop: '15mm' }}>
+                    {receiptPixQrBase64 ? (
+                      <img 
+                        src={receiptPixQrBase64} 
+                        alt="Pix QR Code" 
+                        className="w-28 h-28 object-contain bg-white p-1.5 border border-neutral-300 rounded" 
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-28 h-28 bg-neutral-100 border border-neutral-300 rounded flex items-center justify-center text-[10px] font-bold">
+                        QR CODE PIX
+                      </div>
+                    )}
+                    <span className="text-[10px] font-mono font-bold mt-1 text-neutral-800">
+                      PAGAMENTO PIX DINÂMICO • R$ {lastFinishedSale.total.toFixed(2)}
+                    </span>
+                    {lastFinishedPixStringCode && (
+                      <span className="text-[8px] font-mono text-gray-500 select-all max-w-md truncate">{lastFinishedPixStringCode}</span>
+                    )}
+                  </div>
+
+                  <div className="receipt-fiscal-info text-center text-[9px] text-gray-500 mt-6 pt-3 border-t border-neutral-100 uppercase tracking-widest leading-loose font-mono">
                     *** DOCUMENTAÇÃO INTERNA SUPLEMENTAR - EXPEDIDO SEM EFICÁCIA DE CRÉDITO DE ICMS/IPI/ISS (RECOLHIMENTO UNIFICADO) ***
                   </div>
                 </div>

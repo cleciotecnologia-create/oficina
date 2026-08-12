@@ -34,6 +34,7 @@ export const INITIAL_COMPANY = {
   customDomain: "www.oficinadorafael.com.br",
   subdomain: "oficinadorafael",
   domainStatus: "Ativo" as const,
+  dnsLastUpdatedAt: "2026-08-09T12:00:00Z",
   pixKey: "cleciotecnologia@gmail.com",
   pixBeneficiary: "Oficina do Rafael",
   pixCity: "SAO PAULO",
