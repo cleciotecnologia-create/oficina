@@ -212,10 +212,11 @@ body {
     min-height: 10mm !important;
   }
 
-  /* Rodapé .receipt-footer do #sale-finished-receipt-modal: QR Code Pix dinâmico com pelo menos 15mm de margem superior para não interferir na assinatura */
+  /* Rodapé .receipt-footer do #sale-finished-receipt-modal: QR Code Pix dinâmico com pelo menos 15mm de margem superior e min-height 20mm */
   #sale-finished-receipt-modal .receipt-footer .receipt-pix-qrcode,
   #sale-finished-receipt-modal .receipt-pix-qrcode {
     margin-top: 15mm !important;
+    min-height: 20mm !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
